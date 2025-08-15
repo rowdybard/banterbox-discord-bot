@@ -1,0 +1,32 @@
+# Copy these environment variables to Railway
+# Remove .example extension and fill in your actual values
+
+# Core Application
+NODE_ENV=production
+SESSION_SECRET=your_session_secret_here
+
+# Database
+DATABASE_URL=postgresql://user:password@host:port/dbname
+
+# Discord Bot
+DISCORD_APPLICATION_ID=your_discord_app_id
+DISCORD_BOT_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_CLIENT_SECRET=your_discord_client_secret
+DISCORD_PUBLIC_KEY=your_discord_public_key
+
+# AI Services
+OPENAI_API_KEY=your_openai_api_key
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+
+# Twitch (Optional)
+TWITCH_CLIENT_ID=your_twitch_client_id
+TWITCH_CLIENT_SECRET=your_twitch_client_secret
+
+# Object Storage (if using)
+DEFAULT_OBJECT_STORAGE_BUCKET_ID=your_bucket_id
+PRIVATE_OBJECT_DIR=/.private
+PUBLIC_OBJECT_SEARCH_PATHS=/repl-default-bucket-xyz/public
+
+# Railway Domains (automatically set by Railway)
+# RAILWAY_STATIC_URL will be automatically set

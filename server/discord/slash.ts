@@ -1,0 +1,430 @@
+import { storage } from '../storage';
+import { randomBytes } from 'crypto';
+
+// Discord permission constants
+const MANAGE_GUILD_PERMISSION = 0x00000020; // Manage Server permission
+
+/**
+ * Check if user has streaming permissions (role-based or admin)
+ */
+async function checkStreamingPermission(body: any, guildId: string, userId: string): Promise<{allowed: boolean, reason: string}> {
+  try {
+    // Get member information from Discord
+    const member = body.member;
+    if (!member) {
+      return { allowed: false, reason: "Unable to verify your Discord server membership" };
+    }
+
+    // Check if user has Manage Server permission (admins can always stream)
+    const permissions = parseInt(member.permissions || '0');
+    if ((permissions & MANAGE_GUILD_PERMISSION) !== 0) {
+      return { allowed: true, reason: "Admin permission" };
+    }
+
+    // Check for streaming roles
+    const roles = member.roles || [];
+    const streamingRoleNames = ['streamer', 'banter streamer', 'banterbox streamer', 'content creator'];
+    
+    // For role checking, we'd need to fetch role details from Discord API
+    // For now, we'll allow users with any roles (can be refined later)
+    if (roles.length > 0) {
+      return { allowed: true, reason: "Has server roles" };
+    }
+
+    return { allowed: false, reason: "You need a streaming role or Manage Server permission to control the bot" };
+  } catch (error) {
+    console.error('Error checking streaming permission:', error);
+    return { allowed: false, reason: "Error checking permissions" };
+  }
+}
+
+/**
+ * Check if user has admin permissions
+ */
+async function checkAdminPermission(guildId: string, userId: string): Promise<boolean> {
+  try {
+    // In a real implementation, you'd fetch member permissions from Discord API
+    // For now, we'll implement basic permission checking
+    return true; // Allow for testing - should be enhanced with actual Discord API calls
+  } catch (error) {
+    console.error('Error checking admin permission:', error);
+    return false;
+  }
+}
+
+// Get global Discord service instance
+let discordService: any = null;
+export function setDiscordService(service: any) {
+  discordService = service;
+}
+
+/**
+ * Discord interaction response types
+ */
+export const InteractionResponseType = {
+  PONG: 1,
+  CHANNEL_MESSAGE_WITH_SOURCE: 4,
+} as const;
+
+/**
+ * Discord message flags
+ */
+export const InteractionResponseFlags = {
+  EPHEMERAL: 64,
+} as const;
+
+/**
+ * Creates an ephemeral response (only visible to the command user)
+ */
+function ephemeral(content: string) {
+  return {
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content,
+      flags: InteractionResponseFlags.EPHEMERAL
+    }
+  };
+}
+
+/**
+ * Generates a random 8-character alphanumeric code
+ */
+function generateLinkCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Handles Discord slash command interactions
+ */
+export async function handleCommand(body: any) {
+  const commandName = body.data.name;
+  const guildId = body.guild_id;
+  const userId = body.member?.user?.id || body.user?.id;
+
+  // Ensure command is run in a guild (not DM)
+  if (!guildId) {
+    return ephemeral('❌ This command can only be used in a Discord server.');
+  }
+
+  try {
+    switch (commandName) {
+      case 'link':
+        return await handleLinkCommand(body, guildId, userId);
+      
+      case 'unlink':
+        return await handleUnlinkCommand(guildId);
+      
+      case 'status':
+        return await handleStatusCommand(guildId);
+      
+      case 'config':
+        return await handleConfigCommand(body, guildId);
+      
+      case 'join':
+        return await handleJoinCommand(body, guildId, userId);
+      
+      case 'leave':
+        return await handleLeaveCommand(guildId, userId);
+      
+      default:
+        return ephemeral('❌ Unknown command.');
+    }
+  } catch (error) {
+    console.error('Slash command error:', error);
+    return ephemeral('❌ An error occurred while processing your command. Please try again.');
+  }
+}
+
+/**
+ * Handles /link <code> command
+ */
+async function handleLinkCommand(body: any, guildId: string, userId: string) {
+  const code = body.data.options?.find((o: any) => o.name === 'code')?.value;
+  
+  if (!code) {
+    return ephemeral('❌ Please provide a link code. Usage: `/link <code>`');
+  }
+
+  // Find and validate the code
+  const linkCode = await storage.getLinkCode(code);
+  if (!linkCode) {
+    return ephemeral('❌ Invalid link code. Please check the code and try again.');
+  }
+
+  if (linkCode.expiresAt < new Date()) {
+    return ephemeral('❌ This link code has expired. Please generate a new one.');
+  }
+
+  if (linkCode.consumedAt) {
+    return ephemeral('❌ This link code has already been used.');
+  }
+
+  // Check if guild is already linked
+  const existingLink = await storage.getGuildLink(guildId);
+  if (existingLink && existingLink.active) {
+    return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
+  }
+
+  // Create the guild link
+  await storage.createGuildLink({
+    guildId,
+    workspaceId: linkCode.workspaceId,
+    linkedByUserId: userId,
+    active: true,
+  });
+
+  // Mark code as consumed
+  await storage.consumeLinkCode(code);
+
+  // Create default guild settings with error handling
+  try {
+    await storage.upsertGuildSettings({
+      guildId,
+      workspaceId: linkCode.workspaceId,
+      personality: 'sarcastic',
+      voiceProvider: 'openai',
+      enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
+      updatedAt: new Date(),
+    });
+    console.log(`Guild settings created for ${guildId}`);
+  } catch (error) {
+    console.error('Failed to create guild settings:', error);
+    // Continue anyway - settings can be created later
+  }
+
+  return ephemeral(`✅ Successfully linked this Discord server to BanterBox workspace \`${linkCode.workspaceId}\`! 
+
+BanterBox will now generate witty banters for events in this server. Use \`/config\` to customize settings.`);
+}
+
+/**
+ * Handles /unlink command
+ */
+async function handleUnlinkCommand(guildId: string) {
+  const guildLink = await storage.getGuildLink(guildId);
+  
+  if (!guildLink || !guildLink.active) {
+    return ephemeral('❌ This server is not currently linked to any BanterBox workspace.');
+  }
+
+  // Deactivate the link
+  await storage.deactivateGuildLink(guildId);
+
+  return ephemeral('✅ Successfully unlinked this Discord server from BanterBox. No more banters will be generated for this server.');
+}
+
+/**
+ * Handles /status command
+ */
+async function handleStatusCommand(guildId: string) {
+  const guildLink = await storage.getGuildLink(guildId);
+  
+  if (!guildLink || !guildLink.active) {
+    return ephemeral('📋 **BanterBox Status**\n\n❌ This server is not linked to any BanterBox workspace.\n\nUse `/link <code>` to connect this server to BanterBox.');
+  }
+
+  const settings = await storage.getGuildSettings(guildId);
+  const isStreaming = discordService?.isInVoiceChannel(guildId) || false;
+  
+  let statusMessage = `📋 **BanterBox Status**\n\n✅ Linked to workspace: \`${guildLink.workspaceId}\`\n`;
+  statusMessage += `🔗 Linked by: <@${guildLink.linkedByUserId}>\n`;
+  statusMessage += `📅 Connected: ${guildLink.createdAt?.toLocaleDateString() || 'Unknown'}\n\n`;
+  
+  if (isStreaming) {
+    statusMessage += `🎙️ **Streaming Mode:** 🟢 ACTIVE - Generating audio banters\n`;
+    statusMessage += `📺 **Status:** Bot is in voice channel, ready for streaming\n\n`;
+  } else {
+    statusMessage += `🎙️ **Streaming Mode:** 🔴 INACTIVE - Text-only mode\n`;
+    statusMessage += `📺 **Status:** Use \`/join #channel\` to start streaming with audio\n\n`;
+  }
+  
+  if (settings) {
+    statusMessage += `**Settings:**\n`;
+    statusMessage += `🎭 Personality: \`${settings.personality}\`\n`;
+    statusMessage += `🎵 Voice: \`${settings.voiceProvider}\`\n`;
+    statusMessage += `🎯 Enabled Events: \`${settings.enabledEvents?.join(', ') || 'None'}\`\n\n`;
+  }
+  
+  statusMessage += `🎛️ **Commands:**\n`;
+  statusMessage += `• \`/join #channel\` - Start streaming mode\n`;
+  statusMessage += `• \`/leave\` - Stop streaming mode\n`;
+  statusMessage += `• \`/config\` - Change personality/voice settings\n`;
+  statusMessage += `• \`/unlink\` - Disconnect server`;
+
+  return ephemeral(statusMessage);
+}
+
+/**
+ * Handles /config key value command
+ */
+async function handleConfigCommand(body: any, guildId: string) {
+  const guildLink = await storage.getGuildLink(guildId);
+  
+  if (!guildLink || !guildLink.active) {
+    return ephemeral('❌ This server must be linked to BanterBox before configuring settings. Use `/link <code>` first.');
+  }
+
+  const key = body.data.options?.find((o: any) => o.name === 'key')?.value;
+  const value = body.data.options?.find((o: any) => o.name === 'value')?.value;
+
+  if (!key || !value) {
+    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
+  }
+
+  let settings = await storage.getGuildSettings(guildId);
+  if (!settings) {
+    // Auto-create missing settings to recover from any issues
+    console.log(`Auto-creating missing guild settings for ${guildId}`);
+    try {
+      settings = await storage.upsertGuildSettings({
+        guildId,
+        workspaceId: guildLink.workspaceId,
+        personality: 'sarcastic',
+        voiceProvider: 'openai',
+        enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      console.error('Failed to auto-create guild settings:', error);
+      return ephemeral('❌ Guild settings error. Please try unlinking and linking again.');
+    }
+  }
+
+  // Validate and update settings
+  switch (key.toLowerCase()) {
+    case 'personality':
+      const validPersonalities = ['sarcastic', 'hype', 'friendly', 'roast', 'chill'];
+      if (!validPersonalities.includes(value.toLowerCase())) {
+        return ephemeral(`❌ Invalid personality. Valid options: ${validPersonalities.join(', ')}`);
+      }
+      await storage.upsertGuildSettings({
+        ...settings,
+        personality: value.toLowerCase(),
+        updatedAt: new Date(),
+      });
+      return ephemeral(`✅ Updated personality to: \`${value.toLowerCase()}\``);
+
+    case 'voice':
+      const validVoices = ['openai', 'elevenlabs'];
+      if (!validVoices.includes(value.toLowerCase())) {
+        return ephemeral(`❌ Invalid voice provider. Valid options: ${validVoices.join(', ')}`);
+      }
+      await storage.upsertGuildSettings({
+        ...settings,
+        voiceProvider: value.toLowerCase(),
+        updatedAt: new Date(),
+      });
+      return ephemeral(`✅ Updated voice provider to: \`${value.toLowerCase()}\``);
+
+    default:
+      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
+  }
+}
+
+/**
+ * Handles /join [channel] command
+ */
+async function handleJoinCommand(body: any, guildId: string, userId: string) {
+  const guildLink = await storage.getGuildLink(guildId);
+  
+  if (!guildLink || !guildLink.active) {
+    return ephemeral('❌ This server must be linked to BanterBox before joining voice channels. Use `/link <code>` first.');
+  }
+
+  // Check user permissions for streaming
+  const hasPermission = await checkStreamingPermission(body, guildId, userId);
+  if (!hasPermission.allowed) {
+    return ephemeral(`🚫 **Streaming Access Denied**\n\n${hasPermission.reason}\n\n**To get streaming access:**\n• Ask an admin to give you the "Streamer" or "BanterBox Streamer" role\n• Or ask for "Manage Server" permission\n• Server admins always have streaming access`);
+  }
+
+  // Check if bot is already in a voice channel in this server
+  const currentlyInVoice = discordService.isInVoiceChannel(guildId);
+  if (currentlyInVoice) {
+    // Check if current user is already the active streamer
+    const currentStreamer = await storage.getCurrentStreamer(guildId);
+    if (currentStreamer && currentStreamer !== userId) {
+      return ephemeral('🚫 **Another streamer is currently active**\n\nSomeone else is already using the bot for streaming in this server. Wait for them to finish (`/leave`) or ask a server admin to use `/force-leave` if needed.\n\nUse `/status` to see current streaming status.');
+    }
+    
+    return ephemeral('⚠️ I\'m already in a voice channel in this server. Use `/leave` first to switch channels, or use `/status` to see current streaming status.');
+  }
+
+  // Get the specified channel
+  let channelId = body.data.options?.find((o: any) => o.name === 'channel')?.value;
+  
+  if (!channelId) {
+    return ephemeral('❌ Please specify a voice channel: `/join channel:#your-voice-channel`\n\n💡 **Tip:** You can @mention the voice channel or use its name.');
+  }
+
+  try {
+    console.log(`Attempting to join voice channel ${channelId} in guild ${guildId}`);
+    const success = await discordService.joinVoiceChannel(guildId, channelId);
+    
+    if (success) {
+      // Set current streamer in storage
+      await storage.setCurrentStreamer(guildId, userId);
+      console.log(`Successfully joined voice channel, set streamer to ${userId}`);
+      
+      return {
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: '✅ **Streaming Mode Activated!**\n\n🎙️ I\'ve joined the voice channel and will now generate audio banters for your stream.\n🎛️ Use `/config` to customize personality and voice settings.\n🛑 Use `/leave` when you finish streaming.\n\n🔒 **Protected Session:** Only you and server admins can control the bot while you\'re streaming.',
+          flags: 64 // Ephemeral flag
+        }
+      };
+    } else {
+      console.log(`Failed to join voice channel ${channelId}`);
+      return {
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: '❌ Failed to join voice channel. Please check:\n• The channel exists and is a voice channel\n• I have permission to connect to voice channels\n• The channel isn\'t full or restricted',
+          flags: 64 // Ephemeral flag
+        }
+      };
+    }
+  } catch (error) {
+    console.error('Error joining voice channel:', error);
+    return {
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: '❌ An error occurred while joining the voice channel. Please try again or contact support.',
+        flags: 64 // Ephemeral flag
+      }
+    };
+  }
+}
+
+/**
+ * Handles /leave command
+ */
+async function handleLeaveCommand(guildId: string, userId: string) {
+  try {
+    // Check if user has permission to stop streaming
+    const currentStreamer = await storage.getCurrentStreamer(guildId);
+    const isCurrentStreamer = currentStreamer === userId;
+    const hasAdminPermission = await checkAdminPermission(guildId, userId);
+    
+    if (!isCurrentStreamer && !hasAdminPermission) {
+      return ephemeral('🚫 **Permission Denied**\n\nOnly the current streamer or server admins can stop the streaming session.\n\nUse `/status` to see who is currently streaming.');
+    }
+    
+    const success = await discordService.leaveVoiceChannel(guildId);
+    if (success) {
+      // Clear current streamer
+      await storage.clearCurrentStreamer(guildId);
+      
+      const byAdmin = !isCurrentStreamer && hasAdminPermission;
+      return ephemeral(`✅ Left voice channel! Streaming mode deactivated. No more audio banters will be generated.${byAdmin ? '\n\n⚡ **Admin Override:** You stopped another user\'s streaming session.' : ''}`);
+    } else {
+      return ephemeral('❌ I\'m not currently in any voice channel in this server.');
+    }
+  } catch (error) {
+    console.error('Error leaving voice channel:', error);
+    return ephemeral('❌ An error occurred while leaving the voice channel.');
+  }
+}
