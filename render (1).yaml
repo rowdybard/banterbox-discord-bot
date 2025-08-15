@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: banterbox-discord-bot
+    env: node
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
