@@ -81,7 +81,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.13.3",
     "tailwind-merge": "^2.5.4",
-    "tw-animate-css": "^0.4.0",
+    "tailwindcss-animate": "^1.0.7",
     "tweetnacl": "^1.0.3",
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
