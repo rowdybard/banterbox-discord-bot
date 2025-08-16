@@ -457,10 +457,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         console.log(`Generated Discord banter with audio for ${eventType}: "${banterText}"`);
         console.log(`Audio URL generated: ${audioUrl}`);
-          console.log(`Global Discord Service available: ${!!globalDiscordService}`);
-          
-          // Play the audio in Discord voice channel if bot is connected
-          if (audioUrl && globalDiscordService && isInVoiceChannel) {
+        console.log(`Global Discord Service available: ${!!globalDiscordService}`);
+        
+        // Play the audio in Discord voice channel if bot is connected
+        if (audioUrl && globalDiscordService && isInVoiceChannel) {
             // Use the public object URL instead of localhost - Discord needs external access
             const replicationDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
             console.log(`REPLIT_DOMAINS env var: ${process.env.REPLIT_DOMAINS}`);
@@ -487,16 +487,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error(`Error playing audio in Discord:`, error);
             }
           } else {
-            console.log(`Skipping Discord audio playback - audioUrl: ${!!audioUrl}, globalDiscordService: ${!!globalDiscordService}`);
+            console.log(`Skipping Discord audio playback - not in voice channel`);
           }
-        } catch (audioError) {
-          console.error("Error generating Discord audio:", audioError);
-          // Continue without audio
-        }
-      } finally {
-        console.log(`Generated Discord text-only banter for ${eventType}: "${banterText}" (not streaming)`);
+      } catch (audioError) {
+        console.error("Error generating Discord audio:", audioError);
+        // Continue without audio
       }
-    
+      
       // Create banter item in storage
       const banterItem = await storage.createBanterItem({
         userId: workspaceUserId,
