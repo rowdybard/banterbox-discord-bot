@@ -47,6 +47,25 @@ const commands = [
     ]
   },
   {
+    name: 'personality',
+    description: 'Set AI personality for this server',
+    options: [
+      {
+        name: 'type',
+        description: 'Choose AI personality style',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'Witty & Clever', value: 'witty' },
+          { name: 'Friendly & Warm', value: 'friendly' },
+          { name: 'Playfully Sarcastic', value: 'sarcastic' },
+          { name: 'High-Energy Hype', value: 'hype' },
+          { name: 'Chill & Laid-back', value: 'chill' }
+        ]
+      }
+    ]
+  },
+  {
     name: 'join',
     description: 'Join a voice channel to start streaming mode',
     options: [

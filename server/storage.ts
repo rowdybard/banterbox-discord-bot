@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings } from "@shared/schema";
+import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type ContextMemory, type InsertContextMemory, type PersonalityMarketplace, type InsertPersonalityMarketplace, type PersonalityVote, type InsertPersonalityVote, type PersonalityDownload, type InsertPersonalityDownload, type CustomVoice, type InsertCustomVoice, type VoiceMarketplace, type InsertVoiceMarketplace, type VoiceVote, type InsertVoiceVote, type VoiceDownload, type InsertVoiceDownload, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings, contextMemory, personalityMarketplace, personalityVotes, personalityDownloads, customVoices, voiceMarketplace, voiceVotes, voiceDownloads } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -6,6 +6,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 export interface IStorage {
   // User methods (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   completeOnboarding(userId: string): Promise<User>;
   
@@ -49,6 +50,7 @@ export interface IStorage {
   getGuildLink(guildId: string): Promise<GuildLink | undefined>;
   createGuildLink(guildLink: InsertGuildLink): Promise<GuildLink>;
   deactivateGuildLink(guildId: string): Promise<void>;
+  reactivateGuildLink(guildId: string, workspaceId: string, linkedByUserId: string): Promise<void>;
   getGuildSettings(guildId: string): Promise<GuildSettings | undefined>;
   upsertGuildSettings(settings: InsertGuildSettings): Promise<GuildSettings>;
   
@@ -56,6 +58,37 @@ export interface IStorage {
   getCurrentStreamer(guildId: string): Promise<string | null>;
   setCurrentStreamer(guildId: string, userId: string): Promise<void>;
   clearCurrentStreamer(guildId: string): Promise<void>;
+  
+  // Context memory methods
+  createContextMemory(memory: InsertContextMemory): Promise<ContextMemory>;
+  getRecentContext(userId: string, guildId?: string, limit?: number): Promise<ContextMemory[]>;
+  getContextByEventType(userId: string, eventType: string, guildId?: string, limit?: number): Promise<ContextMemory[]>;
+  cleanExpiredContext(): Promise<number>; // Returns number of cleaned records
+  getContextSummary(userId: string, guildId?: string): Promise<string>;
+
+  // Marketplace methods
+  getMarketplacePersonalities(category?: string, sortBy?: 'popular' | 'recent' | 'trending', limit?: number): Promise<PersonalityMarketplace[]>;
+  getPersonalityById(id: string): Promise<PersonalityMarketplace | undefined>;
+  createMarketplacePersonality(personality: InsertPersonalityMarketplace): Promise<PersonalityMarketplace>;
+  updateMarketplacePersonality(id: string, updates: Partial<PersonalityMarketplace>): Promise<PersonalityMarketplace | undefined>;
+  deleteMarketplacePersonality(id: string): Promise<boolean>;
+  voteOnPersonality(vote: InsertPersonalityVote): Promise<PersonalityVote>;
+  getUserVote(personalityId: string, userId: string): Promise<PersonalityVote | undefined>;
+  downloadPersonality(download: InsertPersonalityDownload): Promise<PersonalityDownload>;
+  getUserPersonalities(userId: string): Promise<PersonalityMarketplace[]>;
+  searchPersonalities(query: string, category?: string): Promise<PersonalityMarketplace[]>;
+
+  // Custom voice methods
+  saveCustomVoice(voice: InsertCustomVoice): Promise<CustomVoice>;
+  getCustomVoices(userId: string): Promise<CustomVoice[]>;
+  deleteCustomVoice(voiceId: string, userId: string): Promise<boolean>;
+
+  // Voice marketplace methods
+  createVoiceMarketplace(voice: InsertVoiceMarketplace): Promise<VoiceMarketplace>;
+  getVoiceMarketplace(category?: string, sortBy?: 'popular' | 'recent' | 'trending', limit?: number): Promise<VoiceMarketplace[]>;
+  getVoiceById(id: string): Promise<VoiceMarketplace | undefined>;
+  voteOnVoice(vote: InsertVoiceVote): Promise<VoiceVote>;
+  downloadVoice(download: InsertVoiceDownload): Promise<VoiceDownload>;
 }
 
 export class MemStorage implements IStorage {
@@ -68,6 +101,15 @@ export class MemStorage implements IStorage {
   private linkCodes: Map<string, LinkCode> = new Map();
   private guildLinks: Map<string, GuildLink> = new Map();
   private guildSettings: Map<string, GuildSettings> = new Map();
+  private contextMemory: Map<string, ContextMemory> = new Map();
+  private marketplacePersonalities: Map<string, PersonalityMarketplace> = new Map();
+  private personalityVotes: Map<string, PersonalityVote> = new Map();
+  private personalityDownloads: Map<string, PersonalityDownload> = new Map();
+  private customVoices: Map<string, CustomVoice> = new Map();
+  private voiceMarketplace: Map<string, VoiceMarketplace> = new Map();
+  private voiceVotes: Map<string, VoiceVote> = new Map();
+  private voiceDownloads: Map<string, VoiceDownload> = new Map();
+  private currentStreamers: Map<string, string> = new Map(); // guildId -> userId
 
   constructor() {
     // Create a demo user for Replit Auth compatibility
@@ -121,6 +163,10 @@ export class MemStorage implements IStorage {
   // User methods
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => u.email === email);
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -478,6 +524,16 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async reactivateGuildLink(guildId: string, workspaceId: string, linkedByUserId: string): Promise<void> {
+    const guildLink = this.guildLinks.get(guildId);
+    if (guildLink) {
+      guildLink.active = true;
+      guildLink.workspaceId = workspaceId;
+      guildLink.linkedByUserId = linkedByUserId;
+      this.guildLinks.set(guildId, guildLink);
+    }
+  }
+
   async getGuildSettings(guildId: string): Promise<GuildSettings | undefined> {
     return this.guildSettings.get(guildId);
   }
@@ -512,6 +568,294 @@ export class MemStorage implements IStorage {
       settings.currentStreamer = null;
     }
   }
+
+  // Context memory methods
+  async createContextMemory(memory: InsertContextMemory): Promise<ContextMemory> {
+    const id = randomUUID();
+    const contextMemory: ContextMemory = {
+      ...memory,
+      id,
+      createdAt: new Date(),
+    };
+    this.contextMemory.set(id, contextMemory);
+    return contextMemory;
+  }
+
+  async getRecentContext(userId: string, guildId?: string, limit: number = 10): Promise<ContextMemory[]> {
+    const now = new Date();
+    return Array.from(this.contextMemory.values())
+      .filter(ctx => 
+        ctx.userId === userId &&
+        ctx.expiresAt > now &&
+        (!guildId || ctx.guildId === guildId)
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  }
+
+  async getContextByEventType(userId: string, eventType: string, guildId?: string, limit: number = 5): Promise<ContextMemory[]> {
+    const now = new Date();
+    return Array.from(this.contextMemory.values())
+      .filter(ctx => 
+        ctx.userId === userId &&
+        ctx.eventType === eventType &&
+        ctx.expiresAt > now &&
+        (!guildId || ctx.guildId === guildId)
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  }
+
+  async cleanExpiredContext(): Promise<number> {
+    const now = new Date();
+    const expired = Array.from(this.contextMemory.entries())
+      .filter(([_, ctx]) => ctx.expiresAt <= now);
+    
+    expired.forEach(([id]) => this.contextMemory.delete(id));
+    return expired.length;
+  }
+
+  async getContextSummary(userId: string, guildId?: string): Promise<string> {
+    const recentContext = await this.getRecentContext(userId, guildId, 5);
+    
+    if (recentContext.length === 0) {
+      return "No recent activity to remember.";
+    }
+
+    const summaries = recentContext
+      .map(ctx => ctx.contextSummary)
+      .filter(summary => summary)
+      .join('. ');
+
+    return summaries || "Recent stream activity occurred.";
+  }
+
+  // Marketplace methods
+  async getMarketplacePersonalities(category?: string, sortBy: 'popular' | 'recent' | 'trending' = 'popular', limit: number = 20): Promise<PersonalityMarketplace[]> {
+    const personalities = Array.from(this.marketplacePersonalities.values())
+      .filter(p => p.isActive && (!category || p.category === category));
+
+    switch (sortBy) {
+      case 'popular':
+        return personalities.sort((a, b) => (b.downloads + b.upvotes) - (a.downloads + a.upvotes)).slice(0, limit);
+      case 'recent':
+        return personalities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+      case 'trending':
+        return personalities.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes)).slice(0, limit);
+      default:
+        return personalities.slice(0, limit);
+    }
+  }
+
+  async getPersonalityById(id: string): Promise<PersonalityMarketplace | undefined> {
+    return this.marketplacePersonalities.get(id);
+  }
+
+  async createMarketplacePersonality(personality: InsertPersonalityMarketplace): Promise<PersonalityMarketplace> {
+    const id = randomUUID();
+    const newPersonality: PersonalityMarketplace = {
+      ...personality,
+      id,
+      downloads: 0,
+      upvotes: 0,
+      downvotes: 0,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.marketplacePersonalities.set(id, newPersonality);
+    return newPersonality;
+  }
+
+  async updateMarketplacePersonality(id: string, updates: Partial<PersonalityMarketplace>): Promise<PersonalityMarketplace | undefined> {
+    const personality = this.marketplacePersonalities.get(id);
+    if (!personality) return undefined;
+
+    const updated = { ...personality, ...updates, updatedAt: new Date() };
+    this.marketplacePersonalities.set(id, updated);
+    return updated;
+  }
+
+  async deleteMarketplacePersonality(id: string): Promise<boolean> {
+    return this.marketplacePersonalities.delete(id);
+  }
+
+  async voteOnPersonality(vote: InsertPersonalityVote): Promise<PersonalityVote> {
+    const voteId = randomUUID();
+    const newVote: PersonalityVote = {
+      ...vote,
+      id: voteId,
+      createdAt: new Date(),
+    };
+
+    // Remove existing vote if any
+    const existingVoteKey = Array.from(this.personalityVotes.entries())
+      .find(([_, v]) => v.personalityId === vote.personalityId && v.userId === vote.userId)?.[0];
+    
+    if (existingVoteKey) {
+      const existingVote = this.personalityVotes.get(existingVoteKey)!;
+      this.personalityVotes.delete(existingVoteKey);
+      
+      // Update personality vote count
+      const personality = this.marketplacePersonalities.get(vote.personalityId);
+      if (personality) {
+        if (existingVote.voteType === 'upvote') personality.upvotes--;
+        else personality.downvotes--;
+      }
+    }
+
+    this.personalityVotes.set(voteId, newVote);
+    
+    // Update personality vote count
+    const personality = this.marketplacePersonalities.get(vote.personalityId);
+    if (personality) {
+      if (vote.voteType === 'upvote') personality.upvotes++;
+      else personality.downvotes++;
+    }
+
+    return newVote;
+  }
+
+  async getUserVote(personalityId: string, userId: string): Promise<PersonalityVote | undefined> {
+    return Array.from(this.personalityVotes.values())
+      .find(vote => vote.personalityId === personalityId && vote.userId === userId);
+  }
+
+  async downloadPersonality(download: InsertPersonalityDownload): Promise<PersonalityDownload> {
+    const downloadId = randomUUID();
+    const newDownload: PersonalityDownload = {
+      ...download,
+      id: downloadId,
+      createdAt: new Date(),
+    };
+
+    this.personalityDownloads.set(downloadId, newDownload);
+    
+    // Increment download count
+    const personality = this.marketplacePersonalities.get(download.personalityId);
+    if (personality) {
+      personality.downloads++;
+    }
+
+    return newDownload;
+  }
+
+  async getUserPersonalities(userId: string): Promise<PersonalityMarketplace[]> {
+    return Array.from(this.marketplacePersonalities.values())
+      .filter(p => p.authorId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async searchPersonalities(query: string, category?: string): Promise<PersonalityMarketplace[]> {
+    const searchTerm = query.toLowerCase();
+    return Array.from(this.marketplacePersonalities.values())
+      .filter(p => 
+        p.isActive &&
+        (!category || p.category === category) &&
+        (p.name.toLowerCase().includes(searchTerm) || 
+         p.description.toLowerCase().includes(searchTerm) ||
+         (Array.isArray(p.tags) ? p.tags : []).some((tag: string) => tag.toLowerCase().includes(searchTerm)))
+      )
+      .sort((a, b) => (b.downloads + b.upvotes) - (a.downloads + a.upvotes));
+  }
+
+  // Custom voice methods
+  async saveCustomVoice(voice: InsertCustomVoice): Promise<CustomVoice> {
+    const id = randomUUID();
+    const newVoice: CustomVoice = {
+      ...voice,
+      id,
+      createdAt: new Date(),
+    };
+    this.customVoices.set(id, newVoice);
+    return newVoice;
+  }
+
+  async getCustomVoices(userId: string): Promise<CustomVoice[]> {
+    return Array.from(this.customVoices.values())
+      .filter(voice => voice.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async deleteCustomVoice(voiceId: string, userId: string): Promise<boolean> {
+    const voice = this.customVoices.get(voiceId);
+    if (!voice || voice.userId !== userId) return false;
+    return this.customVoices.delete(voiceId);
+  }
+
+  // Voice marketplace methods
+  async createVoiceMarketplace(voice: InsertVoiceMarketplace): Promise<VoiceMarketplace> {
+    const id = randomUUID();
+    const newVoice: VoiceMarketplace = {
+      ...voice,
+      id,
+      downloads: 0,
+      upvotes: 0,
+      downvotes: 0,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.voiceMarketplace.set(id, newVoice);
+    return newVoice;
+  }
+
+  async getVoiceMarketplace(category?: string, sortBy: 'popular' | 'recent' | 'trending' = 'popular', limit: number = 20): Promise<VoiceMarketplace[]> {
+    const voices = Array.from(this.voiceMarketplace.values())
+      .filter(v => v.isActive && (!category || v.category === category));
+
+    switch (sortBy) {
+      case 'popular':
+        return voices.sort((a, b) => (b.downloads + b.upvotes) - (a.downloads + a.upvotes)).slice(0, limit);
+      case 'recent':
+        return voices.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+      case 'trending':
+        return voices.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes)).slice(0, limit);
+      default:
+        return voices.slice(0, limit);
+    }
+  }
+
+  async getVoiceById(id: string): Promise<VoiceMarketplace | undefined> {
+    return this.voiceMarketplace.get(id);
+  }
+
+  async voteOnVoice(vote: InsertVoiceVote): Promise<VoiceVote> {
+    const voteId = randomUUID();
+    const newVote: VoiceVote = {
+      ...vote,
+      id: voteId,
+      createdAt: new Date(),
+    };
+    this.voiceVotes.set(voteId, newVote);
+    
+    // Update voice vote count
+    const voice = this.voiceMarketplace.get(vote.voiceId);
+    if (voice) {
+      if (vote.voteType === 'upvote') voice.upvotes++;
+      else voice.downvotes++;
+    }
+    
+    return newVote;
+  }
+
+  async downloadVoice(download: InsertVoiceDownload): Promise<VoiceDownload> {
+    const downloadId = randomUUID();
+    const newDownload: VoiceDownload = {
+      ...download,
+      id: downloadId,
+      createdAt: new Date(),
+    };
+    this.voiceDownloads.set(downloadId, newDownload);
+    
+    // Increment download count
+    const voice = this.voiceMarketplace.get(download.voiceId);
+    if (voice) {
+      voice.downloads++;
+    }
+    
+    return newDownload;
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -521,17 +865,32 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
+    // First check if user exists by email
+    const existingUser = await this.getUserByEmail(userData.email || '');
+    
+    if (existingUser) {
+      // Update existing user
+      const [user] = await db
+        .update(users)
+        .set({
+          ...userData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existingUser.id))
+        .returning();
+      return user;
+    }
+    
+    // Create new user
     const [user] = await db
       .insert(users)
       .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
       .returning();
     return user;
   }
@@ -782,6 +1141,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(guildLinks.guildId, guildId));
   }
 
+  async reactivateGuildLink(guildId: string, workspaceId: string, linkedByUserId: string): Promise<void> {
+    await db
+      .update(guildLinks)
+      .set({ 
+        active: true,
+        workspaceId,
+        linkedByUserId,
+      })
+      .where(eq(guildLinks.guildId, guildId));
+  }
+
   async getGuildSettings(guildId: string): Promise<GuildSettings | undefined> {
     const [settings] = await db.select().from(guildSettings).where(eq(guildSettings.guildId, guildId));
     return settings;
@@ -820,6 +1190,350 @@ export class DatabaseStorage implements IStorage {
       .update(guildSettings)
       .set({ currentStreamer: null })
       .where(eq(guildSettings.guildId, guildId));
+  }
+
+  // Context memory methods
+  async createContextMemory(memory: InsertContextMemory): Promise<ContextMemory> {
+    const [result] = await db.insert(contextMemory).values(memory).returning();
+    return result;
+  }
+
+  async getRecentContext(userId: string, guildId?: string, limit: number = 10): Promise<ContextMemory[]> {
+    const now = new Date();
+    let query = db
+      .select()
+      .from(contextMemory)
+      .where(
+        and(
+          eq(contextMemory.userId, userId),
+          sql`${contextMemory.expiresAt} > ${now}`
+        )
+      );
+
+    if (guildId) {
+      query = query.where(eq(contextMemory.guildId, guildId));
+    }
+
+    return await query
+      .orderBy(desc(contextMemory.createdAt))
+      .limit(limit);
+  }
+
+  async getContextByEventType(userId: string, eventType: string, guildId?: string, limit: number = 5): Promise<ContextMemory[]> {
+    const now = new Date();
+    let query = db
+      .select()
+      .from(contextMemory)
+      .where(
+        and(
+          eq(contextMemory.userId, userId),
+          eq(contextMemory.eventType, eventType),
+          sql`${contextMemory.expiresAt} > ${now}`
+        )
+      );
+
+    if (guildId) {
+      query = query.where(eq(contextMemory.guildId, guildId));
+    }
+
+    return await query
+      .orderBy(desc(contextMemory.createdAt))
+      .limit(limit);
+  }
+
+  async cleanExpiredContext(): Promise<number> {
+    const now = new Date();
+    const result = await db
+      .delete(contextMemory)
+      .where(sql`${contextMemory.expiresAt} <= ${now}`);
+    
+    return result.rowCount || 0;
+  }
+
+  async getContextSummary(userId: string, guildId?: string): Promise<string> {
+    const recentContext = await this.getRecentContext(userId, guildId, 5);
+    
+    if (recentContext.length === 0) {
+      return "No recent activity to remember.";
+    }
+
+    const summaries = recentContext
+      .map(ctx => ctx.contextSummary)
+      .filter(summary => summary)
+      .join('. ');
+
+    return summaries || "Recent stream activity occurred.";
+  }
+
+  // Marketplace methods
+  async getMarketplacePersonalities(category?: string, sortBy: 'popular' | 'recent' | 'trending' = 'popular', limit: number = 20): Promise<PersonalityMarketplace[]> {
+    let query = db.select().from(personalityMarketplace).where(eq(personalityMarketplace.isActive, true));
+
+    if (category) {
+      query = query.where(eq(personalityMarketplace.category, category));
+    }
+
+    switch (sortBy) {
+      case 'popular':
+        return await query
+          .orderBy(desc(sql`${personalityMarketplace.downloads} + ${personalityMarketplace.upvotes}`))
+          .limit(limit);
+      case 'recent':
+        return await query.orderBy(desc(personalityMarketplace.createdAt)).limit(limit);
+      case 'trending':
+        return await query
+          .orderBy(desc(sql`${personalityMarketplace.upvotes} - ${personalityMarketplace.downvotes}`))
+          .limit(limit);
+      default:
+        return await query.limit(limit);
+    }
+  }
+
+  async getPersonalityById(id: string): Promise<PersonalityMarketplace | undefined> {
+    const [personality] = await db.select().from(personalityMarketplace).where(eq(personalityMarketplace.id, id));
+    return personality;
+  }
+
+  async createMarketplacePersonality(personality: InsertPersonalityMarketplace): Promise<PersonalityMarketplace> {
+    const [result] = await db.insert(personalityMarketplace).values(personality).returning();
+    return result;
+  }
+
+  async updateMarketplacePersonality(id: string, updates: Partial<PersonalityMarketplace>): Promise<PersonalityMarketplace | undefined> {
+    const [personality] = await db
+      .update(personalityMarketplace)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(personalityMarketplace.id, id))
+      .returning();
+    return personality;
+  }
+
+  async deleteMarketplacePersonality(id: string): Promise<boolean> {
+    const result = await db.delete(personalityMarketplace).where(eq(personalityMarketplace.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async voteOnPersonality(vote: InsertPersonalityVote): Promise<PersonalityVote> {
+    // Remove existing vote if any
+    await db.delete(personalityVotes).where(
+      and(
+        eq(personalityVotes.personalityId, vote.personalityId),
+        eq(personalityVotes.userId, vote.userId)
+      )
+    );
+
+    const [newVote] = await db.insert(personalityVotes).values(vote).returning();
+    
+    // Update personality vote counts
+    if (vote.voteType === 'upvote') {
+      await db
+        .update(personalityMarketplace)
+        .set({ upvotes: sql`${personalityMarketplace.upvotes} + 1` })
+        .where(eq(personalityMarketplace.id, vote.personalityId));
+    } else {
+      await db
+        .update(personalityMarketplace)
+        .set({ downvotes: sql`${personalityMarketplace.downvotes} + 1` })
+        .where(eq(personalityMarketplace.id, vote.personalityId));
+    }
+
+    return newVote;
+  }
+
+  async getUserVote(personalityId: string, userId: string): Promise<PersonalityVote | undefined> {
+    const [vote] = await db
+      .select()
+      .from(personalityVotes)
+      .where(
+        and(
+          eq(personalityVotes.personalityId, personalityId),
+          eq(personalityVotes.userId, userId)
+        )
+      );
+    return vote;
+  }
+
+  async downloadPersonality(download: InsertPersonalityDownload): Promise<PersonalityDownload> {
+    const [newDownload] = await db.insert(personalityDownloads).values(download).returning();
+    
+    // Increment download count
+    await db
+      .update(personalityMarketplace)
+      .set({ downloads: sql`${personalityMarketplace.downloads} + 1` })
+      .where(eq(personalityMarketplace.id, download.personalityId));
+
+    return newDownload;
+  }
+
+  async getUserPersonalities(userId: string): Promise<PersonalityMarketplace[]> {
+    return await db
+      .select()
+      .from(personalityMarketplace)
+      .where(eq(personalityMarketplace.authorId, userId))
+      .orderBy(desc(personalityMarketplace.createdAt));
+  }
+
+  async searchPersonalities(query: string, category?: string): Promise<PersonalityMarketplace[]> {
+    let dbQuery = db
+      .select()
+      .from(personalityMarketplace)
+      .where(
+        and(
+          eq(personalityMarketplace.isActive, true),
+          sql`(${personalityMarketplace.name} ILIKE ${'%' + query + '%'} OR ${personalityMarketplace.description} ILIKE ${'%' + query + '%'})`
+        )
+      );
+
+    if (category) {
+      dbQuery = dbQuery.where(eq(personalityMarketplace.category, category));
+    }
+
+    return await dbQuery
+      .orderBy(desc(sql`${personalityMarketplace.downloads} + ${personalityMarketplace.upvotes}`));
+  }
+
+  // Custom voice methods
+  async saveCustomVoice(voice: InsertCustomVoice): Promise<CustomVoice> {
+    const [newVoice] = await db.insert(customVoices).values(voice).returning();
+    return newVoice;
+  }
+
+  async getCustomVoices(userId: string): Promise<CustomVoice[]> {
+    return await db
+      .select()
+      .from(customVoices)
+      .where(eq(customVoices.userId, userId))
+      .orderBy(desc(customVoices.createdAt));
+  }
+
+  async deleteCustomVoice(voiceId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(customVoices)
+      .where(
+        and(
+          eq(customVoices.id, voiceId),
+          eq(customVoices.userId, userId)
+        )
+      );
+    return (result.rowCount || 0) > 0;
+  }
+
+  // Voice marketplace methods
+  async createVoiceMarketplace(voice: InsertVoiceMarketplace): Promise<VoiceMarketplace> {
+    const [newVoice] = await db.insert(voiceMarketplace).values(voice).returning();
+    return newVoice;
+  }
+
+  async getMarketplaceVoices(category?: string, sortBy: 'popular' | 'recent' | 'downloads' = 'recent', limit: number = 20): Promise<VoiceMarketplace[]> {
+    let query = db.select().from(voiceMarketplace).where(eq(voiceMarketplace.isActive, true));
+    
+    if (category && category !== 'all') {
+      query = query.where(eq(voiceMarketplace.category, category));
+    }
+    
+    switch (sortBy) {
+      case 'popular':
+        query = query.orderBy(desc(voiceMarketplace.upvotes));
+        break;
+      case 'downloads':
+        query = query.orderBy(desc(voiceMarketplace.downloads));
+        break;
+      case 'recent':
+      default:
+        query = query.orderBy(desc(voiceMarketplace.createdAt));
+        break;
+    }
+    
+    return query.limit(limit);
+  }
+
+  async getMarketplaceVoiceById(id: string): Promise<VoiceMarketplace | undefined> {
+    const [voice] = await db.select().from(voiceMarketplace).where(eq(voiceMarketplace.id, id));
+    return voice;
+  }
+
+  async incrementVoiceDownloads(id: string): Promise<void> {
+    await db.update(voiceMarketplace)
+      .set({ downloads: sql`${voiceMarketplace.downloads} + 1` })
+      .where(eq(voiceMarketplace.id, id));
+  }
+
+  async searchMarketplaceVoices(query: string, category?: string): Promise<VoiceMarketplace[]> {
+    let searchQuery = db.select().from(voiceMarketplace)
+      .where(and(
+        eq(voiceMarketplace.isActive, true),
+        or(
+          ilike(voiceMarketplace.name, `%${query}%`),
+          ilike(voiceMarketplace.description, `%${query}%`)
+        )
+      ));
+    
+    if (category && category !== 'all') {
+      searchQuery = searchQuery.where(eq(voiceMarketplace.category, category));
+    }
+    
+    return searchQuery.orderBy(desc(voiceMarketplace.downloads)).limit(20);
+  }
+
+  async getVoiceMarketplace(category?: string, sortBy: 'popular' | 'recent' | 'trending' = 'popular', limit: number = 20): Promise<VoiceMarketplace[]> {
+    let query = db.select().from(voiceMarketplace).where(eq(voiceMarketplace.isActive, true));
+
+    if (category) {
+      query = query.where(eq(voiceMarketplace.category, category));
+    }
+
+    switch (sortBy) {
+      case 'popular':
+        return await query
+          .orderBy(desc(sql`${voiceMarketplace.downloads} + ${voiceMarketplace.upvotes}`))
+          .limit(limit);
+      case 'recent':
+        return await query
+          .orderBy(desc(voiceMarketplace.createdAt))
+          .limit(limit);
+      case 'trending':
+        return await query
+          .orderBy(desc(sql`${voiceMarketplace.upvotes} - ${voiceMarketplace.downvotes}`))
+          .limit(limit);
+      default:
+        return await query.limit(limit);
+    }
+  }
+
+  async getVoiceById(id: string): Promise<VoiceMarketplace | undefined> {
+    const [voice] = await db.select().from(voiceMarketplace).where(eq(voiceMarketplace.id, id));
+    return voice;
+  }
+
+  async voteOnVoice(vote: InsertVoiceVote): Promise<VoiceVote> {
+    const [newVote] = await db.insert(voiceVotes).values(vote).returning();
+    
+    // Update voice vote counts
+    if (vote.voteType === 'upvote') {
+      await db
+        .update(voiceMarketplace)
+        .set({ upvotes: sql`${voiceMarketplace.upvotes} + 1` })
+        .where(eq(voiceMarketplace.id, vote.voiceId));
+    } else {
+      await db
+        .update(voiceMarketplace)
+        .set({ downvotes: sql`${voiceMarketplace.downvotes} + 1` })
+        .where(eq(voiceMarketplace.id, vote.voiceId));
+    }
+
+    return newVote;
+  }
+
+  async downloadVoice(download: InsertVoiceDownload): Promise<VoiceDownload> {
+    const [newDownload] = await db.insert(voiceDownloads).values(download).returning();
+    
+    // Increment download count
+    await db
+      .update(voiceMarketplace)
+      .set({ downloads: sql`${voiceMarketplace.downloads} + 1` })
+      .where(eq(voiceMarketplace.id, download.voiceId));
+
+    return newDownload;
   }
 }
 
