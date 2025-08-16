@@ -967,8 +967,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (req.query.debug === 'true') {
           return res.json({ 
             error: true,
-            type: error.constructor.name,
-            message: error.message,
+            type: error instanceof Error ? error.constructor.name : 'Unknown',
+            message: error instanceof Error ? error.message : 'Unknown error',
             banterText: 'Debug: AI call failed'
           });
         }
