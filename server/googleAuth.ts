@@ -68,9 +68,13 @@ export async function setupGoogleAuth(app: Express) {
           const lastName = profile.name?.familyName;
           const profileImageUrl = profile.photos?.[0]?.value;
 
+          // Check if user already exists by email
+          const existingUser = email ? await storage.getUserByEmail(email) : null;
+          
           // Create or update user in database
           const user = await storage.upsertUser({
-            id: googleId,
+            // Use existing ID if user exists, otherwise use Google ID
+            id: existingUser ? existingUser.id : googleId,
             email: email || null,
             firstName: firstName || null,
             lastName: lastName || null,
