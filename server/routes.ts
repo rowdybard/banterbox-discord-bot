@@ -433,19 +433,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Generating audio for Discord banter`);
       console.log(`globalDiscordService available: ${!!globalDiscordService}`);
       const isInVoiceChannel = globalDiscordService?.isInVoiceChannel(eventData.guildId);
-      console.log(`Bot in voice channel: ${isInVoiceChannel}`);
+      console.log(`Bot in voice channel for guild ${eventData.guildId}: ${isInVoiceChannel}`);
       
-      // Always generate audio for dashboard playback
+      // Always generate audio for dashboard playback (regardless of voice channel status)
       try {
+        console.log(`Generating audio - voice channel check bypassed for dashboard playback`);
         // Use guild settings for Discord, not user settings
         if (guildSettings?.voiceProvider === 'elevenlabs') {
+          console.log(`Using ElevenLabs for audio generation`);
           const voiceId = elevenLabsService.getDefaultVoice();
           const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
           if (audioBuffer) {
             audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+            console.log(`ElevenLabs audio saved with URL: ${audioUrl}`);
           }
         } else {
           // Use OpenAI TTS (default)
+          console.log(`Using OpenAI TTS for audio generation`);
           const openai = getOpenAIClient();
           const response = await openai.audio.speech.create({
             model: "tts-1",
@@ -454,6 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           const audioBuffer = Buffer.from(await response.arrayBuffer());
           audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+          console.log(`OpenAI audio saved with URL: ${audioUrl}`);
         }
         console.log(`Generated Discord banter with audio for ${eventType}: "${banterText}"`);
         console.log(`Audio URL generated: ${audioUrl}`);

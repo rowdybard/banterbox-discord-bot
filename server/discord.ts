@@ -223,7 +223,31 @@ export class DiscordService {
 
   // Check if bot is in voice channel (streaming mode)
   isInVoiceChannel(guildId: string): boolean {
-    return this.voiceConnections.has(guildId);
+    const hasConnection = this.voiceConnections.has(guildId);
+    console.log(`[isInVoiceChannel] Guild ${guildId}: ${hasConnection} (Map size: ${this.voiceConnections.size}, Keys: ${Array.from(this.voiceConnections.keys())})`);
+    
+    // Also check if bot is actually in a voice channel according to Discord
+    const guild = this.client.guilds.cache.get(guildId);
+    if (guild) {
+      const botVoiceState = guild.voiceStates.cache.get(this.client.user!.id);
+      const isInChannel = !!botVoiceState?.channel;
+      console.log(`[isInVoiceChannel] Discord state check - Bot in channel: ${isInChannel}`);
+      
+      // If Discord says we're in a channel but Map is empty, restore the connection
+      if (isInChannel && !hasConnection && botVoiceState?.channel) {
+        console.log(`[isInVoiceChannel] State mismatch detected! Restoring connection...`);
+        const connection = getVoiceConnection(guildId);
+        if (connection) {
+          this.voiceConnections.set(guildId, connection);
+          console.log(`[isInVoiceChannel] Connection restored to Map`);
+          return true;
+        }
+      }
+      
+      return hasConnection || isInChannel;
+    }
+    
+    return hasConnection;
   }
 
   // Play TTS audio in voice channel
