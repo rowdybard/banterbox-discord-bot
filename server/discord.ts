@@ -32,21 +32,18 @@ export class DiscordService {
     this.client.once(Events.ClientReady, async (readyClient) => {
       console.log(`Discord bot ready! Logged in as ${readyClient.user.tag}`);
       
-      // Check if bot is already in any voice channels (from previous session)
       for (const guild of Array.from(readyClient.guilds.cache.values())) {
         const voiceStates = guild.voiceStates.cache;
         const botVoiceState = voiceStates.get(readyClient.user!.id);
         
         if (botVoiceState && botVoiceState.channel) {
           console.log(`Bot found in voice channel ${botVoiceState.channel.name} (${botVoiceState.channel.id}) in guild ${guild.name} (${guild.id})`);
-          // Bot is already in a voice channel in this guild
           const connection = getVoiceConnection(guild.id);
           if (connection) {
             this.voiceConnections.set(guild.id, connection);
             console.log(`✅ Restored existing voice connection for guild ${guild.id}`);
             console.log(`Voice connections map now has: ${Array.from(this.voiceConnections.keys())}`);
           } else {
-            // Re-establish the connection
             console.log(`⚠️ No existing connection found, re-joining voice channel...`);
             const success = await this.joinVoiceChannel(guild.id, botVoiceState.channel.id);
             if (success) {
@@ -59,24 +56,19 @@ export class DiscordService {
       }
       console.log(`Bot startup complete. Voice connections: ${this.voiceConnections.size} guilds: ${Array.from(this.voiceConnections.keys())}`);
     });
-    });
 
-    // Handle Discord messages for banter generation
     this.client.on(Events.MessageCreate, async (message: Message) => {
-      // Ignore bot messages and system messages
       if (message.author.bot || !message.guild) return;
       
       console.log(`Discord message received from ${message.author.username}: ${message.content}`);
       
-      // Check if bot is in a voice channel in this guild (streaming mode)
       const voiceConnection = this.voiceConnections.get(message.guild.id);
       if (!voiceConnection) {
         console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
         console.log(`Current voice connections:`, Array.from(this.voiceConnections.keys()));
-        return; // Only respond when in voice channel
+        return;
       }
 
-      // Only respond to messages that mention "banterbox" or are direct responses
       const shouldRespond = message.content.toLowerCase().includes('banterbox') || 
                            message.content.toLowerCase().includes('banter') ||
                            message.mentions.has(this.client.user!.id);
@@ -88,7 +80,6 @@ export class DiscordService {
       
       console.log(`Triggering banter generation for Discord message in guild ${message.guild.id}`);
       
-      // Trigger banter generation if callback is set
       if (this.banterCallback) {
         await this.banterCallback(
           message.author.id,
@@ -107,7 +98,6 @@ export class DiscordService {
     });
 
     this.client.on(Events.GuildMemberAdd, async (member: GuildMember) => {
-      // Check if bot is in a voice channel in this guild
       const voiceConnection = this.voiceConnections.get(member.guild.id);
       if (!voiceConnection) return;
       
@@ -125,18 +115,14 @@ export class DiscordService {
       }
     });
 
-    // Handle voice state updates to track when bot joins/leaves voice channels
     this.client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
-      // Check if it's our bot
       if (newState.member?.user.id !== this.client.user?.id) return;
 
       const guildId = newState.guild.id;
 
       if (newState.channel) {
-        // Bot joined a voice channel
         console.log(`Bot joined voice channel ${newState.channel.name} in guild ${newState.guild.name} - streaming mode activated`);
       } else if (oldState.channel) {
-        // Bot left a voice channel
         console.log(`Bot left voice channel ${oldState.channel.name} in guild ${oldState.guild.name} - streaming mode deactivated`);
         this.voiceConnections.delete(guildId);
       }
@@ -180,7 +166,7 @@ export class DiscordService {
       const connection = joinVoiceChannel({
         channelId: channelId,
         guildId: guildId,
-        adapterCreator: guild.voiceAdapterCreator,
+        adapterCreator: guild.voiceAdapterCreator as any, // Fix type compatibility
         selfDeaf: false, // Allow bot to be undeafened for proper audio playback
         selfMute: false,
       });
@@ -288,7 +274,7 @@ export class DiscordService {
         const testResponse = await fetch(publicAudioUrl);
         console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
       } catch (error) {
-        console.log(`Audio URL not accessible:`, error.message);
+        console.log(`Audio URL not accessible:`, (error as Error).message);
       }
       
       // Create resource with public URL
