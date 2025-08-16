@@ -427,41 +427,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const banterText = await generateBanter(eventTypeForBanter, eventData, originalMessage, workspaceUserId);
       
-      // Generate TTS audio if bot is in voice channel for this guild
+      // Always generate TTS audio for banters (for dashboard playback)
       let audioUrl = null;
       
-      console.log(`Checking if bot is in voice channel for guild ${eventData.guildId}`);
+      console.log(`Generating audio for Discord banter`);
       console.log(`globalDiscordService available: ${!!globalDiscordService}`);
       const isInVoiceChannel = globalDiscordService?.isInVoiceChannel(eventData.guildId);
       console.log(`Bot in voice channel: ${isInVoiceChannel}`);
       
-      // Generate TTS audio if bot is in voice channel for this guild
-      if (isInVoiceChannel) {
-        try {
-          // Use guild settings for Discord, not user settings
-          if (guildSettings?.voiceProvider === 'elevenlabs') {
-            const voiceId = elevenLabsService.getDefaultVoice();
-            const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
-            if (audioBuffer) {
-              audioUrl = await objectStorage.saveAudioFile(audioBuffer);
-            }
-          } else {
-            // Use OpenAI TTS
-            const openai = getOpenAIClient();
-            const response = await openai.audio.speech.create({
-              model: "tts-1",
-              voice: "alloy",
-              input: banterText,
-            });
-            const audioBuffer = Buffer.from(await response.arrayBuffer());
+      // Always generate audio for dashboard playback
+      try {
+        // Use guild settings for Discord, not user settings
+        if (guildSettings?.voiceProvider === 'elevenlabs') {
+          const voiceId = elevenLabsService.getDefaultVoice();
+          const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
+          if (audioBuffer) {
             audioUrl = await objectStorage.saveAudioFile(audioBuffer);
           }
-          console.log(`Generated Discord streaming banter with audio for ${eventType}: "${banterText}"`);
-          console.log(`Audio URL generated: ${audioUrl}`);
+        } else {
+          // Use OpenAI TTS (default)
+          const openai = getOpenAIClient();
+          const response = await openai.audio.speech.create({
+            model: "tts-1",
+            voice: "alloy",
+            input: banterText,
+          });
+          const audioBuffer = Buffer.from(await response.arrayBuffer());
+          audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+        }
+        console.log(`Generated Discord banter with audio for ${eventType}: "${banterText}"`);
+        console.log(`Audio URL generated: ${audioUrl}`);
           console.log(`Global Discord Service available: ${!!globalDiscordService}`);
           
-          // Play the audio in Discord voice channel (try even if connection not ready)
-          if (audioUrl && globalDiscordService) {
+          // Play the audio in Discord voice channel if bot is connected
+          if (audioUrl && globalDiscordService && isInVoiceChannel) {
             // Use the public object URL instead of localhost - Discord needs external access
             const replicationDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
             console.log(`REPLIT_DOMAINS env var: ${process.env.REPLIT_DOMAINS}`);
@@ -572,12 +571,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const file = await objectStorage.searchPublicObject(filePath);
       if (!file) {
-        return res.status(404).json({ error: "Audio file not found" });
+        console.log(`Audio file not found: ${filePath}`);
+        return res.status(404).json({ 
+          error: "Audio file not found",
+          message: "This audio file may have been created in a different environment. Please generate new banters to create audio files.",
+          path: filePath 
+        });
       }
       objectStorage.downloadObject(file, res);
     } catch (error) {
       console.error("Error serving audio file:", error);
-      return res.status(500).json({ error: "Internal server error" });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if it's an object storage configuration issue
+      if (errorMessage.includes('PUBLIC_OBJECT_SEARCH_PATHS')) {
+        return res.status(503).json({ 
+          error: "Object storage not configured",
+          message: "The server's object storage is not properly configured. Please ensure environment variables are set.",
+          details: errorMessage
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: "Internal server error",
+        message: "Failed to retrieve audio file from storage",
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      });
     }
   });
   
