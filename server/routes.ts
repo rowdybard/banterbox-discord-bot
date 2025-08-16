@@ -496,7 +496,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         console.log(`Generated Discord text-only banter for ${eventType}: "${banterText}" (not streaming)`);
       }
-      
+      finally {
+        console.log('im a noob');
+      }
       // Create banter item in storage
       const banterItem = await storage.createBanterItem({
         userId: workspaceUserId,
