@@ -300,19 +300,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let audioUrl: string | null = null;
       
-      // Generate audio if user has pro access and ElevenLabs is configured
-      const user = await storage.getUser(userId);
-      if (user?.isPro && voiceProvider === 'elevenlabs' && voiceId) {
-        try {
-          const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
-          if (audioBuffer) {
-            // Save audio to object storage and get URL
-            audioUrl = await objectStorage.saveAudioFile(audioBuffer);
-          }
-        } catch (audioError) {
-          console.error("Error generating ElevenLabs audio:", audioError);
-          // Fallback to OpenAI TTS or no audio
+      // Generate audio for all users (OpenAI TTS by default, ElevenLabs for pro users if configured)
+      try {
+        const audioBuffer = await generateTTS(banterText, userId);
+        if (audioBuffer) {
+          // Save audio to object storage and get URL
+          audioUrl = await objectStorage.saveAudioFile(audioBuffer);
         }
+      } catch (audioError) {
+        console.error("Error generating audio:", audioError);
+        // Continue without audio if generation fails
       }
       
       // Create banter item in storage
