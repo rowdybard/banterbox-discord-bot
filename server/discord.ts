@@ -10,7 +10,7 @@ interface DiscordConfig {
 export class DiscordService {
   private client: Client;
   private config: DiscordConfig;
-  private banterCallback?: (userId: string, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
+  private banterCallback?: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
   private voiceConnections: Map<string, VoiceConnection> = new Map(); // Track active voice connections by guild ID
 
   constructor(config: DiscordConfig) {
@@ -82,11 +82,13 @@ export class DiscordService {
       
       if (this.banterCallback) {
         await this.banterCallback(
-          message.author.id,
+          null, // userId will be looked up from guild link
           message.content,
           'discord_message',
           {
             displayName: message.author.displayName || message.author.username,
+            username: message.author.username,
+            discordUserId: message.author.id,
             guildId: message.guild.id,
             guildName: message.guild.name,
             channelId: message.channel.id,
@@ -103,11 +105,13 @@ export class DiscordService {
       
       if (this.banterCallback) {
         await this.banterCallback(
-          member.id,
+          null, // userId will be looked up from guild link
           `${member.displayName || member.user.username} joined the server`,
           'discord_member_join',
           {
             displayName: member.displayName || member.user.username,
+            username: member.user.username,
+            discordUserId: member.id,
             guildId: member.guild.id,
             guildName: member.guild.name
           }
@@ -144,7 +148,7 @@ export class DiscordService {
     console.log('Discord bot disconnected');
   }
 
-  setBanterCallback(callback: (userId: string, originalMessage: string, eventType: string, eventData: any) => Promise<void>) {
+  setBanterCallback(callback: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>) {
     this.banterCallback = callback;
   }
 

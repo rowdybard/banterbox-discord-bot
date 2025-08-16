@@ -383,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Generate banter from Discord events
-  async function generateBanterFromDiscordEvent(discordUserId: string, originalMessage: string, eventType: string, eventData: any) {
+  async function generateBanterFromDiscordEvent(discordUserId: string | null, originalMessage: string, eventType: string, eventData: any) {
     try {
       console.log(`Generating banter for Discord ${eventType} event:`, eventData);
       
@@ -522,6 +522,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // API Routes
+  
+  // Serve audio files from filesystem when object storage isn't available
+  app.use('/audio', express.static(join(process.cwd(), 'public/audio')));
   
   // Health check endpoint for offline detection
   app.get('/api/health', (req, res) => {

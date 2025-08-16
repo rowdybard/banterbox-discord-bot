@@ -1,0 +1,14 @@
+{
+  "instructions": "When you download the ZIP, you need to move these dependencies from devDependencies to dependencies in package.json",
+  "moveToProduction": [
+    "vite",
+    "@vitejs/plugin-react", 
+    "esbuild",
+    "tailwindcss",
+    "@tailwindcss/vite",
+    "postcss",
+    "autoprefixer",
+    "typescript"
+  ],
+  "reason": "These are needed during build process, but Render excludes devDependencies"
+}

@@ -1,6 +1,7 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
+import { firebaseStorage } from "./firebase";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -120,33 +121,71 @@ export class ObjectStorageService {
   }
 
   // Save audio buffer to object storage and return public URL
-  async saveAudioFile(audioBuffer: Buffer): Promise<string> {
+  async saveAudioFile(audioBuffer: Buffer, banterId?: string): Promise<string> {
     const audioId = randomUUID();
     const fileName = `audio/${audioId}.mp3`;
     
-    // Get the public directory for audio files
-    const publicPaths = this.getPublicObjectSearchPaths();
-    const publicPath = publicPaths[0]; // Use first public path
-    const fullPath = `${publicPath}/${fileName}`;
-    
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
     try {
-      // Upload the audio buffer
-      await file.save(audioBuffer, {
-        metadata: {
-          contentType: 'audio/mpeg',
-          cacheControl: 'public, max-age=3600',
-        },
-      });
+      // Try Firebase Storage first (works everywhere including Render)
+      if (firebaseStorage.isAvailable()) {
+        const firebaseUrl = await firebaseStorage.saveAudioFile(audioBuffer);
+        if (firebaseUrl) {
+          console.log('Audio saved to Firebase Storage');
+          return firebaseUrl;
+        }
+      }
+      
+      // Check if object storage is configured (for local/Replit)
+      const publicPathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
+      if (publicPathsStr) {
+        // Object storage is configured, use it
+        const publicPaths = this.getPublicObjectSearchPaths();
+        const publicPath = publicPaths[0]; // Use first public path
+        const fullPath = `${publicPath}/${fileName}`;
+        
+        const { bucketName, objectName } = parseObjectPath(fullPath);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const file = bucket.file(objectName);
 
-      // Return the public URL path that can be served by our API
-      return `/public-objects/${fileName}`;
+        // Upload the audio buffer
+        await file.save(audioBuffer, {
+          metadata: {
+            contentType: 'audio/mpeg',
+            cacheControl: 'public, max-age=3600',
+          },
+        });
+
+        // Return the public URL path that can be served by our API
+        return `/public-objects/${fileName}`;
+      }
+      
+      // Fallback: Use filesystem storage when nothing else is available
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Create audio directory if it doesn't exist
+      const audioDir = path.join(process.cwd(), 'public', 'audio');
+      if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+      }
+      
+      // Save audio file to filesystem
+      const filePath = path.join(audioDir, `${audioId}.mp3`);
+      fs.writeFileSync(filePath, audioBuffer);
+      
+      // Return URL path that can be served
+      return `/audio/${audioId}.mp3`;
     } catch (error) {
       console.error('Error saving audio file:', error);
-      throw new Error('Failed to save audio file');
+      // Final fallback to base64 data URL
+      try {
+        const base64Audio = audioBuffer.toString('base64');
+        console.log('Using base64 data URL as final fallback');
+        return `data:audio/mpeg;base64,${base64Audio}`;
+      } catch (fallbackError) {
+        console.error('All audio save methods failed:', fallbackError);
+        throw new Error('Failed to save audio file');
+      }
     }
   }
 }

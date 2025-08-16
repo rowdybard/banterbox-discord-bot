@@ -37,6 +37,7 @@ export const banterItems = pgTable("banter_items", {
   eventType: text("event_type").notNull(), // 'chat', 'subscription', 'donation', 'raid'
   eventData: jsonb("event_data"), // Additional event information
   audioUrl: text("audio_url"),
+  audioData: text("audio_data"), // Base64 encoded audio for database storage
   isPlayed: boolean("is_played").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
