@@ -38,18 +38,27 @@ export class DiscordService {
         const botVoiceState = voiceStates.get(readyClient.user!.id);
         
         if (botVoiceState && botVoiceState.channel) {
+          console.log(`Bot found in voice channel ${botVoiceState.channel.name} (${botVoiceState.channel.id}) in guild ${guild.name} (${guild.id})`);
           // Bot is already in a voice channel in this guild
           const connection = getVoiceConnection(guild.id);
           if (connection) {
             this.voiceConnections.set(guild.id, connection);
-            console.log(`Bot already in voice channel ${botVoiceState.channel.name} in guild ${guild.name} - restored connection`);
+            console.log(`✅ Restored existing voice connection for guild ${guild.id}`);
+            console.log(`Voice connections map now has: ${Array.from(this.voiceConnections.keys())}`);
           } else {
             // Re-establish the connection
-            console.log(`Re-joining voice channel ${botVoiceState.channel.name} in guild ${guild.name}`);
-            await this.joinVoiceChannel(guild.id, botVoiceState.channel.id);
+            console.log(`⚠️ No existing connection found, re-joining voice channel...`);
+            const success = await this.joinVoiceChannel(guild.id, botVoiceState.channel.id);
+            if (success) {
+              console.log(`✅ Successfully re-joined voice channel`);
+            } else {
+              console.log(`❌ Failed to re-join voice channel`);
+            }
           }
         }
       }
+      console.log(`Bot startup complete. Voice connections: ${this.voiceConnections.size} guilds: ${Array.from(this.voiceConnections.keys())}`);
+    });
     });
 
     // Handle Discord messages for banter generation
@@ -63,6 +72,7 @@ export class DiscordService {
       const voiceConnection = this.voiceConnections.get(message.guild.id);
       if (!voiceConnection) {
         console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
+        console.log(`Current voice connections:`, Array.from(this.voiceConnections.keys()));
         return; // Only respond when in voice channel
       }
 
