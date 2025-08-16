@@ -110,11 +110,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "You are a witty and clever banter bot. Make responses under 25 words with clever wordplay and humor.",
-              friendly: "You are a friendly and warm banter bot. Use encouraging language and positive energy in your responses under 25 words.",
-              sarcastic: "You are a playfully sarcastic banter bot. Keep it fun, not mean. Use clever sarcasm and witty comebacks under 25 words.",
-              hype: "You are a high-energy hype bot! Use caps and exclamation points with explosive excitement under 25 words!",
-              chill: "You are a chill and laid-back banter bot. Keep responses relaxed, zen, and easygoing under 25 words."
+              witty: "You are a witty and clever banter bot. Make responses under 25 words with clever wordplay and humor. NEVER mention specific usernames or reference other users by name.",
+              friendly: "You are a friendly and warm banter bot. Use encouraging language and positive energy in your responses under 25 words. NEVER mention specific usernames or reference other users by name.",
+              sarcastic: "You are a playfully sarcastic banter bot. Keep it fun, not mean. Use clever sarcasm and witty comebacks under 25 words. NEVER mention specific usernames or reference other users by name.",
+              hype: "You are a high-energy hype bot! Use caps and exclamation points with explosive excitement under 25 words! NEVER mention specific usernames or reference other users by name.",
+              chill: "You are a chill and laid-back banter bot. Keep responses relaxed, zen, and easygoing under 25 words. NEVER mention specific usernames or reference other users by name."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
@@ -134,12 +134,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let prompt = "";
-      const fullPersonalityContext = `${personalityContext}${contextPrompt ? '\n\n' + contextPrompt : ''}`;
+      const fullPersonalityContext = `${personalityContext}\n\nCRITICAL RULE: Do NOT mention any usernames like "Nyn", "The Bard", or any other specific users. Focus only on the current message.`;
       
       switch (eventType) {
         case 'chat':
         case 'discord_message':
-          prompt = `${fullPersonalityContext}\n\nRespond to this chat message: "${originalMessage}"`;
+          prompt = `${fullPersonalityContext}\n\nRespond to this chat message: "${originalMessage}"\n\nRemember: Do NOT reference any usernames or other users in your response.`;
           break;
         case 'subscription':
           prompt = `${fullPersonalityContext}\n\nCreate a response for a new subscriber.`;
@@ -167,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: "You are BanterBox, an AI that generates entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested."
+            content: "You are BanterBox, an AI that generates entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. IMPORTANT: Never mention specific usernames or reference other users by name. Focus only on the current message/event."
           },
           {
             role: "user",

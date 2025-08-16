@@ -35,6 +35,20 @@ export function BanterHistory({ userId }: BanterHistoryProps) {
 
   const playBanter = async (banterId: string) => {
     try {
+      // Find the banter to get its audio URL
+      const banter = banters.find(b => b.id === banterId);
+      if (!banter?.audioUrl) {
+        console.error('No audio URL for this banter');
+        return;
+      }
+
+      // Play the audio
+      const audio = new Audio(banter.audioUrl);
+      audio.play().catch(err => {
+        console.error('Error playing audio:', err);
+      });
+
+      // Mark as played in the backend
       await apiRequest('POST', `/api/banter/${banterId}/play`);
     } catch (error) {
       console.error('Error playing banter:', error);

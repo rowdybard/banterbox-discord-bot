@@ -49,6 +49,12 @@ export class ContextService {
     currentEventType: EventType,
     guildId?: string
   ): Promise<string> {
+    // DISABLED: Context feature is too aggressive and references other users inappropriately
+    // Return empty string to disable context injection into AI prompts
+    return '';
+    
+    // Original implementation commented out:
+    /*
     // Get recent general context
     const recentContext = await storage.getRecentContext(userId, guildId, 5);
     
@@ -87,6 +93,7 @@ export class ContextService {
     }
 
     return contextPrompt;
+    */
   }
 
   /**
