@@ -158,6 +158,62 @@ export default function Settings() {
             </CardContent>
           </Card>
 
+          {/* Personality Settings */}
+          <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-white">AI Personality</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              {/* Personality Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Banter Personality
+                </label>
+                <Select 
+                  defaultValue={settings?.banterPersonality || "witty"}
+                  onValueChange={(value) => updateSettingsMutation.mutate({ banterPersonality: value })}
+                  data-testid="select-personality"
+                >
+                  <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectItem value="witty">Witty & Clever</SelectItem>
+                    <SelectItem value="friendly">Friendly & Warm</SelectItem>
+                    <SelectItem value="sarcastic">Playfully Sarcastic</SelectItem>
+                    <SelectItem value="hype">High-Energy Hype</SelectItem>
+                    <SelectItem value="chill">Chill & Laid-back</SelectItem>
+                    <SelectItem value="custom">Custom Prompt</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Choose how your AI responds to chat, donations, and events
+                </p>
+              </div>
+
+              {/* Custom Personality Prompt - show only when custom is selected */}
+              {settings?.banterPersonality === 'custom' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Custom Personality Prompt
+                  </label>
+                  <textarea
+                    className="w-full bg-gray-800 border-gray-700 text-white rounded-md p-3 min-h-[100px] resize-y"
+                    placeholder="Describe how you want the AI to behave. Example: You are a pirate-themed banter bot. Always respond with pirate language and nautical references..."
+                    defaultValue={settings?.customPersonalityPrompt || ''}
+                    onBlur={(e) => updateSettingsMutation.mutate({ customPersonalityPrompt: e.target.value })}
+                    data-testid="textarea-custom-prompt"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Write a custom prompt to define exactly how the AI should respond
+                  </p>
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+
           {/* Event Settings */}
           <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
             <CardHeader>

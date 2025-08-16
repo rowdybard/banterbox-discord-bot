@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +50,10 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
   const queryClient = useQueryClient();
   const { updateVolume } = useAudio();
   
+  // Cooldown system for toast notifications
+  const lastToastRef = useRef<{ [key: string]: number }>({});
+  const TOAST_COOLDOWN = 2000; // 2 seconds
+  
   const [volume, setVolume] = useState(settings?.volume || 75);
   const [autoPlay, setAutoPlay] = useState<boolean>(settings?.autoPlay || true);
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
@@ -58,6 +62,19 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
   const [selectedVoiceProvider, setSelectedVoiceProvider] = useState(settings?.voiceProvider || 'openai');
   const [selectedPersonality, setSelectedPersonality] = useState(settings?.banterPersonality || 'witty');
   const [customPrompt, setCustomPrompt] = useState(settings?.customPersonalityPrompt || '');
+  
+  const showToastWithCooldown = (settingType: string) => {
+    const now = Date.now();
+    const lastToastTime = lastToastRef.current[settingType] || 0;
+    
+    if (now - lastToastTime >= TOAST_COOLDOWN) {
+      toast({
+        title: "Settings updated",
+        description: "Your preferences have been saved.",
+      });
+      lastToastRef.current[settingType] = now;
+    }
+  };
 
   // Fetch ElevenLabs voices for Pro users
   const { data: elevenLabsVoices } = useQuery({
@@ -68,16 +85,13 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: async (updates: Partial<UserSettings>) => {
+    mutationFn: async ({ updates, settingType }: { updates: Partial<UserSettings>, settingType: string }) => {
       const response = await apiRequest("PUT", `/api/settings/${userId}`, updates);
-      return response.json();
+      return { data: await response.json(), settingType };
     },
-    onSuccess: () => {
+    onSuccess: ({ settingType }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/settings', userId] });
-      toast({
-        title: "Settings updated",
-        description: "Your preferences have been saved.",
-      });
+      showToastWithCooldown(settingType);
     },
     onError: () => {
       toast({
@@ -130,7 +144,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     // Update overlay volume in real-time
     updateVolume(newVolume / 100);
     // Also save to settings
-    updateSettingsMutation.mutate({ volume: newVolume });
+    updateSettingsMutation.mutate({ updates: { volume: newVolume }, settingType: 'volume' });
     // Store in localStorage for immediate audio control
     localStorage.setItem('banterbox-volume', newVolume.toString());
     localStorage.setItem('banterbox-muted', 'false');
@@ -138,7 +152,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
 
   const handleAutoPlayChange = (checked: boolean) => {
     setAutoPlay(checked);
-    updateSettingsMutation.mutate({ autoPlay: checked });
+    updateSettingsMutation.mutate({ updates: { autoPlay: checked }, settingType: 'autoPlay' });
   };
 
   const handleEventToggle = (eventType: string, checked: boolean) => {
@@ -147,26 +161,26 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
       : enabledEvents.filter(e => e !== eventType);
     
     setEnabledEvents(newEvents);
-    updateSettingsMutation.mutate({ enabledEvents: newEvents as any });
+    updateSettingsMutation.mutate({ updates: { enabledEvents: newEvents as any }, settingType: 'events' });
   };
 
   const handleVoiceProviderChange = (provider: string) => {
     setSelectedVoiceProvider(provider);
-    updateSettingsMutation.mutate({ voiceProvider: provider });
+    updateSettingsMutation.mutate({ updates: { voiceProvider: provider }, settingType: 'voiceProvider' });
   };
 
   const handlePersonalityChange = (personality: string) => {
     setSelectedPersonality(personality);
-    updateSettingsMutation.mutate({ banterPersonality: personality });
+    updateSettingsMutation.mutate({ updates: { banterPersonality: personality }, settingType: 'personality' });
   };
 
   const handleCustomPromptChange = (prompt: string) => {
     setCustomPrompt(prompt);
-    updateSettingsMutation.mutate({ customPersonalityPrompt: prompt });
+    updateSettingsMutation.mutate({ updates: { customPersonalityPrompt: prompt }, settingType: 'customPrompt' });
   };
 
   const handleVoiceIdChange = (voiceId: string) => {
-    updateSettingsMutation.mutate({ voiceId });
+    updateSettingsMutation.mutate({ updates: { voiceId }, settingType: 'voice' });
   };
 
   // Test voice preview
@@ -258,7 +272,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-700">
-                {elevenLabsVoices?.map((voice: any) => (
+                {(Array.isArray(elevenLabsVoices) ? elevenLabsVoices : [])?.map((voice: any) => (
                   <SelectItem key={voice.id} value={voice.id}>
                     {voice.name} - {voice.description}
                   </SelectItem>
@@ -334,7 +348,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
                 const newVolume = volume === 0 ? 75 : 0;
                 setVolume(newVolume);
                 updateVolume(newVolume / 100);
-                updateSettingsMutation.mutate({ volume: newVolume });
+                updateSettingsMutation.mutate({ updates: { volume: newVolume }, settingType: 'volume' });
                 localStorage.setItem('banterbox-volume', newVolume.toString());
                 localStorage.setItem('banterbox-muted', newVolume === 0 ? 'true' : 'false');
               }}

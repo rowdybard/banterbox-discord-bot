@@ -8,7 +8,9 @@ export default function MobileNav() {
     { path: "/dashboard", icon: "fas fa-tachometer-alt", label: "Dashboard" },
     { path: "/overlay", icon: "fas fa-layer-group", label: "Overlay" },
     { path: "/settings", icon: "fas fa-cog", label: "Settings" },
-    { path: "/pro", icon: "fas fa-crown", label: "Pro" },
+    { path: "/marketplace", icon: "fas fa-store", label: "Market" },
+    { path: "/personality-builder", icon: "fas fa-brain", label: "AI" },
+    { path: "/voice-builder", icon: "fas fa-microphone", label: "Voice" },
   ];
 
   return (

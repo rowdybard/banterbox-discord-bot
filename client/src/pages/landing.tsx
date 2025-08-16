@@ -13,13 +13,22 @@ export default function Landing() {
             <h1 className="text-xl font-bold">BanterBox</h1>
           </div>
           
-          <a 
-            href="/api/login"
-            className="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-            data-testid="button-login"
-          >
-            Sign In
-          </a>
+          <div className="flex items-center space-x-3">
+            <Link 
+              href="/auth"
+              className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors border border-gray-600"
+              data-testid="button-local-login"
+            >
+              Sign In
+            </Link>
+            <a 
+              href="/api/auth/google"
+              className="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              data-testid="button-google-login"
+            >
+              Google
+            </a>
+          </div>
         </div>
       </header>
 
@@ -74,15 +83,24 @@ export default function Landing() {
 
           {/* CTA */}
           <div className="space-y-4">
-            <a 
-              href="/api/login"
-              className="inline-block bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all transform hover:scale-105"
-              data-testid="button-get-started"
-            >
-              Get Started Free
-            </a>
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+              <Link 
+                href="/auth"
+                className="inline-block bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all transform hover:scale-105"
+                data-testid="button-get-started"
+              >
+                Get Started Free
+              </Link>
+              <a 
+                href="/api/auth/google"
+                className="inline-block bg-gray-800 hover:bg-gray-700 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all border border-gray-600"
+                data-testid="button-google-cta"
+              >
+                Continue with Google
+              </a>
+            </div>
             <p className="text-sm text-gray-400">
-              Sign in with your Replit account to start generating intelligent stream banter
+              Create an account with email or sign in with Google to start generating intelligent stream banter
             </p>
           </div>
         </div>
