@@ -31,7 +31,7 @@ export function BanterHistory({ userId }: BanterHistoryProps) {
   const { data: banters = [], isLoading } = useQuery({
     queryKey: ['/api/banter', userId],
     enabled: !!userId,
-  });
+  }) as { data: BanterItem[], isLoading: boolean };
 
   const playBanter = async (banterId: string) => {
     try {
@@ -71,7 +71,7 @@ export function BanterHistory({ userId }: BanterHistoryProps) {
                 No banters generated yet. Start creating some witty responses!
               </div>
             ) : (
-              banters.map((banter: BanterItem) => {
+              banters.map((banter) => {
                 const IconComponent = eventTypeIcons[banter.eventType as keyof typeof eventTypeIcons] || MessageSquare;
                 const colorClass = eventTypeColors[banter.eventType as keyof typeof eventTypeColors] || eventTypeColors.chat;
                 
