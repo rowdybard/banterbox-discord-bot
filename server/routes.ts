@@ -493,12 +493,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error generating Discord audio:", audioError);
           // Continue without audio
         }
-      } else {
+      } finally {
         console.log(`Generated Discord text-only banter for ${eventType}: "${banterText}" (not streaming)`);
       }
-      finally {
-        console.log('im a noob');
-      }
+    
       // Create banter item in storage
       const banterItem = await storage.createBanterItem({
         userId: workspaceUserId,
