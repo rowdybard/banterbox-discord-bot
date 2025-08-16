@@ -116,10 +116,21 @@ export async function setupGoogleAuth(app: Express) {
   }));
 
   app.get("/api/auth/google/callback", 
-    passport.authenticate("google", { failureRedirect: "/?error=auth_failed" }),
+    passport.authenticate("google", { 
+      failureRedirect: "/?error=auth_failed" 
+    }),
     (req, res) => {
-      console.log("OAuth callback successful, user:", req.user);
-      res.redirect("/?auth=success");
+      try {
+        console.log("OAuth callback successful, user:", req.user);
+        if (!req.user) {
+          console.error("OAuth callback: No user object after authentication");
+          return res.redirect("/?error=no_user");
+        }
+        res.redirect("/?auth=success");
+      } catch (error) {
+        console.error("OAuth callback error:", error);
+        res.redirect("/?error=callback_error");
+      }
     }
   );
 
