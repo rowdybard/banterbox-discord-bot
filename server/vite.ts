@@ -3,7 +3,13 @@ import fs from "fs";
 import path from "path";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
+import { createRequire } from 'node:module';
+2  const require = createRequire(import.meta.url);
+3  // … keep your other imports
+4  
+5  // inside the dev-only branch, just before using the config:
+6  // @ts-ignore – load vite config at runtime only
+7  const viteConfig = require('../vite.config');
 import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
