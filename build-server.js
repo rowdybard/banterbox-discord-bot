@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-
+// (optional) outExtension: { '.js': '.mjs' }
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 const dependencies = Object.keys(packageJson.dependencies || {});
 
@@ -14,7 +14,7 @@ try {
     bundle: true,
     outfile: 'dist/index.js',
     platform: 'node',
-    target: 'node18',
+    target: 'node20',
     format: 'esm',
     external: externalDeps,
     resolveExtensions: ['.ts', '.js'],
