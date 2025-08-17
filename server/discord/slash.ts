@@ -1,4 +1,4 @@
-import { storage } from '../storage';
+import { storage } from '../storage.js';
 import { randomBytes } from 'crypto';
 
 // Discord permission constants
