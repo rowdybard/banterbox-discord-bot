@@ -910,6 +910,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear ALL Discord cache/connections for fresh start
+  app.post("/api/discord/clear-cache", isAuthenticated, async (req, res) => {
+    try {
+      const authenticatedUserId = req.user.id;
+      console.log(`🧹 Clearing ALL Discord cache for user ${authenticatedUserId}`);
+      
+      let totalCleared = 0;
+      
+      // 1. Clear all guild links for this user
+      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, authenticatedUserId));
+      for (const link of allGuildLinks) {
+        await storage.deactivateGuildLink(link.guildId);
+        await storage.clearCurrentStreamer(link.guildId);
+        totalCleared++;
+        console.log(`❌ Deactivated guild link: ${link.guildId}`);
+      }
+      
+      // 2. Clear all active link codes for this user
+      await db.update(linkCodes)
+        .set({ consumedAt: new Date() })
+        .where(eq(linkCodes.workspaceId, authenticatedUserId));
+      console.log(`❌ Expired all link codes for user`);
+      
+      // 3. Clear voice connections from memory if Discord service is available
+      if (globalDiscordService) {
+        for (const link of allGuildLinks) {
+          // Force leave any voice channels
+          try {
+            await globalDiscordService.leaveVoiceChannel(link.guildId);
+            console.log(`❌ Left voice channel in guild: ${link.guildId}`);
+          } catch (error) {
+            // Ignore errors, guild might not exist
+          }
+        }
+      }
+      
+      // 4. Clear any legacy Discord settings
+      try {
+        await db.update(discordSettings)
+          .set({ 
+            isConnected: false, 
+            connectedGuilds: null,
+            updatedAt: new Date()
+          })
+          .where(eq(discordSettings.userId, authenticatedUserId));
+        console.log(`❌ Cleared legacy Discord settings`);
+      } catch (error) {
+        // Ignore if table doesn't exist or user has no settings
+      }
+
+      res.json({
+        success: true,
+        cleared: totalCleared,
+        message: `🧹 Successfully cleared ALL Discord cache! Removed ${totalCleared} guild connections. You can now re-add the bot fresh.`,
+        actions: [
+          'Deactivated all guild links',
+          'Expired all link codes',
+          'Left all voice channels',
+          'Cleared legacy settings'
+        ]
+      });
+    } catch (error) {
+      console.error('Error clearing Discord cache:', error);
+      res.status(500).json({ message: "Failed to clear Discord cache" });
+    }
+  });
+
   // Simple broadcast test endpoint
   app.post("/api/broadcast-test", async (req, res) => {
     console.log('BROADCAST TEST ENDPOINT CALLED');
