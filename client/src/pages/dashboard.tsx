@@ -9,6 +9,7 @@ import StatsUpgrade from "@/components/dashboard/stats-upgrade";
 import { UsageDashboard } from "@/components/dashboard/usage-dashboard";
 import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { BanterHistory } from "@/components/dashboard/banter-history";
+import VoiceSettings from "@/components/dashboard/voice-settings";
 
 
 import { LoadingState } from "@/components/ui/loading-state";
@@ -393,6 +394,11 @@ export default function Dashboard() {
               <BanterQueue userId={userId} />
             </div>
           </div>
+        </section>
+
+        {/* Voice Settings */}
+        <section className="mb-8">
+          <VoiceSettings userId={userId} settings={settings} user={user} />
         </section>
 
         {/* Overlay Preview */}

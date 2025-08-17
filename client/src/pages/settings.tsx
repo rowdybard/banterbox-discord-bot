@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -25,8 +24,6 @@ export default function Settings() {
     queryKey: ['/api/settings', userId],
   }) as { data: UserSettings | undefined };
 
-  const [volume, setVolume] = useState(settings?.volume || 75);
-  const [autoPlay, setAutoPlay] = useState<boolean>(settings?.autoPlay || true);
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
     (settings?.enabledEvents as string[]) || ['chat']
   );
@@ -53,16 +50,7 @@ export default function Settings() {
     },
   });
 
-  const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
-    setVolume(newVolume);
-    updateSettingsMutation.mutate({ volume: newVolume });
-  };
 
-  const handleAutoPlayChange = (checked: boolean) => {
-    setAutoPlay(checked);
-    updateSettingsMutation.mutate({ autoPlay: checked });
-  };
 
   const handleEventToggle = (eventType: string, checked: boolean) => {
     const newEvents = checked
@@ -98,65 +86,7 @@ export default function Settings() {
           <TwitchSettings />
           <DiscordBotSettings />
           
-          {/* Audio Settings */}
-          <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Audio Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              
-              {/* Voice Provider */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Voice Provider
-                </label>
-                <Select 
-                  defaultValue={settings?.voiceProvider || "openai"}
-                  onValueChange={(value) => updateSettingsMutation.mutate({ voiceProvider: value })}
-                  data-testid="select-voice-provider"
-                >
-                  <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    <SelectItem value="openai">OpenAI TTS (Free)</SelectItem>
-                    <SelectItem value="elevenlabs" disabled>ElevenLabs Premium (Pro)</SelectItem>
-                    <SelectItem value="custom" disabled>Custom Voice Clone (Pro)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {/* Auto-play */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-300">Auto-play Banter</span>
-                <Switch
-                  checked={autoPlay}
-                  onCheckedChange={handleAutoPlayChange}
-                  className="data-[state=checked]:bg-primary"
-                  data-testid="switch-autoplay"
-                />
-              </div>
-
-              {/* Volume */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Volume: {volume}%
-                </label>
-                <div className="flex items-center space-x-3">
-                  <i className="fas fa-volume-down text-gray-400"></i>
-                  <Slider
-                    value={[volume]}
-                    onValueChange={handleVolumeChange}
-                    max={100}
-                    step={1}
-                    className="flex-1"
-                    data-testid="slider-volume"
-                  />
-                  <i className="fas fa-volume-up text-gray-400"></i>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Personality Settings */}
           <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">

@@ -12,6 +12,11 @@ export class DiscordService {
   private config: DiscordConfig;
   private banterCallback?: (userId: string, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
   private voiceConnections: Map<string, VoiceConnection> = new Map(); // Track active voice connections by guild ID
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  private reconnectDelay: number = 5000;
+  private heartbeatInterval?: NodeJS.Timeout;
+  private isReconnecting: boolean = false;
 
   constructor(config: DiscordConfig) {
     this.config = config;
@@ -22,15 +27,27 @@ export class DiscordService {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers
-      ]
+      ],
+      // Add connection stability options
+      ws: {
+        properties: {
+          browser: 'Discord iOS'
+        }
+      }
     });
 
     this.setupEventHandlers();
   }
 
   private setupEventHandlers() {
+    // Handle client ready event
     this.client.once(Events.ClientReady, async (readyClient) => {
       console.log(`Discord bot ready! Logged in as ${readyClient.user.tag}`);
+      this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+      this.isReconnecting = false;
+      
+      // Start heartbeat to keep connection alive
+      this.startHeartbeat();
       
       // Check if bot is already in any voice channels (from previous session)
       for (const guild of Array.from(readyClient.guilds.cache.values())) {
@@ -52,116 +69,212 @@ export class DiscordService {
       }
     });
 
+    // Handle disconnection events
+    this.client.on(Events.Disconnect, (event) => {
+      console.log(`Discord bot disconnected: ${event.reason} (code: ${event.code})`);
+      this.stopHeartbeat();
+      this.attemptReconnect();
+    });
+
+    this.client.on(Events.Error, (error) => {
+      console.error('Discord bot error:', error);
+      // Don't immediately reconnect on error - let the disconnect event handle it
+    });
+
+    this.client.on(Events.Warn, (warning) => {
+      console.warn('Discord bot warning:', warning);
+    });
+
     // Handle Discord messages for banter generation
     this.client.on(Events.MessageCreate, async (message: Message) => {
-      // Ignore bot messages and system messages
-      if (message.author.bot || !message.guild) return;
-      
-      console.log(`Discord message received from ${message.author.username}: ${message.content}`);
-      
-      // Check if bot is in a voice channel in this guild (streaming mode)
-      const voiceConnection = this.voiceConnections.get(message.guild.id);
-      if (!voiceConnection) {
-        console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
-        return; // Only respond when in voice channel
-      }
+      try {
+        // Ignore bot messages and system messages
+        if (message.author.bot || !message.guild) return;
+        
+        console.log(`Discord message received from ${message.author.username}: ${message.content}`);
+        
+        // Check if bot is in a voice channel in this guild (streaming mode)
+        const voiceConnection = this.voiceConnections.get(message.guild.id);
+        if (!voiceConnection) {
+          console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
+          return; // Only respond when in voice channel
+        }
 
-      // Only respond to messages that mention "banterbox" or are direct responses
-      const shouldRespond = message.content.toLowerCase().includes('banterbox') || 
-                           message.content.toLowerCase().includes('banter') ||
-                           message.mentions.has(this.client.user!.id);
-      
-      if (!shouldRespond) {
-        console.log(`Ignoring message "${message.content}" - doesn't mention banterbox`);
-        return;
-      }
-      
-      console.log(`Triggering banter generation for Discord message in guild ${message.guild.id}`);
-      
-      // Trigger banter generation if callback is set
-      if (this.banterCallback) {
-        await this.banterCallback(
-          message.author.id,
-          message.content,
-          'discord_message',
-          {
-            displayName: message.author.displayName || message.author.username,
-            guildId: message.guild.id,
-            guildName: message.guild.name,
-            channelId: message.channel.id,
-            messageId: message.id,
-            messageContent: message.content
-          }
-        );
+        // Only respond to messages that mention "banterbox" or are direct responses
+        const shouldRespond = message.content.toLowerCase().includes('banterbox') || 
+                             message.content.toLowerCase().includes('banter') ||
+                             message.mentions.has(this.client.user!.id);
+        
+        if (!shouldRespond) {
+          console.log(`Ignoring message "${message.content}" - doesn't mention banterbox`);
+          return;
+        }
+        
+        console.log(`Triggering banter generation for Discord message in guild ${message.guild.id}`);
+        
+        // Trigger banter generation if callback is set
+        if (this.banterCallback) {
+          await this.banterCallback(
+            message.author.id,
+            message.content,
+            'discord_message',
+            {
+              displayName: message.author.displayName || message.author.username,
+              guildId: message.guild.id,
+              guildName: message.guild.name,
+              channelId: message.channel.id,
+              messageId: message.id,
+              messageContent: message.content
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Error handling Discord message:', error);
       }
     });
 
     this.client.on(Events.GuildMemberAdd, async (member: GuildMember) => {
-      // Check if bot is in a voice channel in this guild
-      const voiceConnection = this.voiceConnections.get(member.guild.id);
-      if (!voiceConnection) return;
-      
-      if (this.banterCallback) {
-        await this.banterCallback(
-          member.id,
-          `${member.displayName || member.user.username} joined the server`,
-          'discord_member_join',
-          {
-            displayName: member.displayName || member.user.username,
-            guildId: member.guild.id,
-            guildName: member.guild.name
-          }
-        );
+      try {
+        // Check if bot is in a voice channel in this guild
+        const voiceConnection = this.voiceConnections.get(member.guild.id);
+        if (!voiceConnection) return;
+        
+        if (this.banterCallback) {
+          await this.banterCallback(
+            member.id,
+            `${member.displayName || member.user.username} joined the server`,
+            'discord_member_join',
+            {
+              displayName: member.displayName || member.user.username,
+              guildId: member.guild.id,
+              guildName: member.guild.name
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Error handling guild member add:', error);
       }
     });
 
     // Handle voice state updates to track when bot joins/leaves voice channels
     this.client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
-      // Check if it's our bot
-      if (newState.member?.user.id !== this.client.user?.id) return;
+      try {
+        // Check if it's our bot
+        if (newState.member?.user.id !== this.client.user?.id) return;
 
-      const guildId = newState.guild.id;
+        const guildId = newState.guild.id;
 
-      if (newState.channel) {
-        // Bot joined a voice channel
-        console.log(`Bot joined voice channel ${newState.channel.name} in guild ${newState.guild.name} - streaming mode activated`);
-      } else if (oldState.channel) {
-        // Bot left a voice channel
-        console.log(`Bot left voice channel ${oldState.channel.name} in guild ${oldState.guild.name} - streaming mode deactivated`);
-        this.voiceConnections.delete(guildId);
+        if (newState.channel) {
+          // Bot joined a voice channel
+          console.log(`Bot joined voice channel ${newState.channel.name} in guild ${newState.guild.name} - streaming mode activated`);
+        } else if (oldState.channel) {
+          // Bot left a voice channel
+          console.log(`Bot left voice channel ${oldState.channel.name} in guild ${newState.guild.name} - streaming mode deactivated`);
+          this.voiceConnections.delete(guildId);
+        }
+      } catch (error) {
+        console.error('Error handling voice state update:', error);
       }
     });
 
     // Handle when bot is removed from a guild
     this.client.on(Events.GuildDelete, async (guild) => {
-      console.log(`Bot was removed from guild: ${guild.name} (${guild.id})`);
-      
-      // Clean up voice connections
-      this.voiceConnections.delete(guild.id);
-      
-      // Import storage to clean up guild data
-      const { storage } = await import('./storage');
-      
       try {
-        // Deactivate guild link
-        await storage.deactivateGuildLink(guild.id);
-        console.log(`Deactivated guild link for ${guild.name}`);
+        console.log(`Bot was removed from guild: ${guild.name} (${guild.id})`);
         
-        // Clear any active streamer session
-        await storage.clearCurrentStreamer(guild.id);
-        console.log(`Cleared streaming session for ${guild.name}`);
+        // Clean up voice connections
+        this.voiceConnections.delete(guild.id);
         
-        // Note: We don't delete guild settings/banters as user might re-add the bot
+        // Import storage to clean up guild data
+        const { storage } = await import('./storage');
+        
+        try {
+          // Deactivate guild link
+          await storage.deactivateGuildLink(guild.id);
+          console.log(`Deactivated guild link for ${guild.name}`);
+          
+          // Clear any active streamer session
+          await storage.clearCurrentStreamer(guild.id);
+          console.log(`Cleared streaming session for ${guild.name}`);
+          
+          // Note: We don't delete guild settings/banters as user might re-add the bot
+        } catch (error) {
+          console.error(`Error cleaning up guild data for ${guild.name}:`, error);
+        }
       } catch (error) {
-        console.error(`Error cleaning up guild data for ${guild.name}:`, error);
+        console.error('Error handling guild delete:', error);
       }
     });
 
     // Handle when bot joins a new guild
     this.client.on(Events.GuildCreate, async (guild) => {
-      console.log(`Bot added to new guild: ${guild.name} (${guild.id})`);
-      console.log(`Guild has ${guild.memberCount} members`);
+      try {
+        console.log(`Bot added to new guild: ${guild.name} (${guild.id})`);
+        console.log(`Guild has ${guild.memberCount} members`);
+      } catch (error) {
+        console.error('Error handling guild create:', error);
+      }
     });
+  }
+
+  private startHeartbeat() {
+    // Clear any existing heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    // Send heartbeat every 30 seconds to keep connection alive
+    this.heartbeatInterval = setInterval(() => {
+      try {
+        if (this.client.isReady()) {
+          // Ping the gateway to keep connection alive
+          this.client.ws.ping();
+          console.log('Discord heartbeat sent - connection healthy');
+        }
+      } catch (error) {
+        console.error('Error sending Discord heartbeat:', error);
+      }
+    }, 30000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
+  }
+
+  private async attemptReconnect() {
+    if (this.isReconnecting) {
+      console.log('Already attempting to reconnect, skipping...');
+      return;
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached. Stopping reconnection attempts.`);
+      return;
+    }
+
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+
+    console.log(`Attempting to reconnect Discord bot (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+
+    try {
+      // Wait before attempting reconnection
+      await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
+      
+      // Attempt to reconnect
+      await this.connect();
+      console.log('Discord bot reconnected successfully');
+    } catch (error) {
+      console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error);
+      this.isReconnecting = false;
+      
+      // Try again with exponential backoff
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+      setTimeout(() => this.attemptReconnect(), this.reconnectDelay);
+    }
   }
 
   async connect() {
@@ -175,6 +288,7 @@ export class DiscordService {
   }
 
   disconnect() {
+    this.stopHeartbeat();
     this.client.destroy();
     console.log('Discord bot disconnected');
   }
@@ -209,24 +323,28 @@ export class DiscordService {
       // Import entersState function
       const { entersState, VoiceConnectionStatus } = await import('@discordjs/voice');
       
-      // Don't wait for connection to be ready - start immediately
-      console.log('Voice connection established - ready for audio playback');
+      // Wait for connection to be ready with timeout
+      try {
+        await entersState(connection, VoiceConnectionStatus.Ready, 10000);
+        console.log('Voice connection ready for audio playback');
+      } catch (timeoutError) {
+        console.warn('Voice connection timeout, but continuing anyway:', timeoutError);
+      }
 
       // Add connection event listeners for stability
       connection.on('stateChange', (oldState, newState) => {
         console.log(`Discord voice connection state changed from ${oldState.status} to ${newState.status}`);
-      });
-
-      connection.on('error', (error) => {
-        console.error('Discord voice connection error:', error);
-      });
-
-      // Prevent idle timeout by implementing keepalive
-      connection.on('stateChange', (oldState, newState) => {
+        
+        // Handle connection destruction
         if (newState.status === VoiceConnectionStatus.Destroyed) {
           console.log('Discord voice connection destroyed - cleaning up');
           this.voiceConnections.delete(guildId);
         }
+      });
+
+      connection.on('error', (error) => {
+        console.error('Discord voice connection error:', error);
+        // Don't immediately destroy connection on error - let it try to recover
       });
 
       this.voiceConnections.set(guildId, connection);
@@ -290,8 +408,8 @@ export class DiscordService {
       });
       
       // Convert localhost URL to public URL for Discord access
-          const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
-    console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+      const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
+      console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
       console.log(`Original audio URL: ${audioUrl}`);
       
       // Handle different audio URL types
@@ -334,10 +452,16 @@ export class DiscordService {
       const connectionState = connection.state.status;
       console.log(`Voice connection state: ${connectionState}`);
       
-      // Force play immediately regardless of connection state for Replit
-      console.log(`Voice connection state: ${connectionState} - forcing audio playback`);
-      
-      // Skip all connection state checks for Replit environment
+      // Wait for connection to be ready if it's not already
+      if (connectionState !== VoiceConnectionStatus.Ready) {
+        console.log('Waiting for voice connection to be ready...');
+        try {
+          await entersState(connection, VoiceConnectionStatus.Ready, 5000);
+          console.log('Voice connection is now ready');
+        } catch (timeoutError) {
+          console.warn('Voice connection not ready, but attempting playback anyway:', timeoutError);
+        }
+      }
       
       // Play the audio with enhanced logging
       console.log('Starting audio playback...');
@@ -356,12 +480,6 @@ export class DiscordService {
         console.log(`Audio player state: ${oldState.status} -> ${newState.status}`);
       });
       
-      // Force connection to Ready state for Replit environment
-      if (connectionState !== VoiceConnectionStatus.Ready) {
-        console.log('Attempting to force connection to ready state...');
-        // Note: Removed ping call as it's not available in current Discord.js voice API
-      }
-      
       // Wait for playback to finish
       return new Promise((resolve) => {
         player.on(AudioPlayerStatus.Idle, () => {
@@ -374,11 +492,11 @@ export class DiscordService {
           resolve(false);
         });
         
-        // Timeout after 5 seconds - shorter timeout for faster response
+        // Timeout after 10 seconds - longer timeout for more reliable audio
         setTimeout(() => {
           console.log('Audio playback timeout - assuming success');
           resolve(true);
-        }, 5000);
+        }, 10000);
       });
     } catch (error) {
       console.error('Error playing audio in voice channel:', error);
@@ -453,6 +571,22 @@ export class DiscordService {
     ];
     
     return `https://discord.com/api/oauth2/authorize?client_id=${this.config.clientId}&permissions=2147534848&scope=bot%20applications.commands`;
+  }
+
+  // Check connection health
+  isHealthy(): boolean {
+    return this.client.isReady() && !this.isReconnecting;
+  }
+
+  // Get connection status
+  getConnectionStatus() {
+    return {
+      isReady: this.client.isReady(),
+      isReconnecting: this.isReconnecting,
+      reconnectAttempts: this.reconnectAttempts,
+      voiceConnections: this.voiceConnections.size,
+      guilds: this.client.guilds.cache.size
+    };
   }
 }
 

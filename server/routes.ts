@@ -487,7 +487,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Health check endpoint for offline detection
   app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    const discordStatus = globalDiscordService ? globalDiscordService.getConnectionStatus() : null;
+    
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      discord: discordStatus ? {
+        isReady: discordStatus.isReady,
+        isReconnecting: discordStatus.isReconnecting,
+        reconnectAttempts: discordStatus.reconnectAttempts,
+        voiceConnections: discordStatus.voiceConnections,
+        guilds: discordStatus.guilds,
+        healthy: globalDiscordService?.isHealthy() || false
+      } : null
+    });
   });
   
   // Complete onboarding endpoint
@@ -909,13 +922,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
   
+      // Get Discord service status
+      const discordServiceStatus = globalDiscordService ? globalDiscordService.getConnectionStatus() : null;
+  
       res.json({
         isConnected: verifiedGuilds.length > 0,
         connectedGuilds: verifiedGuilds.length,
         totalGuildLinks: activeGuildLinks.length,
         staleConnections,
         botOnline: !!globalDiscordService,
-        guilds: verifiedGuilds
+        botHealthy: globalDiscordService?.isHealthy() || false,
+        guilds: verifiedGuilds,
+        serviceStatus: discordServiceStatus
       });
     } catch (error) {
       console.error('Error getting Discord status:', error);
@@ -964,6 +982,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error cleaning up stale connections:', error);
       res.status(500).json({ message: "Failed to clean up stale connections" });
+    }
+  });
+
+  // Emergency Discord bot restart (admin only)
+  app.post("/api/discord/restart", isAuthenticated, async (req, res) => {
+    try {
+      const authenticatedUserId = req.user.id;
+      
+      // Only allow restart if Discord service exists and is unhealthy
+      if (!globalDiscordService) {
+        return res.status(503).json({ message: "Discord bot not initialized" });
+      }
+
+      if (globalDiscordService.isHealthy()) {
+        return res.status(400).json({ message: "Discord bot is healthy, restart not needed" });
+      }
+
+      console.log(`🔄 Emergency Discord bot restart requested by user ${authenticatedUserId}`);
+      
+      // Disconnect current service
+      globalDiscordService.disconnect();
+      
+      // Wait a moment for cleanup
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Reinitialize Discord service
+      if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_CLIENT_ID) {
+        globalDiscordService = new DiscordService({
+          token: process.env.DISCORD_BOT_TOKEN,
+          clientId: process.env.DISCORD_CLIENT_ID,
+          clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+        });
+        
+        globalDiscordService.setBanterCallback(generateBanterFromDiscordEvent);
+        await globalDiscordService.connect();
+        
+        // Set the service in slash command handler
+        const { setDiscordService } = await import('./discord/slash');
+        setDiscordService(globalDiscordService);
+        
+        console.log('✅ Discord bot restarted successfully');
+        
+        res.json({
+          success: true,
+          message: "Discord bot restarted successfully",
+          status: globalDiscordService.getConnectionStatus()
+        });
+      } else {
+        throw new Error("Discord bot credentials not configured");
+      }
+    } catch (error) {
+      console.error('Error restarting Discord bot:', error);
+      res.status(500).json({ message: "Failed to restart Discord bot", error: error.message });
     }
   });
 

@@ -5,11 +5,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useAudio } from "@/hooks/use-audio";
 import type { UserSettings, User } from "@shared/schema";
 
 const personalityPresets = {
@@ -48,18 +46,14 @@ interface ControlPanelProps {
 export default function ControlPanel({ userId, settings, user }: ControlPanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { updateVolume } = useAudio();
   
   // Cooldown system for toast notifications
   const lastToastRef = useRef<{ [key: string]: number }>({});
   const TOAST_COOLDOWN = 2000; // 2 seconds
   
-  const [volume, setVolume] = useState(settings?.volume || 75);
-  const [autoPlay, setAutoPlay] = useState<boolean>(settings?.autoPlay || true);
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
     (settings?.enabledEvents as string[]) || ['chat']
   );
-  const [selectedVoiceProvider, setSelectedVoiceProvider] = useState(settings?.voiceProvider || 'openai');
   const [selectedPersonality, setSelectedPersonality] = useState(settings?.banterPersonality || 'witty');
   const [customPrompt, setCustomPrompt] = useState(settings?.customPersonalityPrompt || '');
   
@@ -76,12 +70,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     }
   };
 
-  // Fetch ElevenLabs voices for Pro users
-  const { data: elevenLabsVoices } = useQuery({
-    queryKey: ['/api/elevenlabs/voices'],
-    enabled: Boolean(user?.isPro && selectedVoiceProvider === 'elevenlabs'),
-    retry: false,
-  });
+
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
@@ -138,22 +127,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     },
   });
 
-  const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
-    setVolume(newVolume);
-    // Update overlay volume in real-time
-    updateVolume(newVolume / 100);
-    // Also save to settings
-    updateSettingsMutation.mutate({ updates: { volume: newVolume }, settingType: 'volume' });
-    // Store in localStorage for immediate audio control
-    localStorage.setItem('banterbox-volume', newVolume.toString());
-    localStorage.setItem('banterbox-muted', 'false');
-  };
 
-  const handleAutoPlayChange = (checked: boolean) => {
-    setAutoPlay(checked);
-    updateSettingsMutation.mutate({ updates: { autoPlay: checked }, settingType: 'autoPlay' });
-  };
 
   const handleEventToggle = (eventType: string, checked: boolean) => {
     const newEvents = checked
@@ -162,11 +136,6 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     
     setEnabledEvents(newEvents);
     updateSettingsMutation.mutate({ updates: { enabledEvents: newEvents as any }, settingType: 'events' });
-  };
-
-  const handleVoiceProviderChange = (provider: string) => {
-    setSelectedVoiceProvider(provider);
-    updateSettingsMutation.mutate({ updates: { voiceProvider: provider }, settingType: 'voiceProvider' });
   };
 
   const handlePersonalityChange = (personality: string) => {
@@ -178,40 +147,6 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     setCustomPrompt(prompt);
     updateSettingsMutation.mutate({ updates: { customPersonalityPrompt: prompt }, settingType: 'customPrompt' });
   };
-
-  const handleVoiceIdChange = (voiceId: string) => {
-    updateSettingsMutation.mutate({ updates: { voiceId }, settingType: 'voice' });
-  };
-
-  // Test voice preview
-  const testVoiceMutation = useMutation({
-    mutationFn: async ({ voiceId }: { voiceId: string }) => {
-      const response = await apiRequest("POST", "/api/elevenlabs/test-voice", { voiceId });
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      const audio = new Audio(audioUrl);
-      audio.play();
-      
-      // Clean up the URL after playing
-      audio.onended = () => URL.revokeObjectURL(audioUrl);
-      
-      return audioUrl;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Voice preview",
-        description: "Playing voice sample...",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to play voice preview.",
-        variant: "destructive",
-      });
-    },
-  });
 
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
@@ -232,68 +167,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
           </div>
         </div>
         
-        {/* Voice Provider Selection */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Voice Provider
-          </label>
-          <Select 
-            value={selectedVoiceProvider}
-            onValueChange={handleVoiceProviderChange}
-            data-testid="select-voice-provider"
-          >
-            <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-800 border-gray-700">
-              <SelectItem value="openai">OpenAI TTS (Free)</SelectItem>
-              <SelectItem value="elevenlabs" disabled={!user?.isPro}>
-                ElevenLabs Premium {!user?.isPro && '(Pro Required)'}
-              </SelectItem>
-              <SelectItem value="custom" disabled={!user?.isPro}>
-                Custom Voice Clone {!user?.isPro && '(Pro Required)'}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
 
-        {/* ElevenLabs Voice Selection */}
-        {selectedVoiceProvider === 'elevenlabs' && user?.isPro && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              ElevenLabs Voice
-            </label>
-            <Select 
-              defaultValue={settings?.voiceId || "21m00Tcm4TlvDq8ikWAM"}
-              onValueChange={handleVoiceIdChange}
-              data-testid="select-elevenlabs-voice"
-            >
-              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                {(Array.isArray(elevenLabsVoices) ? elevenLabsVoices : [])?.map((voice: any) => (
-                  <SelectItem key={voice.id} value={voice.id}>
-                    {voice.name} - {voice.description}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            {settings?.voiceId && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 bg-gray-800 hover:bg-gray-700 text-white border-gray-700"
-                onClick={() => testVoiceMutation.mutate({ voiceId: settings.voiceId || "21m00Tcm4TlvDq8ikWAM" })}
-                disabled={testVoiceMutation.isPending}
-                data-testid="button-test-voice"
-              >
-                {testVoiceMutation.isPending ? "Playing..." : "🔊 Test Voice"}
-              </Button>
-            )}
-          </div>
-        )}
         
         {/* Event Types */}
         <div className="mb-6">
@@ -326,51 +200,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
           </div>
         </div>
         
-        {/* Auto-play Toggle */}
-        <div className="flex items-center justify-between mb-6">
-          <span className="text-sm font-medium text-gray-300">Auto-play Banter</span>
-          <Switch
-            checked={autoPlay}
-            onCheckedChange={handleAutoPlayChange}
-            className="data-[state=checked]:bg-primary"
-            data-testid="switch-autoplay"
-          />
-        </div>
-        
-        {/* Volume Control */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Overlay Volume: {volume}%
-          </label>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => {
-                const newVolume = volume === 0 ? 75 : 0;
-                setVolume(newVolume);
-                updateVolume(newVolume / 100);
-                updateSettingsMutation.mutate({ updates: { volume: newVolume }, settingType: 'volume' });
-                localStorage.setItem('banterbox-volume', newVolume.toString());
-                localStorage.setItem('banterbox-muted', newVolume === 0 ? 'true' : 'false');
-              }}
-              className="text-gray-400 hover:text-white transition-colors"
-              data-testid="button-mute-toggle"
-            >
-              <i className={`fas ${volume === 0 ? 'fa-volume-mute' : 'fa-volume-down'}`}></i>
-            </button>
-            <Slider
-              value={[volume]}
-              onValueChange={handleVolumeChange}
-              max={100}
-              step={1}
-              className="flex-1"
-              data-testid="slider-volume"
-            />
-            <i className="fas fa-volume-up text-gray-400"></i>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Controls volume for overlay audio playback in real-time
-          </p>
-        </div>
+
 
         {/* Personality Selection */}
         <div className="mb-6">
