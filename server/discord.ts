@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Events, Message, GuildMember, VoiceState } from 'discord.js';
 import { joinVoiceChannel, VoiceConnection, getVoiceConnection } from '@discordjs/voice';
-
+import Prism from 'prism-media';
+import { createAudioResource, demuxProbe } from '@discordjs/voice';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +9,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const LOCAL_TEST_MP3 = path.resolve(process.cwd(), 'test.mp3');
 
+// helper: turn a remote MP3 URL into a Resource
+async function resourceFromMp3Url(url: string) {
+  // FFmpeg reads the HTTP URL and outputs raw PCM
+  const ffmpeg = new Prism.FFmpeg({
+    args: [
+      '-re',                // natural pacing (optional, but good for streams)
+      '-i', url,            // input = your MP3 URL (use the Firebase *download URL*)
+      '-analyzeduration', '0',
+      '-loglevel', '0',
+      '-f', 's16le',        // 16-bit PCM
+      '-ar', '48000',       // 48 kHz
+      '-ac', '2',           // 2 channels
+      'pipe:1'              // write to stdout
+    ]
+  });
+
+  // Let discord.js detect the right input type
+  const { stream, type } = await demuxProbe(ffmpeg);
+  return createAudioResource(stream, { inputType: type });
+  
 interface DiscordConfig {
   token: string;
   clientId: string;
@@ -313,9 +334,7 @@ export class DiscordService {
       }
       
       // Create resource with public URL
-      const resource = createAudioResource(LOCAL_TEST_MP3, {
-        inlineVolume: false,
-      });
+      const resource = await resourceFromMp3Url(remoteUrl);
       
       console.log(`Playing TTS audio in voice channel for guild ${guildId}`);
       
