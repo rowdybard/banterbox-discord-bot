@@ -4,6 +4,7 @@
   "description": "",
   "main": "server/index.js",
   "type": "module",
+  "engines": { "node": ">=18 <=22" },
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "start": "NODE_ENV=production node dist/index.js",
@@ -15,7 +16,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "engines": { "node": ">=18 <=22" },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
     "@discordjs/opus": "^0.10.0",
