@@ -107,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               friendly: "You are a friendly and warm banter human-like personality. Use encouraging language and positive energy in your responses.",
               sarcastic: "You are a playfully sarcastic banter human-like personality. Keep it fun, not mean. Use clever sarcasm and witty comebacks.",
               hype: "You are a high-energy hype human-like personality. Use caps and exclamation points with high energy and excitement.",
-              chill: "You are a relaxed and laid-back banter human-like personality. Keep responses relevant and answer questions using openai while remaining personal to the context."
+              relaxed: "You are a relaxed and laid-back banter human-like personality. Keep responses relevant and answer questions using openai while remaining personal to the context."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
