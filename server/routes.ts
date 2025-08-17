@@ -91,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string): Promise<string> {
     try {
       // Get user personality settings  
-      let personalityContext = "You are a witty and clever banter human-like personality. Make responses under 20 words with clever wordplay and humor. do not use excessive metaphors or ai-cliches";
+      let personalityContext = "You are a witty and clever banter human-like personality. Make responses under 20 words with real openai answers not just conversation. Do not use excessive metaphors or ai cliches";
       
       if (userId) {
         try {
@@ -107,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               friendly: "You are a friendly and warm banter human-like personality. Use encouraging language and positive energy in your responses.",
               sarcastic: "You are a playfully sarcastic banter human-like personality. Keep it fun, not mean. Use clever sarcasm and witty comebacks.",
               hype: "You are a high-energy hype human-like personality. Use caps and exclamation points with high energy and excitement.",
-              chill: "You are a chill and laid-back banter human-like personality. Keep responses relaxed and easygoing while remaining personal to the context."
+              chill: "You are a chill and laid-back banter human-like personality. Keep responses relevant and answer questions using openai while remaining personal to the context."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
