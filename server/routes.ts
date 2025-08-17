@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { ObjectStorageService } from "./objectStorage";
 import { firebaseStorage } from "./firebase";
-import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks } from "@shared/schema";
+import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
