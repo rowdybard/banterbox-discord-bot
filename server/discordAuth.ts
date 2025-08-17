@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { URLSearchParams } from 'url';
-import { storage } from './storage';
-import { isAuthenticated } from './replitAuth';
+import { storage } from './storage.js';
+import { isAuthenticated } from './replitAuth.js';
 
 interface DiscordUser {
   id: string;
