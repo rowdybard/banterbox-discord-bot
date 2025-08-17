@@ -11,6 +11,7 @@ import {
   StreamType,
 } from '@discordjs/voice';
 import ffmpeg from 'ffmpeg-static';
+import ffmpegPath from 'ffmpeg-static';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,19 +36,10 @@ function normalizeAudioUrl(url: string): string {
 }
 
 function ffmpegPCMStream(url: string) {
-  // Transcode MP3 → 48kHz stereo PCM for Discord
-  const args = [
-    '-re',
-    '-i', url,
-    '-analyzeduration', '0',
-    '-loglevel', '0',
-    '-f', 's16le',
-    '-ar', '48000',
-    '-ac', '2',
-    'pipe:1',
-  ];
-  const child = spawn(ffmpeg as string, args, { stdio: ['ignore', 'pipe', 'ignore'] });
-  return child.stdout!; // readable stream of PCM audio
+  const args = ['-re','-i', url,'-analyzeduration','0','-loglevel','0','-f','s16le','-ar','48000','-ac','2','pipe:1'];
+  const bin = (ffmpegPath ?? '') as unknown as string; // ← appease TS
+  const child = spawn(bin, args, { stdio: ['ignore','pipe','ignore'] });
+  return child.stdout!;
 }
 
 function makeResourceFromMp3(url: string) {
