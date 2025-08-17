@@ -5,37 +5,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UserSettings, User } from "@shared/schema";
 
-const personalityPresets = {
-  witty: {
-    name: "Witty & Clever",
-    description: "Smart, funny responses with wordplay",
-  },
-  friendly: {
-    name: "Friendly & Warm", 
-    description: "Welcoming and positive responses",
-  },
-  sarcastic: {
-    name: "Sarcastic & Edgy",
-    description: "Playfully sarcastic humor",
-  },
-  hype: {
-    name: "Hype & Energetic",
-    description: "High-energy excitement builder",
-  },
-  chill: {
-    name: "Chill & Laid-back",
-    description: "Relaxed and casual vibes",
-  },
-  custom: {
-    name: "Custom Personality",
-    description: "Create your own unique personality",
-  }
-};
+
 
 interface ControlPanelProps {
   userId: string;
@@ -54,8 +28,6 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
   const [enabledEvents, setEnabledEvents] = useState<string[]>(
     (settings?.enabledEvents as string[]) || ['chat']
   );
-  const [selectedPersonality, setSelectedPersonality] = useState(settings?.banterPersonality || 'witty');
-  const [customPrompt, setCustomPrompt] = useState(settings?.customPersonalityPrompt || '');
   
   const showToastWithCooldown = (settingType: string) => {
     const now = Date.now();
@@ -138,15 +110,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
     updateSettingsMutation.mutate({ updates: { enabledEvents: newEvents as any }, settingType: 'events' });
   };
 
-  const handlePersonalityChange = (personality: string) => {
-    setSelectedPersonality(personality);
-    updateSettingsMutation.mutate({ updates: { banterPersonality: personality }, settingType: 'personality' });
-  };
 
-  const handleCustomPromptChange = (prompt: string) => {
-    setCustomPrompt(prompt);
-    updateSettingsMutation.mutate({ updates: { customPersonalityPrompt: prompt }, settingType: 'customPrompt' });
-  };
 
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
@@ -202,48 +166,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
         
 
 
-        {/* Personality Selection */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Banter Personality
-          </label>
-          <Select value={selectedPersonality} onValueChange={handlePersonalityChange}>
-            <SelectTrigger className="bg-dark-lighter border-gray-600 text-white" data-testid="select-personality">
-              <SelectValue placeholder="Choose personality style" />
-            </SelectTrigger>
-            <SelectContent className="bg-dark border-gray-600">
-              {Object.entries(personalityPresets).map(([key, preset]) => (
-                <SelectItem key={key} value={key} className="text-white hover:bg-gray-700">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{preset.name}</span>
-                    <span className="text-xs text-gray-400">{preset.description}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          {/* Custom Prompt for Custom Personality */}
-          {selectedPersonality === 'custom' && (
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-gray-400 mb-2">
-                Custom Personality Instructions
-              </label>
-              <Textarea
-                value={customPrompt}
-                onChange={(e) => handleCustomPromptChange(e.target.value)}
-                placeholder="Describe how you want the AI to respond to events..."
-                className="bg-dark-lighter border-gray-600 text-white placeholder:text-gray-500 resize-none"
-                rows={3}
-                data-testid="textarea-custom-prompt"
-              />
-            </div>
-          )}
-          
-          <p className="text-xs text-gray-500 mt-2">
-            Controls the tone and style of AI-generated banter responses
-          </p>
-        </div>
+
         
         {/* Generate Test Banter Button */}
         <Button
