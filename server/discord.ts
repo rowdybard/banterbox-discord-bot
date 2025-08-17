@@ -1,45 +1,72 @@
 import { Client, GatewayIntentBits, Events, Message, GuildMember, VoiceState } from 'discord.js';
-import { joinVoiceChannel, VoiceConnection, getVoiceConnection } from '@discordjs/voice';
-import Prism from 'prism-media';
-import { createAudioResource, demuxProbe } from '@discordjs/voice';
+import {
+  joinVoiceChannel,
+  VoiceConnection,
+  getVoiceConnection,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  NoSubscriberBehavior,
+  VoiceConnectionStatus,
+  StreamType,
+} from '@discordjs/voice';
+import ffmpeg from 'ffmpeg-static';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 const LOCAL_TEST_MP3 = path.resolve(process.cwd(), 'test.mp3');
 
-export class DiscordService {
-  private client: Client;
-  private config: DiscordConfig;
-  private banterCallback?: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
-  private voiceConnections: Map<string, VoiceConnection> = new Map(); // Track active voice connections by guild ID
-  
-// helper: turn a remote MP3 URL into a Resource
-async function resourceFromMp3Url(url: string) {
-  // FFmpeg reads the HTTP URL and outputs raw PCM
-  const ffmpeg = new Prism.FFmpeg({
-    args: [
-      '-re',                // natural pacing (optional, but good for streams)
-      '-i', url,            // input = your MP3 URL (use the Firebase *download URL*)
-      '-analyzeduration', '0',
-      '-loglevel', '0',
-      '-f', 's16le',        // 16-bit PCM
-      '-ar', '48000',       // 48 kHz
-      '-ac', '2',           // 2 channels
-      'pipe:1'              // write to stdout
-    ]
-  });
-
-  // Let discord.js detect the right input type
-  const { stream, type } = await demuxProbe(ffmpeg);
-  return createAudioResource(stream, { inputType: type });
-  
+// Config the service expects at construction
 interface DiscordConfig {
   token: string;
   clientId: string;
   clientSecret: string;
 }
+
+// --- Helpers ---------------------------------------------------------------
+
+// If you pass a Firebase Storage *download* URL (has alt=media&token=...), use as-is.
+// If you pass a public URL, also fine. We don't try to transform; just stream it.
+function normalizeAudioUrl(url: string): string {
+  return url;
+}
+
+function ffmpegPCMStream(url: string) {
+  // Transcode MP3 → 48kHz stereo PCM for Discord
+  const args = [
+    '-re',
+    '-i', url,
+    '-analyzeduration', '0',
+    '-loglevel', '0',
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    'pipe:1',
+  ];
+  const child = spawn(ffmpeg as string, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+  return child.stdout!; // readable stream of PCM audio
+}
+
+function makeResourceFromMp3(url: string) {
+  const stream = ffmpegPCMStream(url);
+  return createAudioResource(stream, { inputType: StreamType.Raw });
+}
+
+// --- Service ---------------------------------------------------------------
+
+export class DiscordService {
+  private client: Client;
+  private config: DiscordConfig;
+  private banterCallback?: (
+    userId: string | null,
+    originalMessage: string,
+    eventType: string,
+    eventData: any
+  ) => Promise<void>;
+  private voiceConnections: Map<string, VoiceConnection> = new Map();
 
   constructor(config: DiscordConfig) {
     this.config = config;
@@ -49,8 +76,8 @@ interface DiscordConfig {
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-      ]
+        GatewayIntentBits.GuildMembers,
+      ],
     });
 
     this.setupEventHandlers();
@@ -59,104 +86,77 @@ interface DiscordConfig {
   private setupEventHandlers() {
     this.client.once(Events.ClientReady, async (readyClient) => {
       console.log(`Discord bot ready! Logged in as ${readyClient.user.tag}`);
-      
+
+      // Restore voice connections if the bot was already in channels
       for (const guild of Array.from(readyClient.guilds.cache.values())) {
         const voiceStates = guild.voiceStates.cache;
         const botVoiceState = voiceStates.get(readyClient.user!.id);
-        
-        if (botVoiceState && botVoiceState.channel) {
-          console.log(`Bot found in voice channel ${botVoiceState.channel.name} (${botVoiceState.channel.id}) in guild ${guild.name} (${guild.id})`);
+        if (botVoiceState?.channel) {
           const connection = getVoiceConnection(guild.id);
           if (connection) {
             this.voiceConnections.set(guild.id, connection);
-            console.log(`✅ Restored existing voice connection for guild ${guild.id}`);
-            console.log(`Voice connections map now has: ${Array.from(this.voiceConnections.keys())}`);
+            console.log(`✅ Restored voice connection for guild ${guild.id}`);
           } else {
-            console.log(`⚠️ No existing connection found, re-joining voice channel...`);
-            const success = await this.joinVoiceChannel(guild.id, botVoiceState.channel.id);
-            if (success) {
-              console.log(`✅ Successfully re-joined voice channel`);
-            } else {
-              console.log(`❌ Failed to re-join voice channel`);
-            }
+            console.log(`Re-joining voice channel ${botVoiceState.channel.name}…`);
+            await this.joinVoiceChannel(guild.id, botVoiceState.channel.id);
           }
         }
       }
-      console.log(`Bot startup complete. Voice connections: ${this.voiceConnections.size} guilds: ${Array.from(this.voiceConnections.keys())}`);
+      console.log(`Startup complete. Tracked voice connections: ${this.voiceConnections.size}`);
     });
 
     this.client.on(Events.MessageCreate, async (message: Message) => {
       if (message.author.bot || !message.guild) return;
-      
-      console.log(`Discord message received from ${message.author.username}: ${message.content}`);
-      
+
       const voiceConnection = this.voiceConnections.get(message.guild.id);
       if (!voiceConnection) {
-        console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
-        console.log(`Current voice connections:`, Array.from(this.voiceConnections.keys()));
+        console.log(`Ignoring text — no voice connection for guild ${message.guild.id}`);
         return;
       }
 
-      const shouldRespond = message.content.toLowerCase().includes('banterbox') || 
-                           message.content.toLowerCase().includes('banter') ||
-                           message.mentions.has(this.client.user!.id);
-      
-      if (!shouldRespond) {
-        console.log(`Ignoring message "${message.content}" - doesn't mention banterbox`);
-        return;
-      }
-      
-      console.log(`Triggering banter generation for Discord message in guild ${message.guild.id}`);
-      
+      const shouldRespond =
+        message.content.toLowerCase().includes('banterbox') ||
+        message.content.toLowerCase().includes('banter') ||
+        message.mentions.has(this.client.user!.id);
+
+      if (!shouldRespond) return;
+
+      console.log(`Triggering banter generation for guild ${message.guild.id}`);
       if (this.banterCallback) {
-        await this.banterCallback(
-          null, // userId will be looked up from guild link
-          message.content,
-          'discord_message',
-          {
-            displayName: message.author.displayName || message.author.username,
-            username: message.author.username,
-            discordUserId: message.author.id,
-            guildId: message.guild.id,
-            guildName: message.guild.name,
-            channelId: message.channel.id,
-            messageId: message.id,
-            messageContent: message.content
-          }
-        );
+        await this.banterCallback(null, message.content, 'discord_message', {
+          displayName: (message.author as any).displayName || message.author.username,
+          username: message.author.username,
+          discordUserId: message.author.id,
+          guildId: message.guild.id,
+          guildName: message.guild.name,
+          channelId: message.channel.id,
+          messageId: message.id,
+          messageContent: message.content,
+        });
       }
     });
 
     this.client.on(Events.GuildMemberAdd, async (member: GuildMember) => {
       const voiceConnection = this.voiceConnections.get(member.guild.id);
       if (!voiceConnection) return;
-      
+
       if (this.banterCallback) {
-        await this.banterCallback(
-          null, // userId will be looked up from guild link
-          `${member.displayName || member.user.username} joined the server`,
-          'discord_member_join',
-          {
-            displayName: member.displayName || member.user.username,
-            username: member.user.username,
-            discordUserId: member.id,
-            guildId: member.guild.id,
-            guildName: member.guild.name
-          }
-        );
+        await this.banterCallback(null, `${member.displayName || member.user.username} joined the server`, 'discord_member_join', {
+          displayName: member.displayName || member.user.username,
+          username: member.user.username,
+          discordUserId: member.id,
+          guildId: member.guild.id,
+          guildName: member.guild.name,
+        });
       }
     });
 
     this.client.on(Events.VoiceStateUpdate, (oldState: VoiceState, newState: VoiceState) => {
       if (newState.member?.user.id !== this.client.user?.id) return;
-
       const guildId = newState.guild.id;
-
-      if (newState.channel) {
-        console.log(`Bot joined voice channel ${newState.channel.name} in guild ${newState.guild.name} - streaming mode activated`);
-      } else if (oldState.channel) {
-        console.log(`Bot left voice channel ${oldState.channel.name} in guild ${oldState.guild.name} - streaming mode deactivated`);
+      if (!newState.channel && oldState.channel) {
         this.voiceConnections.delete(guildId);
+        console.log(`Left voice channel in guild ${newState.guild.name}`);
       }
     });
   }
@@ -176,7 +176,9 @@ interface DiscordConfig {
     console.log('Discord bot disconnected');
   }
 
-  setBanterCallback(callback: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>) {
+  setBanterCallback(
+    callback: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>
+  ) {
     this.banterCallback = callback;
   }
 
@@ -184,51 +186,26 @@ interface DiscordConfig {
   async joinVoiceChannel(guildId: string, channelId: string): Promise<boolean> {
     try {
       const guild = this.client.guilds.cache.get(guildId);
-      if (!guild) {
-        console.error(`Guild ${guildId} not found`);
-        return false;
-      }
+      if (!guild) return false;
 
       const voiceChannel = guild.channels.cache.get(channelId);
-      if (!voiceChannel || !voiceChannel.isVoiceBased()) {
-        console.error(`Voice channel ${channelId} not found or not voice-based`);
-        return false;
-      }
+      if (!voiceChannel || !voiceChannel.isVoiceBased()) return false;
 
       const connection = joinVoiceChannel({
-        channelId: channelId,
-        guildId: guildId,
-        adapterCreator: guild.voiceAdapterCreator as any, // Fix type compatibility
-        selfDeaf: false, // Allow bot to be undeafened for proper audio playback
+        channelId,
+        guildId,
+        adapterCreator: (guild as any).voiceAdapterCreator,
+        selfDeaf: false,
         selfMute: false,
       });
 
-      // Import entersState function
-      const { entersState, VoiceConnectionStatus } = await import('@discordjs/voice');
-      
-      // Don't wait for connection to be ready - start immediately
-      console.log('Voice connection established - ready for audio playback');
-
-      // Add connection event listeners for stability
-      connection.on('stateChange', (oldState, newState) => {
-        console.log(`Discord voice connection state changed from ${oldState.status} to ${newState.status}`);
+      connection.on('stateChange', (o, n) => {
+        console.log(`Voice connection: ${o.status} → ${n.status}`);
       });
-
-      connection.on('error', (error) => {
-        console.error('Discord voice connection error:', error);
-      });
-
-      // Prevent idle timeout by implementing keepalive
-      connection.on('stateChange', (oldState, newState) => {
-        if (newState.status === VoiceConnectionStatus.Destroyed) {
-          console.log('Discord voice connection destroyed - cleaning up');
-          this.voiceConnections.delete(guildId);
-        }
-      });
+      connection.on('error', (e) => console.error('Voice connection error:', e));
 
       this.voiceConnections.set(guildId, connection);
-      console.log(`Bot joined voice channel ${voiceChannel.name} in guild ${guild.name} - streaming mode activated`);
-      console.log(`Voice connections map now contains ${this.voiceConnections.size} entries for guilds: ${Array.from(this.voiceConnections.keys())}`);
+      console.log(`Joined voice channel ${(voiceChannel as any).name} in guild ${(guild as any).name}`);
       return true;
     } catch (error) {
       console.error('Error joining voice channel:', error);
@@ -243,7 +220,6 @@ interface DiscordConfig {
       if (connection) {
         connection.destroy();
         this.voiceConnections.delete(guildId);
-        console.log(`Bot left voice channel in guild ${guildId}`);
         return true;
       }
       return false;
@@ -253,191 +229,85 @@ interface DiscordConfig {
     }
   }
 
-  // Check if bot is in voice channel (streaming mode)
   isInVoiceChannel(guildId: string): boolean {
     const hasConnection = this.voiceConnections.has(guildId);
-    console.log(`[isInVoiceChannel] Guild ${guildId}: ${hasConnection} (Map size: ${this.voiceConnections.size}, Keys: ${Array.from(this.voiceConnections.keys())})`);
-    
-    // Also check if bot is actually in a voice channel according to Discord
     const guild = this.client.guilds.cache.get(guildId);
     if (guild) {
-      const botVoiceState = guild.voiceStates.cache.get(this.client.user!.id);
-      const isInChannel = !!botVoiceState?.channel;
-      console.log(`[isInVoiceChannel] Discord state check - Bot in channel: ${isInChannel}`);
-      
-      // If Discord says we're in a channel but Map is empty, restore the connection
-      if (isInChannel && !hasConnection && botVoiceState?.channel) {
-        console.log(`[isInVoiceChannel] State mismatch detected! Restoring connection...`);
-        const connection = getVoiceConnection(guildId);
-        if (connection) {
-          this.voiceConnections.set(guildId, connection);
-          console.log(`[isInVoiceChannel] Connection restored to Map`);
-          return true;
-        }
-      }
-      
-      return hasConnection || isInChannel;
+      const botState = guild.voiceStates.cache.get(this.client.user!.id);
+      return hasConnection || !!botState?.channel;
     }
-    
     return hasConnection;
   }
 
-  // Play TTS audio in voice channel
+  // Play a Firebase MP3 (or any MP3 URL) in the current voice channel
   async playAudioInVoiceChannel(guildId: string, audioUrl: string): Promise<boolean> {
     try {
       const connection = this.voiceConnections.get(guildId);
       if (!connection) {
-        console.log('No voice connection found for guild', guildId);
+        console.log('No voice connection for guild', guildId);
         return false;
       }
 
-      // Import voice modules dynamically
-      const { createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = await import('@discordjs/voice');
-      
-      // Create audio resource with more compatible settings for Replit
-      console.log(`Creating audio resource from: ${audioUrl}`);
-      
-      // URL conversion and testing is now done below
-      
-      // Import the NoSubscriberBehavior enum
-      const { NoSubscriberBehavior } = await import('@discordjs/voice');
-      
-      // Create audio player with better error handling
+      const url = normalizeAudioUrl(audioUrl);
+      console.log('Creating audio resource from URL:', url);
+
       const player = createAudioPlayer({
         behaviors: {
-          noSubscriber: NoSubscriberBehavior.Play, // Force play even if no subscribers initially
-          maxMissedFrames: Math.round(5000 / 20), // 5 seconds
+          noSubscriber: NoSubscriberBehavior.Play,
+          maxMissedFrames: Math.round(5000 / 20),
         },
       });
-      
-      // Convert localhost URL to public URL for Discord access
-      const replicationDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
-      const railwayDomain = process.env.RAILWAY_STATIC_URL;
-      console.log(`REPLIT_DOMAINS env var: ${process.env.REPLIT_DOMAINS}`);
-      console.log(`RAILWAY_STATIC_URL env var: ${process.env.RAILWAY_STATIC_URL}`);
-      console.log(`Original audio URL: ${audioUrl}`);
-      
-      const publicAudioUrl = railwayDomain 
-        ? `https://${railwayDomain}${audioUrl.replace('http://localhost:5000', '')}`
-        : replicationDomain 
-        ? `https://${replicationDomain}${audioUrl.replace('http://localhost:5000', '')}`
-        : audioUrl;
-      
-      console.log(`Public audio URL for Discord: ${publicAudioUrl}`);
-      
-      // Test URL accessibility before trying to play
-      try {
-        const testResponse = await fetch(publicAudioUrl);
-        console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
-      } catch (error) {
-        console.log(`Audio URL not accessible:`, (error as Error).message);
-      }
-      
-      // Create resource with public URL
-      const resource = await resourceFromMp3Url(audioUrl);
-      
-      console.log(`Playing TTS audio in voice channel for guild ${guildId}`);
-      
-      // Check connection state and play immediately if connecting
-      const connectionState = connection.state.status;
-      console.log(`Voice connection state: ${connectionState}`);
-      
-      // Force play immediately regardless of connection state for Replit
-      console.log(`Voice connection state: ${connectionState} - forcing audio playback`);
-      
-      // Skip all connection state checks for Replit environment
-      
-      // Play the audio with enhanced logging
-      console.log('Starting audio playback...');
+
+      const resource = makeResourceFromMp3(url);
       player.play(resource);
-      
-      const subscription = connection.subscribe(player);
-      if (!subscription) {
-        console.log('Failed to subscribe audio player to voice connection');
+
+      const sub = connection.subscribe(player);
+      if (!sub) {
+        console.log('Failed to subscribe player to connection');
         return false;
       }
-      
-      console.log('Audio player subscribed successfully');
-      
-      // Add detailed player event logging
-      player.on('stateChange', (oldState, newState) => {
-        console.log(`Audio player state: ${oldState.status} -> ${newState.status}`);
+
+      player.on('stateChange', (o, n) => {
+        console.log(`Player: ${o.status} → ${n.status}`);
       });
-      
-      // Force connection to Ready state for Replit environment
-      if (connectionState !== VoiceConnectionStatus.Ready) {
-        console.log('Attempting to force connection to ready state...');
-        // Note: Removed ping call as it's not available in current Discord.js voice API
-      }
-      
-      // Wait for playback to finish
+      player.on('error', (e) => console.error('Audio playback error:', e));
+
+      // Resolve when playback finishes (or after a short timeout)
       return new Promise((resolve) => {
-        player.on(AudioPlayerStatus.Idle, () => {
-          console.log('Audio playback finished');
-          resolve(true);
-        });
-        
-        player.on('error', (error) => {
-          console.error('Audio playback error:', error);
-          resolve(false);
-        });
-        
-        // Timeout after 5 seconds - shorter timeout for faster response
-        setTimeout(() => {
-          console.log('Audio playback timeout - assuming success');
-          resolve(true);
-        }, 5000);
+        player.once(AudioPlayerStatus.Idle, () => resolve(true));
+        setTimeout(() => resolve(true), 5000);
       });
     } catch (error) {
-      console.error('Error playing audio in voice channel:', error);
+      console.error('Error playing audio:', error);
       return false;
     }
   }
 
-  // Get list of voice channels in a guild
   async getVoiceChannels(guildId: string) {
     try {
       const guild = this.client.guilds.cache.get(guildId);
       if (!guild) return [];
-
       return guild.channels.cache
-        .filter(channel => channel.isVoiceBased())
-        .map(channel => ({
-          id: channel.id,
-          name: channel.name,
-          type: channel.type
-        }));
+        .filter((c) => c.isVoiceBased())
+        .map((c) => ({ id: c.id, name: (c as any).name, type: c.type }));
     } catch (error) {
       console.error('Error getting voice channels:', error);
       return [];
     }
   }
 
-  // Send a message to a specific channel
   async sendMessage(channelId: string, message: string) {
     try {
       const channel = await this.client.channels.fetch(channelId);
-      if (channel && 'send' in channel) {
-        await channel.send(message);
-      }
+      if (channel && 'send' in channel) await (channel as any).send(message);
     } catch (error) {
       console.error('Error sending Discord message:', error);
     }
   }
 
-  // Get bot's invite link
   getInviteLink(): string {
-    const permissions = [
-      'ViewChannel',
-      'SendMessages',
-      'ReadMessageHistory',
-      'AddReactions',
-      'UseSlashCommands'
-    ];
-    
     return `https://discord.com/api/oauth2/authorize?client_id=${this.config.clientId}&permissions=2147534848&scope=bot%20applications.commands`;
   }
 }
 
 export default DiscordService;
-}
