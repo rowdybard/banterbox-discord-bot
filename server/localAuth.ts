@@ -69,19 +69,19 @@ passport.deserializeUser(async (id: string, done) => {
   }
 });
 
+// Authentication middleware
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+};
+
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
-
-  // Authentication middleware
-  export const isAuthenticated: RequestHandler = (req, res, next) => {
-    if (req.isAuthenticated()) {
-      return next();
-    }
-    res.status(401).json({ error: 'Not authenticated' });
-  };
 
   // Login route
   app.post('/api/auth/login', passport.authenticate('local'), (req, res) => {
@@ -165,5 +165,3 @@ export async function setupAuth(app: Express) {
     });
   });
 }
-
-export { isAuthenticated };
