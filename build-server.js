@@ -1,26 +1,21 @@
-import { build } from 'esbuild';
-import { readFileSync } from 'fs';
-// (optional) outExtension: { '.js': '.mjs' }
-const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
-const dependencies = Object.keys(packageJson.dependencies || {});
-
-// Filter out local dependencies that should be bundled
-const externalDeps = dependencies.filter(dep => !dep.startsWith('@shared'));
-
+// build-server.js
 import esbuild from 'esbuild';
 import { resolve } from 'node:path';
 
 try {
   await esbuild.build({
     entryPoints: ['server/index.ts'],
-    bundle: true,
+    outdir: 'dist/server',
     platform: 'node',
     target: 'node20',
-    format: 'esm',                 // ← key: emit ESM so `export` is valid
-    outdir: 'dist/server',
+    bundle: true,
+    format: 'esm',                 // ← output ESM so `export` is valid
     loader: { '.ts': 'ts', '.tsx': 'tsx' },
 
-    // Resolve `@shared/...` to `./shared/...ts`
+    // IMPORTANT: don't bundle node_modules (avoids @babel/lightningcss issues)
+    packages: 'external',
+
+    // Resolve `@shared/...` to your local shared code
     plugins: [{
       name: 'resolve-shared',
       setup(build) {
@@ -32,12 +27,12 @@ try {
       }
     }],
 
-    // Allow `require()` inside ESM output when a lib expects it
+    // Allow require() in ESM output if a library expects it
     banner: {
       js: 'import { createRequire } from "module"; const require = createRequire(import.meta.url);',
     },
 
-    logLevel: 'info'
+    logLevel: 'info',
   });
 
   console.log('✅ Server built successfully');
