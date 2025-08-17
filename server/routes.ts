@@ -379,6 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isInVoiceChannel = globalDiscordService?.isInVoiceChannel(eventData.guildId);
       console.log(`Bot in voice channel for guild ${eventData.guildId}: ${isInVoiceChannel}`);
       
+      try {
         // Use web dashboard user settings (source of truth) for voice
         const userSettings = await storage.getUserSettings(workspaceUserId);
         const voiceProvider = userSettings?.voiceProvider || 'openai';
