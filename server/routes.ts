@@ -910,6 +910,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test Discord database operations
+  app.post("/api/discord/test-db", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      console.log(`🧪 Testing Discord DB operations for user: ${userId}`);
+      
+      const results = {
+        tests: [],
+        success: true,
+        errors: []
+      };
+      
+      // Test 1: Create a test link code
+      try {
+        const testCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        
+        console.log(`Testing createLinkCode with code: ${testCode}`);
+        const linkCode = await storage.createLinkCode({
+          code: testCode,
+          workspaceId: userId,
+          expiresAt,
+        });
+        
+        results.tests.push({
+          name: 'createLinkCode',
+          status: 'PASS',
+          data: { code: linkCode.code, id: linkCode.id }
+        });
+        
+        // Test 2: Retrieve the link code
+        console.log(`Testing getLinkCode with code: ${testCode}`);
+        const retrievedCode = await storage.getLinkCode(testCode);
+        
+        if (retrievedCode && retrievedCode.code === testCode) {
+          results.tests.push({
+            name: 'getLinkCode',
+            status: 'PASS',
+            data: { found: true, code: retrievedCode.code }
+          });
+        } else {
+          throw new Error('Link code not found after creation');
+        }
+        
+        // Test 3: Test guild link creation (fake guild ID)
+        const testGuildId = '123456789012345678';
+        console.log(`Testing createGuildLink with guild: ${testGuildId}`);
+        
+        const guildLink = await storage.createGuildLink({
+          guildId: testGuildId,
+          workspaceId: userId,
+          linkedByUserId: 'test-user-123',
+          active: true,
+        });
+        
+        results.tests.push({
+          name: 'createGuildLink',
+          status: 'PASS',
+          data: { guildId: guildLink.guildId, id: guildLink.id }
+        });
+        
+        // Test 4: Test guild settings
+        console.log(`Testing upsertGuildSettings for guild: ${testGuildId}`);
+        
+        const guildSettings = await storage.upsertGuildSettings({
+          guildId: testGuildId,
+          workspaceId: userId,
+          personality: 'test',
+          voiceProvider: 'openai',
+          enabledEvents: ['test_event'],
+          updatedAt: new Date(),
+        });
+        
+        results.tests.push({
+          name: 'upsertGuildSettings',
+          status: 'PASS',
+          data: { guildId: guildSettings.guildId }
+        });
+        
+        // Cleanup test data
+        await storage.deactivateGuildLink(testGuildId);
+        await storage.consumeLinkCode(testCode);
+        
+        results.tests.push({
+          name: 'cleanup',
+          status: 'PASS',
+          data: { message: 'Test data cleaned up' }
+        });
+        
+      } catch (error) {
+        results.success = false;
+        results.errors.push({
+          test: 'database_operations',
+          error: error.message,
+          stack: error.stack
+        });
+        console.error('Database test error:', error);
+      }
+      
+      res.json(results);
+    } catch (error) {
+      console.error('Test endpoint error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        stack: error.stack 
+      });
+    }
+  });
+
   // Clear ALL Discord cache/connections for fresh start
   app.post("/api/discord/clear-cache", isAuthenticated, async (req, res) => {
     try {
