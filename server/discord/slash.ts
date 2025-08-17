@@ -1,4 +1,7 @@
 import { storage } from '../storage';
+import { db } from '../db';
+import { guildLinks } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 
 // Discord permission constants
@@ -112,9 +115,14 @@ export async function handleCommand(body: any) {
   }
 
   try {
+    console.log(`🎮 Processing Discord command: ${commandName} in guild: ${guildId} by user: ${userId}`);
+    
     switch (commandName) {
       case 'link':
-        return await handleLinkCommand(body, guildId, userId);
+        console.log('🔗 Routing to handleLinkCommand');
+        const linkResult = await handleLinkCommand(body, guildId, userId);
+        console.log('🔗 Link command result:', linkResult);
+        return linkResult;
       
       case 'unlink':
         return await handleUnlinkCommand(guildId);
@@ -135,7 +143,15 @@ export async function handleCommand(body: any) {
         return ephemeral('❌ Unknown command.');
     }
   } catch (error) {
-    console.error('Slash command error:', error);
+    console.error('❌ Slash command error in main handler:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      commandName,
+      guildId,
+      userId,
+      body: body.data
+    });
     return ephemeral('❌ An error occurred while processing your command. Please try again.');
   }
 }
@@ -177,21 +193,47 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
     // Check if guild is already linked
     console.log(`Checking existing guild link for: ${guildId}`);
     const existingLink = await storage.getGuildLink(guildId);
-    console.log(`Existing link:`, existingLink ? `Active: ${existingLink.active}` : 'NONE');
+    console.log(`Existing link:`, existingLink ? `Active: ${existingLink.active}, Workspace: ${existingLink.workspaceId}` : 'NONE');
     
-    if (existingLink && existingLink.active) {
-      return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
+    if (existingLink) {
+      if (existingLink.active) {
+        return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
+      } else {
+        // Reactivate existing inactive link with new workspace
+        console.log(`Reactivating existing guild link for workspace: ${linkCode.workspaceId}`);
+        try {
+          // Update the existing link instead of creating a new one
+          await db.update(guildLinks)
+            .set({
+              workspaceId: linkCode.workspaceId,
+              linkedByUserId: userId,
+              active: true,
+              // Reset created date to now for the new link
+              createdAt: new Date()
+            })
+            .where(eq(guildLinks.guildId, guildId));
+          console.log(`✅ Guild link reactivated successfully`);
+        } catch (updateError) {
+          console.error('❌ Failed to reactivate guild link:', updateError);
+          throw updateError;
+        }
+      }
+    } else {
+      // Create new guild link
+      console.log(`Creating new guild link - Guild: ${guildId}, Workspace: ${linkCode.workspaceId}`);
+      try {
+        await storage.createGuildLink({
+          guildId,
+          workspaceId: linkCode.workspaceId,
+          linkedByUserId: userId,
+          active: true,
+        });
+        console.log(`✅ Guild link created successfully`);
+      } catch (createError) {
+        console.error('❌ Failed to create guild link:', createError);
+        throw createError;
+      }
     }
-
-    // Create the guild link
-    console.log(`Creating guild link - Guild: ${guildId}, Workspace: ${linkCode.workspaceId}`);
-    await storage.createGuildLink({
-      guildId,
-      workspaceId: linkCode.workspaceId,
-      linkedByUserId: userId,
-      active: true,
-    });
-    console.log(`✅ Guild link created successfully`);
 
     // Mark code as consumed
     console.log(`Consuming link code: ${code}`);
