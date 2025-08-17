@@ -92,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string, guildId?: string): Promise<string> {
     try {
       // Get personality settings - use guild settings for Discord, user settings for other platforms
-      let personalityContext = "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.";
+      let personalityContext = "Be a human-like personality. Make responses under 20 words with natural conversation. Avoid AI cliches and excessive metaphors.";
       
       // For Discord events, use guild personality settings
       if (guildId && (eventType.startsWith('discord_') || eventType === 'discord_message')) {
@@ -101,12 +101,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const personality = guildSettings?.personality || 'sarcastic';
           
           const personalityPrompts = {
-            witty: "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.",
-            friendly: "Use encouraging language and positive energy. Be warm and supportive in your responses.",
-            sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and witty comebacks.",
+            witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words.",
+            friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively.",
+            sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks.",
             hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
-            chill: "Keep responses relaxed, zen, and easygoing. Stay laid-back and cool.",
-            roast: "Be roasting and teasing but keep it playful. Use clever burns and witty insults that are funny, not hurtful."
+            chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing.",
+            roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful."
           };
           personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.sarcastic;
           console.log(`Using guild personality: ${personality} for guild ${guildId}`);
@@ -125,12 +125,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.",
-              friendly: "Use encouraging language and positive energy. Be warm and supportive in your responses.",
-              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and witty comebacks.",
+              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words.",
+              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively.",
+              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks.",
               hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
-              chill: "Keep responses relaxed, zen, and easygoing. Stay laid-back and cool.",
-              roast: "Be roasting and teasing but keep it playful. Use clever burns and witty insults that are funny, not hurtful."
+              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing.",
+              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
@@ -1106,6 +1106,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test personality system
+  app.post("/api/test-personality", isAuthenticated, async (req, res) => {
+    try {
+      const { guildId, personality, message } = req.body;
+      const userId = req.user.id;
+      
+      console.log(`🧪 Testing personality: ${personality} for guild: ${guildId}`);
+      
+      // Update guild settings if provided
+      if (guildId && personality) {
+        const guildLink = await storage.getGuildLink(guildId);
+        if (guildLink) {
+          await storage.upsertGuildSettings({
+            guildId,
+            workspaceId: guildLink.workspaceId,
+            personality: personality,
+            voiceProvider: 'openai',
+            enabledEvents: ['discord_message'],
+            updatedAt: new Date(),
+          });
+          console.log(`✅ Updated guild ${guildId} personality to: ${personality}`);
+        }
+      }
+      
+      // Test banter generation
+      const testMessage = message || "Hey banterbox, test the personality!";
+      const eventData = {
+        displayName: "TestUser",
+        guildId: guildId,
+        guildName: "Test Server",
+        messageContent: testMessage
+      };
+      
+      const banterResponse = await generateBanter(
+        'discord_message',
+        eventData,
+        testMessage,
+        userId,
+        guildId
+      );
+      
+      // Get current guild settings to verify
+      const currentSettings = guildId ? await storage.getGuildSettings(guildId) : null;
+      
+      res.json({
+        success: true,
+        testMessage,
+        banterResponse,
+        appliedPersonality: currentSettings?.personality || 'default',
+        guildId,
+        settings: currentSettings
+      });
+    } catch (error) {
+      console.error('Personality test error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        stack: error.stack 
+      });
+    }
+  });
+
   // Test Discord database operations
   app.post("/api/discord/test-db", isAuthenticated, async (req, res) => {
     try {
@@ -1786,4 +1848,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   return httpServer;
-}
+        }
