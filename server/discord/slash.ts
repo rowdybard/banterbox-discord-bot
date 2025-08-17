@@ -249,8 +249,6 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
       await storage.upsertGuildSettings({
         guildId,
         workspaceId: linkCode.workspaceId,
-        personality: 'sarcastic',
-        voiceProvider: 'openai',
         enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
         updatedAt: new Date(),
       });
@@ -318,17 +316,17 @@ async function handleStatusCommand(guildId: string) {
     statusMessage += `📺 **Status:** Use \`/join #channel\` to start streaming with audio\n\n`;
   }
   
-  if (settings) {
-    statusMessage += `**Settings:**\n`;
-    statusMessage += `🎭 Personality: \`${settings.personality}\`\n`;
-    statusMessage += `🎵 Voice: \`${settings.voiceProvider}\`\n`;
-    statusMessage += `🎯 Enabled Events: \`${settings.enabledEvents?.join(', ') || 'None'}\`\n\n`;
-  }
+  statusMessage += `🎛️ **Settings:**\n`;
+  statusMessage += `🎭 Personality: Managed in web dashboard\n`;
+  statusMessage += `🎵 Voice: Managed in web dashboard\n`;
+  statusMessage += `🎯 Events: All Discord events enabled\n\n`;
+  
+  statusMessage += `🌐 **Web Dashboard:** banterbox.ai/dashboard\n\n`;
   
   statusMessage += `🎛️ **Commands:**\n`;
   statusMessage += `• \`/join #channel\` - Start streaming mode\n`;
   statusMessage += `• \`/leave\` - Stop streaming mode\n`;
-  statusMessage += `• \`/config\` - Change personality/voice settings\n`;
+  statusMessage += `• \`/config\` - Configure Discord events\n`;
   statusMessage += `• \`/unlink\` - Disconnect server`;
 
   return ephemeral(statusMessage);
@@ -348,7 +346,7 @@ async function handleConfigCommand(body: any, guildId: string) {
   const value = body.data.options?.find((o: any) => o.name === 'value')?.value;
 
   if (!key || !value) {
-    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - sarcastic, hype, friendly, roast, chill, witty\n• `voice` - openai, elevenlabs');
+    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `events` - Enable/disable specific Discord events\n\n💡 **Personality & Voice settings are now managed in the web dashboard at banterbox.ai**');
   }
 
   let settings = await storage.getGuildSettings(guildId);
@@ -359,8 +357,6 @@ async function handleConfigCommand(body: any, guildId: string) {
       settings = await storage.upsertGuildSettings({
         guildId,
         workspaceId: guildLink.workspaceId,
-        personality: 'sarcastic',
-        voiceProvider: 'openai',
         enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
         updatedAt: new Date(),
       });
@@ -372,32 +368,12 @@ async function handleConfigCommand(body: any, guildId: string) {
 
   // Validate and update settings
   switch (key.toLowerCase()) {
-    case 'personality':
-      const validPersonalities = ['sarcastic', 'hype', 'friendly', 'roast', 'chill', 'witty'];
-      if (!validPersonalities.includes(value.toLowerCase())) {
-        return ephemeral(`❌ Invalid personality. Valid options: ${validPersonalities.join(', ')}`);
-      }
-      await storage.upsertGuildSettings({
-        ...settings,
-        personality: value.toLowerCase(),
-        updatedAt: new Date(),
-      });
-      return ephemeral(`✅ Updated personality to: \`${value.toLowerCase()}\``);
-
-    case 'voice':
-      const validVoices = ['openai', 'elevenlabs'];
-      if (!validVoices.includes(value.toLowerCase())) {
-        return ephemeral(`❌ Invalid voice provider. Valid options: ${validVoices.join(', ')}`);
-      }
-      await storage.upsertGuildSettings({
-        ...settings,
-        voiceProvider: value.toLowerCase(),
-        updatedAt: new Date(),
-      });
-      return ephemeral(`✅ Updated voice provider to: \`${value.toLowerCase()}\``);
+    case 'events':
+      // Handle event configuration (future feature)
+      return ephemeral('🎛️ **Event configuration coming soon!**\n\nFor now, all Discord events are enabled by default.\n\n💡 **Personality & Voice settings are managed in the web dashboard at banterbox.ai**');
 
     default:
-      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - sarcastic, hype, friendly, roast, chill, witty\n• `voice` - openai, elevenlabs');
+      return ephemeral('❌ Invalid setting key. Available settings:\n• `events` - Enable/disable specific Discord events\n\n💡 **Personality & Voice settings are now managed in the web dashboard at banterbox.ai**');
   }
 }
 
@@ -494,51 +470,10 @@ async function handleFavoritesCommand(body: any, guildId: string, userId: string
     }
 
     if (type === 'personality') {
-      if (action === 'list') {
-        // Get user's favorite personalities
-        try {
-          const response = await fetch(`${process.env.RENDER_EXTERNAL_HOSTNAME || 'http://localhost:5000'}/api/favorites/personalities`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${workspaceUserId}`, // This would need proper auth
-            }
-          });
-          
-          if (!response.ok) {
-            return ephemeral('❌ Could not fetch your favorite personalities.');
-          }
-          
-          const data = await response.json();
-          const personalities = data.personalities || [];
-          
-          if (personalities.length === 0) {
-            return ephemeral('📝 You have no saved favorite personalities yet.\n\nSave personalities from the BanterBox marketplace to use them here!');
-          }
-          
-          const personalityList = personalities.map((p: any) => `• **${p.name}** - ${p.description || 'No description'}`).join('\n');
-          return ephemeral(`🎭 **Your Favorite Personalities:**\n\n${personalityList}\n\nUse \`/favorites type:personality action:select name:<name>\` to apply one!`);
-          
-        } catch (error) {
-          console.error('Error fetching personalities:', error);
-          return ephemeral('❌ Error fetching your favorite personalities.');
-        }
-      } 
-      else if (action === 'select') {
-        if (!name) {
-          return ephemeral('❌ Please specify the name of the personality to select.');
-        }
-        
-        // This is a simplified version - you'd need proper auth and personality application
-        return ephemeral(`🎭 Applied personality: **${name}**\n\n*(Note: Full implementation requires marketplace integration)*`);
-      }
+      return ephemeral('🎭 **Personality Management**\n\nPersonality settings are now managed in the web dashboard!\n\n🌐 **Visit:** banterbox.ai/dashboard\n\n💡 **Features:**\n• Choose from preset personalities\n• Create custom personalities\n• Save favorite personalities\n• Test personalities instantly');
     } 
     else if (type === 'voice') {
-      if (action === 'list') {
-        return ephemeral('🎤 **Voice Favorites:**\n\n*(Voice favorites feature coming soon!)*\n\nFor now, use `/config voice:elevenlabs` to switch voice providers.');
-      } 
-      else if (action === 'select') {
-        return ephemeral('🎤 **Voice Selection:**\n\n*(Voice selection feature coming soon!)*\n\nFor now, use `/config voice:elevenlabs` to switch voice providers.');
-      }
+      return ephemeral('🎤 **Voice Management**\n\nVoice settings are now managed in the web dashboard!\n\n🌐 **Visit:** banterbox.ai/dashboard\n\n💡 **Features:**\n• Switch between OpenAI & ElevenLabs\n• Choose from 100+ ElevenLabs voices\n• Save favorite voices\n• Test voice previews');
     }
 
     return ephemeral('❌ Invalid type or action specified.');

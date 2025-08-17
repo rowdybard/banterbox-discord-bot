@@ -88,34 +88,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
-    // Generate banter using GPT
+  // Generate banter using GPT
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string, guildId?: string): Promise<string> {
     try {
-      // Get personality settings - use guild settings for Discord, user settings for other platforms
+      // Get personality settings from web dashboard (source of truth)
       let personalityContext = "Be a human-like personality. Make responses under 20 words with natural conversation. Avoid AI cliches and excessive metaphors.";
       
-      // For Discord events, use guild personality settings
-      if (guildId && (eventType.startsWith('discord_') || eventType === 'discord_message')) {
-        try {
-          const guildSettings = await storage.getGuildSettings(guildId);
-          const personality = guildSettings?.personality || 'sarcastic';
-          
-          const personalityPrompts = {
-            witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words.",
-            friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively.",
-            sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks.",
-            hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
-            chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing.",
-            roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful."
-          };
-          personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.sarcastic;
-          console.log(`Using guild personality: ${personality} for guild ${guildId}`);
-        } catch (error) {
-          console.log('Could not load guild settings, using default personality');
-        }
-      } 
-      // For non-Discord events (Twitch, etc.), use user personality settings
-      else if (userId) {
+      // Always use user settings from web dashboard for personality
+      if (userId) {
         try {
           const settings = await storage.getUserSettings(userId);
           const personality = settings?.banterPersonality || 'witty';
@@ -134,7 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
-          console.log(`Using user personality: ${personality} for user ${userId}`);
+          console.log(`Using web dashboard personality: ${personality} for user ${userId}`);
         } catch (error) {
           console.log('Could not load user settings, using default personality');
         }
@@ -243,26 +223,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate the banter text
       const banterText = await generateBanter(eventType, eventData, originalMessage);
       
-      // Get user settings for voice preferences
+      // Get user settings for voice preferences (web dashboard source of truth)
       const userSettings = await storage.getUserSettings(userId);
       const voiceProvider = userSettings?.voiceProvider || 'openai';
       const voiceId = userSettings?.voiceId;
       
       let audioUrl: string | null = null;
       
-      // Generate audio if user has pro access and ElevenLabs is configured
-      const user = await storage.getUser(userId);
-      if (user?.isPro && voiceProvider === 'elevenlabs' && voiceId) {
-        try {
-          const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
-          if (audioBuffer) {
-            // Try Firebase first, fallback to object storage
-            audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+      // Generate audio using web dashboard voice settings
+      try {
+        if (voiceProvider === 'elevenlabs') {
+          // Use ElevenLabs if configured
+          const user = await storage.getUser(userId);
+          if (user?.isPro && voiceId) {
+            const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
+            if (audioBuffer) {
+              // Try Firebase first, fallback to object storage
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+            }
           }
-        } catch (audioError) {
-          console.error("Error generating ElevenLabs audio:", audioError);
-          // Fallback to OpenAI TTS or no audio
+        } else {
+          // Use OpenAI TTS (default)
+          const response = await openai.audio.speech.create({
+            model: "tts-1",
+            voice: "alloy",
+            input: banterText,
+          });
+          const audioBuffer = Buffer.from(await response.arrayBuffer());
+          // Try Firebase first, fallback to object storage
+          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
         }
+      } catch (audioError) {
+        console.error("Error generating audio:", audioError);
+        // Continue without audio
       }
       
       // Create banter item in storage
@@ -389,9 +382,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate TTS audio if bot is in voice channel for this guild
       if (isInVoiceChannel) {
         try {
-          // Use guild settings for Discord, not user settings
-          if (guildSettings?.voiceProvider === 'elevenlabs') {
-            const voiceId = elevenLabsService.getDefaultVoice();
+          // Use web dashboard user settings (source of truth) for voice
+          const userSettings = await storage.getUserSettings(workspaceUserId);
+          const voiceProvider = userSettings?.voiceProvider || 'openai';
+          
+          if (voiceProvider === 'elevenlabs') {
+            const voiceId = userSettings?.voiceId || elevenLabsService.getDefaultVoice();
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
             if (audioBuffer) {
               // Try Firebase first, fallback to object storage
@@ -1109,53 +1105,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test personality system
   app.post("/api/test-personality", isAuthenticated, async (req, res) => {
     try {
-      const { guildId, personality, message } = req.body;
+      const { personality, message } = req.body;
       const userId = req.user.id;
       
-      console.log(`🧪 Testing personality: ${personality} for guild: ${guildId}`);
+      console.log(`🧪 Testing personality: ${personality} for user: ${userId}`);
       
-      // Update guild settings if provided
-      if (guildId && personality) {
-        const guildLink = await storage.getGuildLink(guildId);
-        if (guildLink) {
-          await storage.upsertGuildSettings({
-            guildId,
-            workspaceId: guildLink.workspaceId,
-            personality: personality,
-            voiceProvider: 'openai',
-            enabledEvents: ['discord_message'],
-            updatedAt: new Date(),
-          });
-          console.log(`✅ Updated guild ${guildId} personality to: ${personality}`);
-        }
+      // Update web dashboard user settings if personality provided
+      if (personality) {
+        await storage.updateUserSettings(userId, {
+          banterPersonality: personality
+        });
+        console.log(`✅ Updated user ${userId} personality to: ${personality}`);
       }
       
       // Test banter generation
       const testMessage = message || "Hey banterbox, test the personality!";
       const eventData = {
         displayName: "TestUser",
-        guildId: guildId,
-        guildName: "Test Server",
         messageContent: testMessage
       };
       
       const banterResponse = await generateBanter(
-        'discord_message',
+        'chat',
         eventData,
         testMessage,
-        userId,
-        guildId
+        userId
       );
       
-      // Get current guild settings to verify
-      const currentSettings = guildId ? await storage.getGuildSettings(guildId) : null;
+      // Get current user settings to verify
+      const currentSettings = await storage.getUserSettings(userId);
       
       res.json({
         success: true,
         testMessage,
         banterResponse,
-        appliedPersonality: currentSettings?.personality || 'default',
-        guildId,
+        appliedPersonality: currentSettings?.banterPersonality || 'default',
+        userId,
         settings: currentSettings
       });
     } catch (error) {

@@ -26,16 +26,15 @@ const commands = [
   },
   {
     name: 'config',
-    description: 'Configure BanterBox settings for this server',
+    description: 'Configure BanterBox settings for this server (personality & voice managed in web dashboard)',
     options: [
       {
         name: 'key',
-        description: 'Setting to configure (personality, voice)',
+        description: 'Setting to configure (events)',
         type: 3, // STRING
         required: true,
         choices: [
-          { name: 'personality', value: 'personality' },
-          { name: 'voice', value: 'voice' }
+          { name: 'events', value: 'events' }
         ]
       },
       {
@@ -65,7 +64,7 @@ const commands = [
   },
   {
     name: 'favorites',
-    description: 'Manage favorite personalities and voices for this server',
+    description: 'Manage favorite personalities and voices (managed in web dashboard)',
     options: [
       {
         name: 'type',
