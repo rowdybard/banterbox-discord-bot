@@ -68,7 +68,8 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Use process.cwd() to get the project root, then navigate to dist/client
+  const distPath = path.resolve(process.cwd(), "dist", "client");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
