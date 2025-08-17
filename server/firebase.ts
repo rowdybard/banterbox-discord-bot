@@ -7,7 +7,7 @@ const storage = new Storage();
 // Initialize Firebase Admin SDK
 let firebaseApp: admin.app.App | null = null;
 let bucket: Bucket | null = null;
-
+export const bucket: any = storage.bucket(process.env.GCS_BUCKET!);
 export function initializeFirebase() {
   // Check if Firebase is already initialized
   if (firebaseApp) {
