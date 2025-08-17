@@ -1,6 +1,7 @@
 import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type ContextMemory, type InsertContextMemory, type PersonalityMarketplace, type InsertPersonalityMarketplace, type PersonalityVote, type InsertPersonalityVote, type PersonalityDownload, type InsertPersonalityDownload, type CustomVoice, type InsertCustomVoice, type VoiceMarketplace, type InsertVoiceMarketplace, type VoiceVote, type InsertVoiceVote, type VoiceDownload, type InsertVoiceDownload, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings, contextMemory, personalityMarketplace, personalityVotes, personalityDownloads, customVoices, voiceMarketplace, voiceVotes, voiceDownloads } from "../shared/schema.js";
 import { randomUUID } from "crypto";
 import { db } from "./db,js";
+import { or, ilike } from 'drizzle-orm'; 
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
