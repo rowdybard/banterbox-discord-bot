@@ -1,7 +1,6 @@
-import express, { Request, Response } from 'express';
-import { URLSearchParams } from 'url';
+import express, { type Request, type Response } from 'express';
+import { URLSearchParams } from 'node:url';
 import { storage } from './storage.js';
-import { isAuthenticated } from './replitAuth.js';
 
 interface DiscordUser {
   id: string;
@@ -24,7 +23,7 @@ export class DiscordAuth {
     this.config = config;
   }
 
-  // Generate Discord OAuth URL
+  // Build the Discord OAuth2 URL
   getAuthUrl(): string {
     const params = new URLSearchParams({
       client_id: this.config.clientId,
@@ -32,24 +31,22 @@ export class DiscordAuth {
       response_type: 'code',
       scope: 'identify email guilds',
     });
-
     return `https://discord.com/api/oauth2/authorize?${params.toString()}`;
   }
 
-  // Generate Discord OAuth URL with state parameter
+  // Same as above but with state payload
   getAuthUrlWithState(state: string): string {
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
       response_type: 'code',
       scope: 'identify email guilds',
-      state: state,
+      state,
     });
-
     return `https://discord.com/api/oauth2/authorize?${params.toString()}`;
   }
 
-  // Exchange code for access token
+  // Exchange an authorization code for an access token
   async exchangeCodeForToken(code: string): Promise<string> {
     const params = new URLSearchParams({
       client_id: this.config.clientId,
@@ -61,207 +58,92 @@ export class DiscordAuth {
 
     const response = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to exchange code for token');
-    }
-
-    const data = await response.json();
+    if (!response.ok) throw new Error('Failed to exchange code for token');
+    const data = (await response.json()) as { access_token: string };
     return data.access_token;
   }
 
-  // Get user information
+  // Fetch the current user
   async getUser(accessToken: string): Promise<DiscordUser> {
     const response = await fetch('https://discord.com/api/users/@me', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch user data');
-    }
-
-    return await response.json();
+    if (!response.ok) throw new Error('Failed to fetch user data');
+    return (await response.json()) as DiscordUser;
   }
 
-  // Get user's guilds
-  async getUserGuilds(accessToken: string) {
+  // Fetch the user's guilds
+  async getUserGuilds(accessToken: string): Promise<any[]> {
     const response = await fetch('https://discord.com/api/users/@me/guilds', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch user guilds');
-    }
-
-    return await response.json();
-  }
-
-  // Setup routes for Discord OAuth
-  setupRoutes(app: express.Application, storage: any) {
-    // Start Discord OAuth
-    app.get('/api/discord/auth', (req: Request, res: Response) => {
-      const authUrl = this.getAuthUrl();
-      res.redirect(authUrl);
-    });
-
-    // Discord OAuth callback
-    app.get('/api/discord/callback', async (req: Request, res: Response) => {
-      try {
-        const { code } = req.query;
-        
-        if (!code || typeof code !== 'string') {
-          return res.status(400).json({ error: 'No authorization code provided' });
-        }
-
-        // Exchange code for access token
-        const accessToken = await this.exchangeCodeForToken(code);
-        
-        // Get user data
-        const discordUser = await this.getUser(accessToken);
-        
-        // Get user's guilds
-        const guilds = await this.getUserGuilds(accessToken);
-
-        // Store Discord connection in user settings
-        // You'll need to add Discord fields to your user settings schema
-        
-        res.json({
-          success: true,
-          user: discordUser,
-          guilds: guilds.slice(0, 10), // Limit to first 10 guilds
-        });
-      } catch (error) {
-        console.error('Discord OAuth error:', error);
-        res.status(500).json({ error: 'Discord authentication failed' });
-      }
-    });
-
-    // Disconnect Discord
-    app.post('/api/discord/disconnect', async (req: Request, res: Response) => {
-      try {
-        // Remove Discord connection from user settings
-        // Implementation depends on your user schema
-        
-        res.json({ success: true });
-      } catch (error) {
-        console.error('Discord disconnect error:', error);
-        res.status(500).json({ error: 'Failed to disconnect Discord' });
-      }
-    });
-
-    // Get Discord connection status
-    app.get('/api/discord/status', async (req: Request, res: Response) => {
-      try {
-        // Check if user has Discord connected
-        // Implementation depends on your user schema
-        
-        res.json({ connected: false, user: null });
-      } catch (error) {
-        console.error('Discord status error:', error);
-        res.status(500).json({ error: 'Failed to get Discord status' });
-      }
-    });
+    if (!response.ok) throw new Error('Failed to fetch user guilds');
+    return (await response.json()) as any[];
   }
 }
 
-// Setup Discord authentication routes
+// ---------------------------------------------------------------------------
+// Route wiring
+// ---------------------------------------------------------------------------
+
 export function setupDiscordAuth(app: express.Application) {
-  // Get the first domain from REPLIT_DOMAINS (comma-separated list)
+  // Preferred external domain: REPLIT_DOMAINS first, else localhost
   const domain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
-  
+
   const discordAuth = new DiscordAuth({
     clientId: process.env.DISCORD_CLIENT_ID || '',
     clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+    // Keep this path in sync with the callback route below
     redirectUri: `https://${domain}/api/discord/auth/callback`,
   });
 
-  // Start Discord OAuth flow (manual auth check to handle direct navigation)
+  // Start OAuth (manual auth check to handle direct nav)
   app.get('/api/discord/auth/login', async (req: Request, res: Response) => {
-    // Check authentication manually to provide better error handling
-    const user = req.user as any;
-    
-    console.log('=== DISCORD AUTH START ===');
-    console.log('Session exists:', !!req.session);
-    console.log('User exists:', !!user);
-    console.log('Is authenticated:', req.isAuthenticated?.());
-    
-    if (!req.isAuthenticated?.() || !user || !user.claims || !user.claims.sub) {
-      console.log('User not authenticated, redirecting to login');
-      // Store the intended destination
-      // set
-      (req.session as any).returnTo = url;
-      // read
-      const returnTo = (req.session as any).returnTo as string | undefined;
-      req.session.returnTo = '/settings?discord=connect';
+    const user = (req as any).user as { claims?: { sub?: string } } | undefined;
+    const isAuthed = typeof (req as any).isAuthenticated === 'function' ? (req as any).isAuthenticated() : Boolean(user);
+
+    if (!isAuthed || !user?.claims?.sub) {
+      // Remember where to go after login
+      (req.session as any).returnTo = '/settings?discord=connect';
       return res.redirect('/api/login');
     }
-    
-    const userId = user.claims.sub;
-    console.log('User ID:', userId);
+
+    const userId = user.claims.sub!;
     const stateData = { userId };
-    const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
-    console.log('State data:', stateData);
-    console.log('Encoded state:', state);
+    const state = Buffer.from(JSON.stringify(stateData), 'utf8').toString('base64');
+
     const authUrl = discordAuth.getAuthUrlWithState(state);
-    console.log('Auth URL:', authUrl);
-    console.log('=== REDIRECTING TO DISCORD ===');
-    res.redirect(authUrl);
+    return res.redirect(authUrl);
   });
 
-  // Handle Discord OAuth callback (no auth middleware needed - we use state instead)
+  // Discord redirects back here after user authorizes the app
   app.get('/api/discord/auth/callback', async (req: Request, res: Response) => {
     try {
-      const { code, state, error: authError } = req.query;
-      
-      console.log('Discord callback received:', { code: !!code, state: !!state, authError });
-      
-      if (authError) {
-        console.error('Discord OAuth error:', authError);
-        return res.redirect('/settings?discord=error&reason=oauth_denied');
-      }
-      
-      if (!code || typeof code !== 'string') {
-        console.error('No authorization code provided');
-        return res.redirect('/settings?discord=error&reason=no_code');
-      }
+      const { code, state, error: authError } = req.query as { code?: string; state?: string; error?: string };
 
-      if (!state || typeof state !== 'string') {
-        console.error('No state parameter provided');
-        return res.redirect('/settings?discord=error&reason=no_state');
-      }
+      if (authError) return res.redirect('/settings?discord=error&reason=oauth_denied');
+      if (!code) return res.redirect('/settings?discord=error&reason=no_code');
+      if (!state) return res.redirect('/settings?discord=error&reason=no_state');
 
-      // Decode state to get user ID
-      let userId: string;
+      // Decode state → userId
+      let userId: string | undefined;
       try {
-        const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+        const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf8')) as { userId?: string };
         userId = stateData.userId;
-        if (!userId) {
-          throw new Error('No userId in state');
-        }
-        console.log('Extracted userId from state:', userId);
-      } catch (error) {
-        console.error('Invalid state parameter:', error);
+      } catch (e) {
         return res.redirect('/settings?discord=error&reason=invalid_state');
       }
+      if (!userId) return res.redirect('/settings?discord=error&reason=no_user');
 
-      // Exchange code for access token
+      // Exchange code for token & fetch user
       const accessToken = await discordAuth.exchangeCodeForToken(code);
-      console.log('Discord access token obtained');
-      
-      // Get user information
       const discordUser = await discordAuth.getUser(accessToken);
-      console.log('Discord user obtained:', discordUser.username);
-      
-      // Store Discord connection in database/storage
+
+      // Persist connection (trim guilds server-side if you wish)
       await storage.upsertDiscordSettings({
         userId,
         discordUserId: discordUser.id,
@@ -271,10 +153,30 @@ export function setupDiscordAuth(app: express.Application) {
         enabledEvents: ['discord_message', 'discord_member_join'],
       });
 
-      res.redirect('/settings?discord=connected');
-    } catch (error) {
-      console.error('Discord auth error:', error);
-      res.redirect('/settings?discord=error&reason=server_error');
+      // Where to go post-connect
+      const returnTo = (req.session as any).returnTo as string | undefined;
+      delete (req.session as any).returnTo;
+      return res.redirect(returnTo || '/settings?discord=connected');
+    } catch (err) {
+      console.error('Discord auth error:', err);
+      return res.redirect('/settings?discord=error&reason=server_error');
+    }
+  });
+
+  // Optional: simple status endpoint
+  app.get('/api/discord/status', async (_req: Request, res: Response) => {
+    // Implement a real lookup if you store per-user records
+    return res.json({ connected: false, user: null });
+  });
+
+  // Optional: disconnect endpoint (depends on your schema)
+  app.post('/api/discord/disconnect', async (req: Request, res: Response) => {
+    try {
+      // TODO: delete or mark disconnected in your storage by userId
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('Discord disconnect error:', e);
+      return res.status(500).json({ error: 'Failed to disconnect Discord' });
     }
   });
 }
