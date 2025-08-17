@@ -371,94 +371,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const banterText = await generateBanter(eventTypeForBanter, eventData, originalMessage, workspaceUserId, eventData.guildId);
       
-      // Generate TTS audio if bot is in voice channel for this guild
+      // Always generate TTS audio for banters (for dashboard playback)
       let audioUrl = null;
       
-      console.log(`Checking if bot is in voice channel for guild ${eventData.guildId}`);
+      console.log(`Generating audio for Discord banter`);
       console.log(`globalDiscordService available: ${!!globalDiscordService}`);
       const isInVoiceChannel = globalDiscordService?.isInVoiceChannel(eventData.guildId);
-      console.log(`Bot in voice channel: ${isInVoiceChannel}`);
+      console.log(`Bot in voice channel for guild ${eventData.guildId}: ${isInVoiceChannel}`);
       
-      // Generate TTS audio if bot is in voice channel for this guild
-      if (isInVoiceChannel) {
-        try {
-          // Use web dashboard user settings (source of truth) for voice
-          const userSettings = await storage.getUserSettings(workspaceUserId);
-          const voiceProvider = userSettings?.voiceProvider || 'openai';
-          
-          if (voiceProvider === 'elevenlabs') {
-            const voiceId = userSettings?.voiceId || elevenLabsService.getDefaultVoice();
-            const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
-            if (audioBuffer) {
-              // Try Firebase first, fallback to object storage
-              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
-            }
-          } else {
-            // Use OpenAI TTS
-            const response = await openai.audio.speech.create({
-              model: "tts-1",
-              voice: "alloy",
-              input: banterText,
-            });
-            const audioBuffer = Buffer.from(await response.arrayBuffer());
+        // Use web dashboard user settings (source of truth) for voice
+        const userSettings = await storage.getUserSettings(workspaceUserId);
+        const voiceProvider = userSettings?.voiceProvider || 'openai';
+        
+        if (voiceProvider === 'elevenlabs') {
+          const voiceId = userSettings?.voiceId || elevenLabsService.getDefaultVoice();
+          const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
+          if (audioBuffer) {
             // Try Firebase first, fallback to object storage
             audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           }
-          console.log(`Generated Discord streaming banter with audio for ${eventType}: "${banterText}"`);
-          console.log(`Audio URL generated: ${audioUrl}`);
-          console.log(`Global Discord Service available: ${!!globalDiscordService}`);
-          
-          // Play the audio in Discord voice channel (try even if connection not ready)
-          if (audioUrl && globalDiscordService) {
-            // Use the public object URL instead of localhost - Discord needs external access
-                  const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
-      console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
-                          console.log(`Parsed domain: ${renderDomain}`);
-            
-            // Handle different audio URL types  
-            let publicAudioUrl: string;
-            
-            if (audioUrl.startsWith('https://storage.googleapis.com/')) {
-              // Firebase/GCS URLs are already public
-              publicAudioUrl = audioUrl;
-              console.log(`Using Firebase audio URL: ${publicAudioUrl}`);
-            } else if (audioUrl.startsWith('/public-objects/')) {
-              // Local object storage - convert to public URL
-              publicAudioUrl = renderDomain 
-                ? `https://${renderDomain}${audioUrl}`
-                : `http://localhost:5000${audioUrl}`;
-              console.log(`Using local storage audio URL: ${publicAudioUrl}`);
-            } else {
-              // Fallback for other URL formats
-              publicAudioUrl = audioUrl;
-              console.log(`Using original audio URL: ${publicAudioUrl}`);
-            }
-            
-            console.log(`Attempting to play audio in Discord: ${publicAudioUrl}`);
-            
-            // Test URL accessibility before trying to play
-            try {
-              const testResponse = await fetch(publicAudioUrl);
-              console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
-            } catch (error) {
-              console.log(`Audio URL not accessible:`, error.message);
-            }
-            
-            try {
-              const playbackResult = await globalDiscordService.playAudioInVoiceChannel(eventData.guildId, publicAudioUrl);
-              console.log(`Audio playback result: ${playbackResult}`);
-            } catch (error) {
-              console.error(`Error playing audio in Discord:`, error);
-            }
-          } else {
-            console.log(`Skipping Discord audio playback - audioUrl: ${!!audioUrl}, globalDiscordService: ${!!globalDiscordService}`);
-          }
-        } catch (audioError) {
-          console.error("Error generating Discord audio:", audioError);
-          // Continue without audio
+        } else {
+          // Use OpenAI TTS
+          const response = await openai.audio.speech.create({
+            model: "tts-1",
+            voice: "alloy",
+            input: banterText,
+          });
+          const audioBuffer = Buffer.from(await response.arrayBuffer());
+          // Try Firebase first, fallback to object storage
+          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
         }
-      } else {
-        console.log(`Generated Discord text-only banter for ${eventType}: "${banterText}" (not streaming)`);
+        console.log(`Generated Discord banter with audio for ${eventType}: "${banterText}"`);
+        console.log(`Audio URL generated: ${audioUrl}`);
+        console.log(`Global Discord Service available: ${!!globalDiscordService}`);
+        
+        // Play the audio in Discord voice channel if bot is connected
+        if (audioUrl && globalDiscordService && isInVoiceChannel) {
+          // Use the public object URL instead of localhost - Discord needs external access
+          const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
+          console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+          console.log(`Parsed domain: ${renderDomain}`);
+          
+          // Handle different audio URL types  
+          let publicAudioUrl: string;
+          
+          if (audioUrl.startsWith('https://storage.googleapis.com/')) {
+            // Firebase/GCS URLs are already public
+            publicAudioUrl = audioUrl;
+            console.log(`Using Firebase audio URL: ${publicAudioUrl}`);
+          } else if (audioUrl.startsWith('/public-objects/')) {
+            // Local object storage - convert to public URL
+            publicAudioUrl = renderDomain 
+              ? `https://${renderDomain}${audioUrl}`
+              : `http://localhost:5000${audioUrl}`;
+            console.log(`Using local storage audio URL: ${publicAudioUrl}`);
+          } else {
+            // Fallback for other URL formats
+            publicAudioUrl = audioUrl;
+            console.log(`Using original audio URL: ${publicAudioUrl}`);
+          }
+          
+          console.log(`Attempting to play audio in Discord: ${publicAudioUrl}`);
+          
+          // Test URL accessibility before trying to play
+          try {
+            const testResponse = await fetch(publicAudioUrl);
+            console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
+          } catch (error) {
+            console.log(`Audio URL not accessible:`, error.message);
+          }
+          
+          try {
+            const playbackResult = await globalDiscordService.playAudioInVoiceChannel(eventData.guildId, publicAudioUrl);
+            console.log(`Audio playback result: ${playbackResult}`);
+          } catch (error) {
+            console.error(`Error playing audio in Discord:`, error);
+          }
+        } else {
+          console.log(`Skipping Discord audio playback - audioUrl: ${!!audioUrl}, globalDiscordService: ${!!globalDiscordService}, isInVoiceChannel: ${isInVoiceChannel}`);
+        }
+      } catch (audioError) {
+        console.error("Error generating Discord audio:", audioError);
+        // Continue without audio
       }
       
       // Create banter item in storage
