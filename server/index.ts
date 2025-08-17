@@ -1,7 +1,7 @@
 // server/index.ts
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite.js";
 import { createServer } from "node:http";
 
 const app = express();
