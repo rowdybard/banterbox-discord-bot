@@ -197,6 +197,10 @@ export function setupDiscordAuth(app: express.Application) {
     if (!req.isAuthenticated?.() || !user || !user.claims || !user.claims.sub) {
       console.log('User not authenticated, redirecting to login');
       // Store the intended destination
+      // set
+      (req.session as any).returnTo = url;
+      // read
+      const returnTo = (req.session as any).returnTo as string | undefined;
       req.session.returnTo = '/settings?discord=connect';
       return res.redirect('/api/login');
     }
