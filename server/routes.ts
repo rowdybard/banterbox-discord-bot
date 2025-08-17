@@ -7,7 +7,7 @@ import { storage } from "./storage.js";
 import { ObjectStorageService } from "./objectStorage.js";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, users } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
-import { db } from "./db";
+import { db } from "./db.js";
 import { randomUUID } from "node:crypto";
 import { setupGoogleAuth, isAuthenticated } from "./googleAuth.js";
 import { setupLocalAuth } from "./localAuth.js";
@@ -2226,7 +2226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Global Discord service initialized for voice channel operations');
     
     // Set the service in slash command handler
-    const { setDiscordService } = await import('./discord/slash');
+    const { setDiscordService } = await import('./discord/slash.js');
     setDiscordService(globalDiscordService);
     
     console.log('Global Discord service initialized for voice channel operations');
