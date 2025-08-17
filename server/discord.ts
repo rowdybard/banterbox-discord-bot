@@ -334,7 +334,7 @@ interface DiscordConfig {
       }
       
       // Create resource with public URL
-      const resource = await resourceFromMp3Url(remoteUrl);
+      const resource = await resourceFromMp3Url(audioUrl);
       
       console.log(`Playing TTS audio in voice channel for guild ${guildId}`);
       
