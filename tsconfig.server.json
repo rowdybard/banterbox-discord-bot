@@ -4,9 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist/server",
+    "rootDir": "server",
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true
-  }
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["server/**/*", "shared/**/*"]
 }
