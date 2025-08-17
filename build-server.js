@@ -17,7 +17,7 @@ try {
   format: 'esm',              // ← this is the key
   outdir: 'dist/server',
   loader: { '.ts': 'ts', '.tsx': 'tsx' }
-}),
+})
     // Use esbuild's path mapping to resolve @shared imports
     plugins: [{
       name: 'resolve-shared',
