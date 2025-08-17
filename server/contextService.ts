@@ -1,5 +1,5 @@
-import { storage } from './storage';
-import { InsertContextMemory, EventType, EventData } from '@shared/schema';
+import { storage } from './storage.js';
+import { InsertContextMemory, EventType, EventData } from '@shared/schema.js';
 
 /**
  * Context Memory Service
