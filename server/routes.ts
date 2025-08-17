@@ -7,7 +7,7 @@ import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./localAuth";
 import { setupTwitchAuth } from "./twitchAuth";
 import { setupDiscordAuth } from "./discordAuth";
 import discordInteractions from "./discord/interactions";
@@ -349,12 +349,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Play the audio in Discord voice channel (try even if connection not ready)
           if (audioUrl && globalDiscordService) {
             // Use the public object URL instead of localhost - Discord needs external access
-            const replicationDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
-            console.log(`REPLIT_DOMAINS env var: ${process.env.REPLIT_DOMAINS}`);
-            console.log(`Parsed domain: ${replicationDomain}`);
+                  const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
+      console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+                          console.log(`Parsed domain: ${renderDomain}`);
             
-            const publicAudioUrl = replicationDomain 
-              ? `https://${replicationDomain}${audioUrl}`
+            const publicAudioUrl = renderDomain 
+              ? `https://${renderDomain}${audioUrl}`
               : `http://localhost:5000${audioUrl}`;
             
             console.log(`Attempting to play audio in Discord: ${publicAudioUrl}`);
@@ -416,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete onboarding endpoint
   app.post('/api/user/complete-onboarding', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       await storage.completeOnboarding(userId);
       res.json({ success: true });
     } catch (error) {
@@ -428,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search banters endpoint
   app.get('/api/banter/search', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { query, eventType, limit } = req.query;
       
       const banters = await storage.searchBanters(
@@ -583,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/play", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -614,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/replay", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -896,7 +896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/simulate/chat", isAuthenticated, async (req: any, res) => {
     try {
       const { username, message } = req.body;
-      const userId = req.user.claims.sub; // Use authenticated user ID
+      const userId = req.user.id; // Use authenticated user ID
       
       // Check daily usage limits
       const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
@@ -950,7 +950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -962,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get ElevenLabs voices (Pro users only)
   app.get('/api/elevenlabs/voices', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (!user?.isPro) {
@@ -980,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test ElevenLabs voice (Pro users only)
   app.post('/api/elevenlabs/test-voice', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       
       if (!user?.isPro) {
@@ -1009,7 +1009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/banters/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const requestedUserId = req.params.userId;
-      const authenticatedUserId = req.user.claims.sub;
+      const authenticatedUserId = req.user.id;
       
       // Users can only access their own banters
       if (requestedUserId !== authenticatedUserId && requestedUserId !== "demo-user") {
@@ -1028,7 +1028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const requestedUserId = req.params.userId;
-      const authenticatedUserId = req.user.claims.sub;
+      const authenticatedUserId = req.user.id;
       
       // Users can only access their own settings
       if (requestedUserId !== authenticatedUserId && requestedUserId !== "demo-user") {

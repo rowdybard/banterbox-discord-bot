@@ -4,8 +4,9 @@ import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
-  // User methods (required for Replit Auth)
+  // User methods (required for Local Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   completeOnboarding(userId: string): Promise<User>;
   
@@ -123,6 +124,10 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.email === email);
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const existingUser = this.users.get(userData.id!);
     
@@ -140,6 +145,7 @@ export class MemStorage implements IStorage {
       const newUser: User = {
         id: userData.id || randomUUID(),
         email: userData.email || null,
+        passwordHash: userData.passwordHash || null,
         firstName: userData.firstName || null,
         lastName: userData.lastName || null,
         profileImageUrl: userData.profileImageUrl || null,
@@ -515,9 +521,14 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // User methods (required for Replit Auth)
+  // User methods (required for Local Auth)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 

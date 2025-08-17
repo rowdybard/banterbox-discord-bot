@@ -108,7 +108,7 @@ export function setupTwitchAuth(app: Express) {
       const twitchUser = userData.data[0];
 
       // Save Twitch settings
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       await storage.upsertTwitchSettings({
         userId,
         accessToken: tokens.access_token,
@@ -137,7 +137,7 @@ export function setupTwitchAuth(app: Express) {
     }
 
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const twitchSettings = await storage.getTwitchSettings(userId);
 
       if (twitchSettings?.accessToken) {
@@ -178,7 +178,7 @@ export function setupTwitchAuth(app: Express) {
     }
 
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const twitchSettings = await storage.getTwitchSettings(userId);
 
       res.json({
@@ -200,7 +200,7 @@ export function setupTwitchAuth(app: Express) {
 
     try {
       const { enabledEvents } = req.body;
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
 
       await storage.updateTwitchEventSettings(userId, enabledEvents);
 

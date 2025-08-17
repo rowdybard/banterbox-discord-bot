@@ -175,8 +175,8 @@ export class DiscordAuth {
 
 // Setup Discord authentication routes
 export function setupDiscordAuth(app: express.Application) {
-  // Get the first domain from REPLIT_DOMAINS (comma-separated list)
-  const domain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+  // Get the domain from RENDER_EXTERNAL_HOSTNAME or use localhost for development
+  const domain = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost:5000';
   
   const discordAuth = new DiscordAuth({
     clientId: process.env.DISCORD_CLIENT_ID || '',

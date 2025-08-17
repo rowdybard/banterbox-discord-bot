@@ -259,16 +259,12 @@ export class DiscordService {
       });
       
       // Convert localhost URL to public URL for Discord access
-      const replicationDomain = process.env.REPLIT_DOMAINS?.split(',')[0];
-      const railwayDomain = process.env.RAILWAY_STATIC_URL;
-      console.log(`REPLIT_DOMAINS env var: ${process.env.REPLIT_DOMAINS}`);
-      console.log(`RAILWAY_STATIC_URL env var: ${process.env.RAILWAY_STATIC_URL}`);
+          const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
+    console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
       console.log(`Original audio URL: ${audioUrl}`);
       
-      const publicAudioUrl = railwayDomain 
-        ? `https://${railwayDomain}${audioUrl.replace('http://localhost:5000', '')}`
-        : replicationDomain 
-        ? `https://${replicationDomain}${audioUrl.replace('http://localhost:5000', '')}`
+      const publicAudioUrl = renderDomain 
+        ? `https://${renderDomain}${audioUrl.replace('http://localhost:5000', '')}`
         : audioUrl;
       
       console.log(`Public audio URL for Discord: ${publicAudioUrl}`);
