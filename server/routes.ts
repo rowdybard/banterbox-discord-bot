@@ -5,7 +5,7 @@ import { join } from "path";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage.js";
 import { ObjectStorageService } from "./objectStorage.js";
-import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, users } from "@shared/schema";
+import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, users } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
