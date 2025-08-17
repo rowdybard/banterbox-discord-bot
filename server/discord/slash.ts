@@ -144,62 +144,92 @@ export async function handleCommand(body: any) {
  * Handles /link <code> command
  */
 async function handleLinkCommand(body: any, guildId: string, userId: string) {
-  const code = body.data.options?.find((o: any) => o.name === 'code')?.value;
-  
-  if (!code) {
-    return ephemeral('❌ Please provide a link code. Usage: `/link <code>`');
-  }
-
-  // Find and validate the code
-  const linkCode = await storage.getLinkCode(code);
-  if (!linkCode) {
-    return ephemeral('❌ Invalid link code. Please check the code and try again.');
-  }
-
-  if (linkCode.expiresAt < new Date()) {
-    return ephemeral('❌ This link code has expired. Please generate a new one.');
-  }
-
-  if (linkCode.consumedAt) {
-    return ephemeral('❌ This link code has already been used.');
-  }
-
-  // Check if guild is already linked
-  const existingLink = await storage.getGuildLink(guildId);
-  if (existingLink && existingLink.active) {
-    return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
-  }
-
-  // Create the guild link
-  await storage.createGuildLink({
-    guildId,
-    workspaceId: linkCode.workspaceId,
-    linkedByUserId: userId,
-    active: true,
-  });
-
-  // Mark code as consumed
-  await storage.consumeLinkCode(code);
-
-  // Create default guild settings with error handling
   try {
-    await storage.upsertGuildSettings({
+    console.log(`🔗 Processing /link command - Guild: ${guildId}, User: ${userId}`);
+    console.log('Command body:', JSON.stringify(body.data, null, 2));
+    
+    const code = body.data.options?.find((o: any) => o.name === 'code')?.value;
+    console.log(`Link code provided: ${code}`);
+    
+    if (!code) {
+      return ephemeral('❌ Please provide a link code. Usage: `/link <code>`');
+    }
+
+    // Find and validate the code
+    console.log(`Looking up link code: ${code}`);
+    const linkCode = await storage.getLinkCode(code);
+    console.log(`Link code found:`, linkCode ? 'YES' : 'NO');
+    
+    if (!linkCode) {
+      return ephemeral('❌ Invalid link code. Please check the code and try again.');
+    }
+
+    console.log(`Link code expires at: ${linkCode.expiresAt}, current time: ${new Date()}`);
+    if (linkCode.expiresAt < new Date()) {
+      return ephemeral('❌ This link code has expired. Please generate a new one.');
+    }
+
+    console.log(`Link code consumed at: ${linkCode.consumedAt}`);
+    if (linkCode.consumedAt) {
+      return ephemeral('❌ This link code has already been used.');
+    }
+
+    // Check if guild is already linked
+    console.log(`Checking existing guild link for: ${guildId}`);
+    const existingLink = await storage.getGuildLink(guildId);
+    console.log(`Existing link:`, existingLink ? `Active: ${existingLink.active}` : 'NONE');
+    
+    if (existingLink && existingLink.active) {
+      return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
+    }
+
+    // Create the guild link
+    console.log(`Creating guild link - Guild: ${guildId}, Workspace: ${linkCode.workspaceId}`);
+    await storage.createGuildLink({
       guildId,
       workspaceId: linkCode.workspaceId,
-      personality: 'sarcastic',
-      voiceProvider: 'openai',
-      enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
-      updatedAt: new Date(),
+      linkedByUserId: userId,
+      active: true,
     });
-    console.log(`Guild settings created for ${guildId}`);
-  } catch (error) {
-    console.error('Failed to create guild settings:', error);
-    // Continue anyway - settings can be created later
-  }
+    console.log(`✅ Guild link created successfully`);
 
-  return ephemeral(`✅ Successfully linked this Discord server to BanterBox workspace \`${linkCode.workspaceId}\`! 
+    // Mark code as consumed
+    console.log(`Consuming link code: ${code}`);
+    await storage.consumeLinkCode(code);
+    console.log(`✅ Link code consumed`);
+
+    // Create default guild settings with error handling
+    try {
+      console.log(`Creating guild settings for: ${guildId}`);
+      await storage.upsertGuildSettings({
+        guildId,
+        workspaceId: linkCode.workspaceId,
+        personality: 'sarcastic',
+        voiceProvider: 'openai',
+        enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
+        updatedAt: new Date(),
+      });
+      console.log(`✅ Guild settings created for ${guildId}`);
+    } catch (error) {
+      console.error('❌ Failed to create guild settings:', error);
+      // Continue anyway - settings can be created later
+    }
+
+    console.log(`✅ Link command completed successfully for guild ${guildId}`);
+    return ephemeral(`✅ Successfully linked this Discord server to BanterBox workspace \`${linkCode.workspaceId}\`! 
 
 BanterBox will now generate witty banters for events in this server. Use \`/config\` to customize settings.`);
+  } catch (error) {
+    console.error('❌ Error in handleLinkCommand:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      guildId,
+      userId,
+      body: body.data
+    });
+    return ephemeral('❌ An error occurred while linking the server. Please try again or contact support.');
+  }
 }
 
 /**
