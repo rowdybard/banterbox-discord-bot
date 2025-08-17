@@ -562,34 +562,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get user settings
-  app.get("/api/settings/:userId", async (req, res) => {
+  app.get("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.id;
+      
+      // Users can only access their own settings
+      if (userId !== authenticatedUserId && userId !== "demo-user") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const settings = await storage.getUserSettings(userId);
       
       if (!settings) {
-        return res.status(404).json({ message: "Settings not found" });
+        // Create default settings if they don't exist
+        const defaultSettings = await storage.createUserSettings({
+          userId,
+          voiceProvider: 'openai',
+          voiceId: null,
+          autoPlay: true,
+          volume: 75,
+          enabledEvents: ['chat'],
+          overlayPosition: 'bottom-center',
+          overlayDuration: 5,
+          overlayAnimation: 'fade',
+          banterPersonality: 'witty',
+          customPersonalityPrompt: null,
+        });
+        return res.json(defaultSettings);
       }
       
       res.json(settings);
     } catch (error) {
+      console.error('Error getting user settings:', error);
       res.status(500).json({ message: "Failed to get settings" });
     }
   });
 
   // Update user settings
-  app.put("/api/settings/:userId", async (req, res) => {
+  app.put("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.id;
       const updates = req.body;
       
-      const updated = await storage.updateUserSettings(userId, updates);
+      // Users can only update their own settings
+      if (userId !== authenticatedUserId && userId !== "demo-user") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      let updated = await storage.updateUserSettings(userId, updates);
+      
+      // If settings don't exist, create them first
       if (!updated) {
-        return res.status(404).json({ message: "Settings not found" });
+        const newSettings = await storage.createUserSettings({
+          userId,
+          voiceProvider: updates.voiceProvider || 'openai',
+          voiceId: updates.voiceId || null,
+          autoPlay: updates.autoPlay ?? true,
+          volume: updates.volume || 75,
+          enabledEvents: updates.enabledEvents || ['chat'],
+          overlayPosition: updates.overlayPosition || 'bottom-center',
+          overlayDuration: updates.overlayDuration || 5,
+          overlayAnimation: updates.overlayAnimation || 'fade',
+          banterPersonality: updates.banterPersonality || 'witty',
+          customPersonalityPrompt: updates.customPersonalityPrompt || null,
+        });
+        updated = newSettings;
       }
       
       res.json(updated);
     } catch (error) {
+      console.error('Error updating user settings:', error);
       res.status(500).json({ message: "Failed to update settings" });
     }
   });

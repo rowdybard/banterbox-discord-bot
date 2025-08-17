@@ -41,18 +41,17 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/tools" component={Tools} />
           <Route path="/settings" component={Settings} />
-
+          <Route path="/marketplace" component={Marketplace} />
+          <Route path="/voice-marketplace" component={VoiceMarketplace} />
+          <Route path="/personality-builder" component={PersonalityBuilder} />
+          <Route path="/voice-builder" component={VoiceBuilder} />
           <Route path="/pro" component={Pro} />
         </>
       )}
       {/* Auth page is always accessible */}
       <Route path="/auth" component={Auth} />
-      {/* Overlay, Marketplaces, and Builders are always public */}
+      {/* Overlay is always public */}
       <Route path="/overlay" component={Overlay} />
-      <Route path="/marketplace" component={Marketplace} />
-      <Route path="/voice-marketplace" component={VoiceMarketplace} />
-      <Route path="/personality-builder" component={PersonalityBuilder} />
-      <Route path="/voice-builder" component={VoiceBuilder} />
       <Route component={NotFound} />
     </Switch>
   );
