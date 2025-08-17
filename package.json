@@ -15,7 +15,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "engines": { "node": ">=18 <=22" }
+  "engines": { "node": ">=18 <=22" },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
     "@discordjs/opus": "^0.10.0",
