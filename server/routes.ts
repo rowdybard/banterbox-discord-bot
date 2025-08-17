@@ -815,19 +815,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find all guild links for this workspace
       const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, userId));
       const activeGuildLinks = allGuildLinks.filter(link => link.active);
-  
-      res.json({
-        isConnected: activeGuildLinks.length > 0,
-        connectedGuilds: activeGuildLinks.length,
-        guilds: activeGuildLinks.map(link => ({
+      
+      // Check actual bot presence if Discord service is available
+      let verifiedGuilds: any[] = [];
+      let staleConnections = 0;
+      
+      if (globalDiscordService) {
+        for (const link of activeGuildLinks) {
+          const isActuallyInGuild = globalDiscordService.isActuallyInGuild(link.guildId);
+          
+          if (isActuallyInGuild) {
+            // Get guild info from Discord
+            const discordGuilds = globalDiscordService.getCurrentGuilds();
+            const guildInfo = discordGuilds.find(g => g.id === link.guildId);
+            
+            verifiedGuilds.push({
+              guildId: link.guildId,
+              guildName: guildInfo?.name || 'Unknown',
+              linkedByUserId: link.linkedByUserId,
+              createdAt: link.createdAt,
+              verified: true
+            });
+          } else {
+            // Guild link exists but bot is not actually in guild
+            staleConnections++;
+            console.log(`Stale guild connection detected: ${link.guildId}`);
+          }
+        }
+      } else {
+        // Bot not connected, treat all as unverified
+        verifiedGuilds = activeGuildLinks.map(link => ({
           guildId: link.guildId,
           linkedByUserId: link.linkedByUserId,
           createdAt: link.createdAt,
-        }))
+          verified: false
+        }));
+      }
+  
+      res.json({
+        isConnected: verifiedGuilds.length > 0,
+        connectedGuilds: verifiedGuilds.length,
+        totalGuildLinks: activeGuildLinks.length,
+        staleConnections,
+        botOnline: !!globalDiscordService,
+        guilds: verifiedGuilds
       });
     } catch (error) {
       console.error('Error getting Discord status:', error);
       res.status(500).json({ message: "Failed to get Discord status" });
+    }
+  });
+
+  // Clean up stale Discord connections
+  app.post("/api/discord/cleanup-stale", isAuthenticated, async (req, res) => {
+    try {
+      const { userId } = req.body;
+      const authenticatedUserId = req.user.id;
+      
+      // Ensure user can only clean their own data
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!globalDiscordService) {
+        return res.status(503).json({ message: "Discord bot not connected" });
+      }
+
+      // Find all guild links for this workspace
+      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, userId));
+      const activeGuildLinks = allGuildLinks.filter(link => link.active);
+      
+      let cleanedUp = 0;
+      
+      for (const link of activeGuildLinks) {
+        const isActuallyInGuild = globalDiscordService.isActuallyInGuild(link.guildId);
+        
+        if (!isActuallyInGuild) {
+          // Bot is not actually in this guild, deactivate the link
+          await storage.deactivateGuildLink(link.guildId);
+          await storage.clearCurrentStreamer(link.guildId);
+          cleanedUp++;
+          console.log(`Cleaned up stale guild link: ${link.guildId}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        cleanedUp,
+        message: `Cleaned up ${cleanedUp} stale connections`
+      });
+    } catch (error) {
+      console.error('Error cleaning up stale connections:', error);
+      res.status(500).json({ message: "Failed to clean up stale connections" });
     }
   });
 

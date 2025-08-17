@@ -131,6 +131,37 @@ export class DiscordService {
         this.voiceConnections.delete(guildId);
       }
     });
+
+    // Handle when bot is removed from a guild
+    this.client.on(Events.GuildDelete, async (guild) => {
+      console.log(`Bot was removed from guild: ${guild.name} (${guild.id})`);
+      
+      // Clean up voice connections
+      this.voiceConnections.delete(guild.id);
+      
+      // Import storage to clean up guild data
+      const { storage } = await import('./storage');
+      
+      try {
+        // Deactivate guild link
+        await storage.deactivateGuildLink(guild.id);
+        console.log(`Deactivated guild link for ${guild.name}`);
+        
+        // Clear any active streamer session
+        await storage.clearCurrentStreamer(guild.id);
+        console.log(`Cleared streaming session for ${guild.name}`);
+        
+        // Note: We don't delete guild settings/banters as user might re-add the bot
+      } catch (error) {
+        console.error(`Error cleaning up guild data for ${guild.name}:`, error);
+      }
+    });
+
+    // Handle when bot joins a new guild
+    this.client.on(Events.GuildCreate, async (guild) => {
+      console.log(`Bot added to new guild: ${guild.name} (${guild.id})`);
+      console.log(`Guild has ${guild.memberCount} members`);
+    });
   }
 
   async connect() {
@@ -384,6 +415,31 @@ export class DiscordService {
     } catch (error) {
       console.error('Error sending Discord message:', error);
     }
+  }
+
+  // Check if bot is actually in a guild (not just stored state)
+  isActuallyInGuild(guildId: string): boolean {
+    return this.client.guilds.cache.has(guildId);
+  }
+
+  // Get all guilds bot is currently in
+  getCurrentGuilds() {
+    return Array.from(this.client.guilds.cache.values()).map(guild => ({
+      id: guild.id,
+      name: guild.name,
+      memberCount: guild.memberCount,
+      iconURL: guild.iconURL()
+    }));
+  }
+
+  // Sync guild links with actual bot presence
+  async syncGuildLinks() {
+    const { storage } = await import('./storage');
+    const currentGuilds = new Set(this.client.guilds.cache.keys());
+    
+    // This would need to be implemented to get all active guild links
+    // For now, we'll handle this on a per-request basis
+    console.log(`Bot is currently in ${currentGuilds.size} guilds`);
   }
 
   // Get bot's invite link
