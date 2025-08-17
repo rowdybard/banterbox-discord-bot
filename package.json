@@ -9,7 +9,7 @@
     "dev": "NODE_ENV=development tsx server/index.ts",
 
     "build": "npm run build:server && vite build",
-    "start": "node dist/server/index.js"
+    "start": "node dist/server/index.js",
     "build:server": "tsc -p tsconfig.server.json",
     "start:server": "node dist/server/index.js",
     "db:push": "drizzle-kit push --config=drizzle.config.ts"
