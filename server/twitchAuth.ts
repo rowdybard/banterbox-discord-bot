@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { randomBytes } from "crypto";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
