@@ -13,9 +13,11 @@ try {
     entryPoints: ['server/index.ts'],
     bundle: true,
     outfile: 'dist/index.js',
+    format: 'esm',
     platform: 'node',
     target: 'node20',
-    format: 'esm',
+    bundle: true,
+    loader: { '.ts': 'ts', '.tsx': 'tsx' },
     external: externalDeps,
     resolveExtensions: ['.ts', '.js'],
     // Use esbuild's path mapping to resolve @shared imports
