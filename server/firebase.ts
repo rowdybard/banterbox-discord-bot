@@ -2,7 +2,8 @@ import admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import { randomUUID } from 'crypto';
 import type { Bucket } from '@google-cloud/storage';
-
+import { Storage } from '@google-cloud/storage';
+const storage = new Storage();
 // Initialize Firebase Admin SDK
 let firebaseApp: admin.app.App | null = null;
 let bucket: Bucket | null = null;
