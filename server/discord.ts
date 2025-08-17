@@ -263,9 +263,24 @@ export class DiscordService {
     console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
       console.log(`Original audio URL: ${audioUrl}`);
       
-      const publicAudioUrl = renderDomain 
-        ? `https://${renderDomain}${audioUrl.replace('http://localhost:5000', '')}`
-        : audioUrl;
+      // Handle different audio URL types
+      let publicAudioUrl: string;
+      
+      if (audioUrl.startsWith('https://storage.googleapis.com/')) {
+        // Firebase/GCS URLs are already public
+        publicAudioUrl = audioUrl;
+        console.log(`Using Firebase audio URL: ${publicAudioUrl}`);
+      } else if (audioUrl.startsWith('/public-objects/')) {
+        // Local object storage - convert to public URL
+        publicAudioUrl = renderDomain 
+          ? `https://${renderDomain}${audioUrl}`
+          : `http://localhost:5000${audioUrl}`;
+        console.log(`Using local storage audio URL: ${publicAudioUrl}`);
+      } else {
+        // Fallback for other URL formats
+        publicAudioUrl = audioUrl;
+        console.log(`Using original audio URL: ${publicAudioUrl}`);
+      }
       
       console.log(`Public audio URL for Discord: ${publicAudioUrl}`);
       

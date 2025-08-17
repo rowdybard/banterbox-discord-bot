@@ -42,7 +42,13 @@ ELEVENLABS_API_KEY=your-elevenlabs-api-key
 OPENAI_API_KEY=your-openai-api-key
 ```
 
-### **Object Storage (Required for Audio Files)**
+### **Firebase Storage (Required for Discord Audio)**
+```
+FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"..."}
+FIREBASE_STORAGE_BUCKET=your-firebase-project.appspot.com
+```
+
+### **Alternative: Google Cloud Storage (Fallback)**
 ```
 GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
 GOOGLE_CLOUD_BUCKET_NAME=your-gcs-bucket-name

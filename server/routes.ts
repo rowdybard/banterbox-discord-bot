@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { ObjectStorageService } from "./objectStorage";
+import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
@@ -194,8 +195,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
           if (audioBuffer) {
-            // Save audio to object storage and get URL
-            audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+            // Try Firebase first, fallback to object storage
+            audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           }
         } catch (audioError) {
           console.error("Error generating ElevenLabs audio:", audioError);
@@ -332,7 +333,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const voiceId = elevenLabsService.getDefaultVoice();
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
             if (audioBuffer) {
-              audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+              // Try Firebase first, fallback to object storage
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
             }
           } else {
             // Use OpenAI TTS
@@ -342,7 +344,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               input: banterText,
             });
             const audioBuffer = Buffer.from(await response.arrayBuffer());
-            audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+            // Try Firebase first, fallback to object storage
+            audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           }
           console.log(`Generated Discord streaming banter with audio for ${eventType}: "${banterText}"`);
           console.log(`Audio URL generated: ${audioUrl}`);
@@ -355,9 +358,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
                           console.log(`Parsed domain: ${renderDomain}`);
             
-            const publicAudioUrl = renderDomain 
-              ? `https://${renderDomain}${audioUrl}`
-              : `http://localhost:5000${audioUrl}`;
+            // Handle different audio URL types  
+            let publicAudioUrl: string;
+            
+            if (audioUrl.startsWith('https://storage.googleapis.com/')) {
+              // Firebase/GCS URLs are already public
+              publicAudioUrl = audioUrl;
+              console.log(`Using Firebase audio URL: ${publicAudioUrl}`);
+            } else if (audioUrl.startsWith('/public-objects/')) {
+              // Local object storage - convert to public URL
+              publicAudioUrl = renderDomain 
+                ? `https://${renderDomain}${audioUrl}`
+                : `http://localhost:5000${audioUrl}`;
+              console.log(`Using local storage audio URL: ${publicAudioUrl}`);
+            } else {
+              // Fallback for other URL formats
+              publicAudioUrl = audioUrl;
+              console.log(`Using original audio URL: ${publicAudioUrl}`);
+            }
             
             console.log(`Attempting to play audio in Discord: ${publicAudioUrl}`);
             
@@ -447,7 +465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Serve public audio files
+  // Serve public audio files (fallback for non-Firebase audio)
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
     
@@ -458,6 +476,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Encoding, Content-Length");
     
     try {
+      // Check if this is a Firebase-stored file that was missed
+      if (filePath.startsWith('audio/') && firebaseStorage.isAvailable()) {
+        console.log(`Audio file ${filePath} should be served from Firebase, not local storage`);
+        return res.status(404).json({ 
+          error: "Audio file not found in local storage",
+          hint: "This file may be stored in Firebase. Please check your Firebase configuration."
+        });
+      }
+      
       const file = await objectStorage.searchPublicObject(filePath);
       if (!file) {
         return res.status(404).json({ error: "Audio file not found" });
@@ -549,7 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const audioBuffer = await generateTTS(banterText, userId);
         if (audioBuffer) {
           // Save audio to object storage
-          const audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           await storage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
         }
@@ -871,7 +898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const audioBuffer = await generateTTS(banterText, userId);
         if (audioBuffer) {
-          const audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           await storage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
           
@@ -927,7 +954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const audioBuffer = await generateTTS(banterText, userId);
         if (audioBuffer) {
           // Save audio to object storage
-          const audioUrl = await objectStorage.saveAudioFile(audioBuffer);
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           await storage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
         }
