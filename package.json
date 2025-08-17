@@ -9,8 +9,8 @@
     "dev": "NODE_ENV=development tsx server/index.ts",
     "start": "NODE_ENV=production node dist/index.js",
     "build": "npm install --legacy-peer-deps && node build-server.js && vite build",
-    "build:server": "node build-server.js",
-    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start:server": "node dist/server/index.js",
     "db:push": "drizzle-kit push --config=drizzle.config.ts"
   },
   "keywords": [],
