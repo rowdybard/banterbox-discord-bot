@@ -7,7 +7,7 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage.js";
-
+import memoizee from 'memoizee';
 // Check if we're in a Replit environment - if not, we'll skip Replit Auth setup
 const isReplitEnvironment = !!process.env.REPLIT_DOMAINS;
 
