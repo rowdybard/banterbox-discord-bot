@@ -7,7 +7,9 @@ const dependencies = Object.keys(packageJson.dependencies || {});
 
 // Filter out local dependencies that should be bundled
 const externalDeps = dependencies.filter(dep => !dep.startsWith('@shared'));
-esbuild.build({
+
+try {
+  esbuild.build({
   entryPoints: ['server/index.ts'],
   bundle: true,
   platform: 'node',
@@ -16,18 +18,6 @@ esbuild.build({
   outdir: 'dist/server',
   loader: { '.ts': 'ts', '.tsx': 'tsx' }
 }),
-try {
-  await build({
-    entryPoints: ['server/index.ts'],
-    bundle: true,
-    outfile: 'dist/index.js',
-    format: 'esm',
-    platform: 'node',
-    target: 'node20',
-    bundle: true,
-    loader: { '.ts': 'ts', '.tsx': 'tsx' },
-    external: externalDeps,
-    resolveExtensions: ['.ts', '.js'],
     // Use esbuild's path mapping to resolve @shared imports
     plugins: [{
       name: 'resolve-shared',
