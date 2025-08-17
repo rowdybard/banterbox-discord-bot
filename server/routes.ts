@@ -3,7 +3,7 @@ import express from "express";
 import { createServer, type Server } from "http";
 import { join } from "path";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import { ObjectStorageService } from "./objectStorage";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
