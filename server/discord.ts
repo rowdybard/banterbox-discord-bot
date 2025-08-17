@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Events, Message, GuildMember, VoiceState } from 'discord.js';
 import { joinVoiceChannel, VoiceConnection, getVoiceConnection } from '@discordjs/voice';
-
+const path = require('path');
+const localPath = path.resolve(process.cwd(), 'test.mp3'); // uses repo-root test file
 interface DiscordConfig {
   token: string;
   clientId: string;
