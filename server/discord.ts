@@ -223,16 +223,18 @@ export class DiscordService {
       clearInterval(this.heartbeatInterval);
     }
 
-    // Send heartbeat every 30 seconds to keep connection alive
+    // Monitor connection health every 30 seconds
     this.heartbeatInterval = setInterval(() => {
       try {
         if (this.client.isReady()) {
-          // Ping the gateway to keep connection alive
-          this.client.ws.ping();
-          console.log('Discord heartbeat sent - connection healthy');
+          // Check if client is still healthy (doesn't need manual ping in modern Discord.js)
+          const ping = this.client.ws.ping;
+          console.log(`Discord heartbeat check - connection healthy (ping: ${ping}ms)`);
+        } else {
+          console.warn('Discord client not ready during heartbeat check');
         }
       } catch (error) {
-        console.error('Error sending Discord heartbeat:', error);
+        console.error('Error during Discord heartbeat check:', error);
       }
     }, 30000);
   }
