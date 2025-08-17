@@ -154,14 +154,14 @@ export class ElevenLabsService {
       { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', description: 'Enthusiastic, warm female', personality: 'Cooking Show Host' },
       
       // Additional unique voices for variety
-      { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie', description: 'British, sophisticated male' },
-      { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', description: 'Deep, authoritative male' },
-      { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum', description: 'Young, energetic British male' },
-      { id: 'SOYHLrjzK2X1ezoPC6cr', name: 'Harry', description: 'Casual, friendly British male' },
-      { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam', description: 'Confident, clear male' },
-      { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', description: 'Professional British female' },
-      { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', description: 'American young female' },
-      { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace', description: 'Elegant, refined female' },
+      { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie', description: 'British, sophisticated male', personality: 'Chill Vibes Curator' },
+      { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', description: 'Deep, authoritative male', personality: 'Chill Vibes Curator' },
+      { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum', description: 'Young, energetic British male', personality: 'Chill Vibes Curator' },
+      { id: 'SOYHLrjzK2X1ezoPC6cr', name: 'Harry', description: 'Casual, friendly British male', personality: 'Chill Vibes Curator' },
+      { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam', description: 'Confident, clear male', personality: 'Chill Vibes Curator' },
+      { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', description: 'Professional British female', personality: 'Chill Vibes Curator' },
+      { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', description: 'American young female', personality: 'Chill Vibes Curator' },
+      { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace', description: 'Elegant, refined female', personality: 'Chill Vibes Curator' },
     ];
   }
 
