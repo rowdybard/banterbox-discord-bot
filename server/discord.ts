@@ -9,6 +9,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const LOCAL_TEST_MP3 = path.resolve(process.cwd(), 'test.mp3');
 
+export class DiscordService {
+  private client: Client;
+  private config: DiscordConfig;
+  private banterCallback?: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
+  private voiceConnections: Map<string, VoiceConnection> = new Map(); // Track active voice connections by guild ID
+  
 // helper: turn a remote MP3 URL into a Resource
 async function resourceFromMp3Url(url: string) {
   // FFmpeg reads the HTTP URL and outputs raw PCM
@@ -34,12 +40,6 @@ interface DiscordConfig {
   clientId: string;
   clientSecret: string;
 }
-
-export class DiscordService {
-  private client: Client;
-  private config: DiscordConfig;
-  private banterCallback?: (userId: string | null, originalMessage: string, eventType: string, eventData: any) => Promise<void>;
-  private voiceConnections: Map<string, VoiceConnection> = new Map(); // Track active voice connections by guild ID
 
   constructor(config: DiscordConfig) {
     this.config = config;
