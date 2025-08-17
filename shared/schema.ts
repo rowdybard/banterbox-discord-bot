@@ -14,17 +14,15 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table (supports both local and OAuth authentication)
+// User storage table (required for Replit Auth)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
-  password: varchar("password"), // For local auth (null for OAuth users)
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   isPro: boolean("is_pro").default(false),
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
-  authProvider: varchar("auth_provider").default("local"), // 'local' or 'google'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -37,7 +35,6 @@ export const banterItems = pgTable("banter_items", {
   eventType: text("event_type").notNull(), // 'chat', 'subscription', 'donation', 'raid'
   eventData: jsonb("event_data"), // Additional event information
   audioUrl: text("audio_url"),
-  audioData: text("audio_data"), // Base64 encoded audio for database storage
   isPlayed: boolean("is_played").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -68,101 +65,6 @@ export const dailyStats = pgTable("daily_stats", {
   audioGenerated: integer("audio_generated").default(0), // in seconds
   viewerEngagement: integer("viewer_engagement").default(0), // percentage
   peakHour: integer("peak_hour"), // Hour of day (0-23) with most activity
-});
-
-// Custom voices table
-export const customVoices = pgTable("custom_voices", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
-  name: text("name").notNull(),
-  baseVoiceId: text("base_voice_id").notNull(),
-  settings: jsonb("settings").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Voice marketplace table
-export const voiceMarketplace = pgTable("voice_marketplace", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  authorId: varchar("author_id").references(() => users.id),
-  name: text("name").notNull(),
-  description: text("description").notNull(),
-  baseVoiceId: text("base_voice_id").notNull(),
-  settings: jsonb("settings").notNull(),
-  sampleText: text("sample_text").notNull(),
-  category: text("category").default("Custom"),
-  tags: text("tags").array(),
-  downloads: integer("downloads").default(0),
-  upvotes: integer("upvotes").default(0),
-  downvotes: integer("downvotes").default(0),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Voice marketplace votes
-export const voiceVotes = pgTable("voice_votes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  voiceId: varchar("voice_id").references(() => voiceMarketplace.id),
-  userId: varchar("user_id").references(() => users.id),
-  voteType: text("vote_type").notNull(), // 'upvote' | 'downvote'
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Voice marketplace downloads
-export const voiceDownloads = pgTable("voice_downloads", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  voiceId: varchar("voice_id").references(() => voiceMarketplace.id),
-  userId: varchar("user_id").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Custom personality marketplace
-export const personalityMarketplace = pgTable("personality_marketplace", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  description: text("description").notNull(),
-  prompt: text("prompt").notNull(),
-  category: text("category").notNull(), // 'gaming', 'music', 'comedy', 'educational', 'custom'
-  tags: jsonb("tags").default([]),
-  authorId: varchar("author_id").references(() => users.id),
-  authorName: text("author_name").notNull(),
-  isVerified: boolean("is_verified").default(false), // Staff verified quality personalities
-  downloads: integer("downloads").default(0),
-  upvotes: integer("upvotes").default(0),
-  downvotes: integer("downvotes").default(0),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// User votes on marketplace personalities
-export const personalityVotes = pgTable("personality_votes", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  personalityId: varchar("personality_id").references(() => personalityMarketplace.id),
-  userId: varchar("user_id").references(() => users.id),
-  voteType: text("vote_type").notNull(), // 'upvote' or 'downvote'
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// User downloads of marketplace personalities
-export const personalityDownloads = pgTable("personality_downloads", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  personalityId: varchar("personality_id").references(() => personalityMarketplace.id),
-  userId: varchar("user_id").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Context memory for AI to remember recent stream events
-export const contextMemory = pgTable("context_memory", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
-  guildId: varchar("guild_id"), // For Discord context
-  eventType: text("event_type").notNull(), // 'chat', 'subscription', 'donation', 'raid', 'join', 'reaction'
-  eventData: jsonb("event_data"), // Event details (username, amount, message, etc.)
-  contextSummary: text("context_summary"), // AI-friendly summary of the event
-  importance: integer("importance").default(1), // 1-10 scale for context relevance
-  expiresAt: timestamp("expires_at").notNull(), // When this memory should expire
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Twitch integration settings
@@ -259,9 +161,7 @@ export const insertGuildLinkSchema = createInsertSchema(guildLinks).omit({
   createdAt: true,
 });
 
-export const insertGuildSettingsSchema = createInsertSchema(guildSettings).extend({
-  enabledEvents: z.array(z.string()).optional()
-});
+export const insertGuildSettingsSchema = createInsertSchema(guildSettings);
 
 // Legacy Discord settings schema (to be removed)
 export const insertDiscordSettingsSchema = createInsertSchema(discordSettings).omit({
@@ -280,58 +180,6 @@ export const insertTwitchSettingsSchema = createInsertSchema(twitchSettings).omi
   updatedAt: true,
 });
 
-// Context memory schema
-export const insertContextMemorySchema = createInsertSchema(contextMemory).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Marketplace schemas
-export const insertPersonalityMarketplaceSchema = createInsertSchema(personalityMarketplace).omit({
-  id: true,
-  downloads: true,
-  upvotes: true,
-  downvotes: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertPersonalityVoteSchema = createInsertSchema(personalityVotes).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertPersonalityDownloadSchema = createInsertSchema(personalityDownloads).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Custom voices schema
-export const insertCustomVoiceSchema = createInsertSchema(customVoices).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Voice marketplace schemas
-export const insertVoiceMarketplaceSchema = createInsertSchema(voiceMarketplace).omit({
-  id: true,
-  downloads: true,
-  upvotes: true,
-  downvotes: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertVoiceVoteSchema = createInsertSchema(voiceVotes).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertVoiceDownloadSchema = createInsertSchema(voiceDownloads).omit({
-  id: true,
-  createdAt: true,
-});
-
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
@@ -348,34 +196,6 @@ export type DailyStats = typeof dailyStats.$inferSelect;
 
 export type InsertTwitchSettings = z.infer<typeof insertTwitchSettingsSchema>;
 export type TwitchSettings = typeof twitchSettings.$inferSelect;
-
-// Context memory types
-export type InsertContextMemory = z.infer<typeof insertContextMemorySchema>;
-export type ContextMemory = typeof contextMemory.$inferSelect;
-
-// Marketplace types
-export type InsertPersonalityMarketplace = z.infer<typeof insertPersonalityMarketplaceSchema>;
-export type PersonalityMarketplace = typeof personalityMarketplace.$inferSelect;
-
-export type InsertPersonalityVote = z.infer<typeof insertPersonalityVoteSchema>;
-export type PersonalityVote = typeof personalityVotes.$inferSelect;
-
-export type InsertPersonalityDownload = z.infer<typeof insertPersonalityDownloadSchema>;
-export type PersonalityDownload = typeof personalityDownloads.$inferSelect;
-
-// Custom voice types
-export type InsertCustomVoice = z.infer<typeof insertCustomVoiceSchema>;
-export type CustomVoice = typeof customVoices.$inferSelect;
-
-// Voice marketplace types
-export type InsertVoiceMarketplace = z.infer<typeof insertVoiceMarketplaceSchema>;
-export type VoiceMarketplace = typeof voiceMarketplace.$inferSelect;
-
-export type InsertVoiceVote = z.infer<typeof insertVoiceVoteSchema>;
-export type VoiceVote = typeof voiceVotes.$inferSelect;
-
-export type InsertVoiceDownload = z.infer<typeof insertVoiceDownloadSchema>;
-export type VoiceDownload = typeof voiceDownloads.$inferSelect;
 
 // New Discord bot types
 export type InsertLinkCode = z.infer<typeof insertLinkCodeSchema>;

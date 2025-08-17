@@ -1,22 +1,11 @@
-// server/index.ts
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
-import { createServer } from "node:http";
+import { registerRoutes } from "./routes";
+import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// ── NEW: one switch to enable/disable the Discord pieces ───────────────
-const ENABLE_DISCORD = process.env.BB_ENABLE_DISCORD === "1";
-if (ENABLE_DISCORD) {
-  try {
-    await registerRoutes(app); // your existing bootstrap that wires Discord
-  } catch (err) {
-    console.warn("Discord failed to start:", (err as any)?.message);
-  }
-}
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -32,8 +21,14 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      if (logLine.length > 80) logLine = logLine.slice(0, 79) + "…";
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
       log(logLine);
     }
   });
@@ -43,41 +38,47 @@ app.use((req, res, next) => {
 
 (async () => {
   let server;
-
-  if (ENABLE_DISCORD) {
-    try {
-      // Your existing routes/bootstrap that also wires up Discord
-      server = await registerRoutes(app);
-      log("🎙️ Discord is ENABLED (BB_ENABLE_DISCORD=1)");
-    } catch (error: any) {
-      console.warn("⚠️  Discord service failed to start:", error?.message ?? error);
-      console.log("📝 Continuing without Discord functionality…");
-      server = createServer(app);
-    }
-  } else {
-    // Minimal HTTP server (no Discord). Lets you deploy even if bot deps fail.
-    log("🙈 Discord is DISABLED (BB_ENABLE_DISCORD not set to 1)");
+  try {
+    server = await registerRoutes(app);
+  } catch (error) {
+    console.warn('⚠️  Discord service failed to start (likely missing tokens):', error.message);
+    console.log('📝 Server continuing without Discord functionality...');
+    
+    // Start minimal server without Discord
+    const { createServer } = await import('http');
+    app.get('/api/health', (req, res) => {
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
     server = createServer(app);
   }
 
-  // Error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
     res.status(status).json({ message });
     throw err;
   });
 
-  // Dev vs prod static/Vite
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    { port, host: "0.0.0.0", reusePort: true },
-    () => log(`serving on port ${port}`)
-  );
+  // ALWAYS serve the app on the port specified in the environment variable PORT
+  // Other ports are firewalled. Default to 5000 if not specified.
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  const port = parseInt(process.env.PORT || '5000', 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
+  });
 })();

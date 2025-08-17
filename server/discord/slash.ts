@@ -1,4 +1,4 @@
-import { storage } from '../storage.js';
+import { storage } from '../storage';
 import { randomBytes } from 'crypto';
 
 // Discord permission constants
@@ -125,9 +125,6 @@ export async function handleCommand(body: any) {
       case 'config':
         return await handleConfigCommand(body, guildId);
       
-      case 'personality':
-        return await handlePersonalityCommand(body, guildId);
-      
       case 'join':
         return await handleJoinCommand(body, guildId, userId);
       
@@ -167,36 +164,19 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
     return ephemeral('❌ This link code has already been used.');
   }
 
-  // Check if guild is already linked (active or inactive)
+  // Check if guild is already linked
   const existingLink = await storage.getGuildLink(guildId);
-  if (existingLink) {
-    if (existingLink.active) {
-      return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
-    } else {
-      // Reactivate the existing link with new workspace
-      await storage.reactivateGuildLink(guildId, linkCode.workspaceId, userId);
-    }
-  } else {
-    // Create new guild link
-    try {
-      await storage.createGuildLink({
-        guildId,
-        workspaceId: linkCode.workspaceId,
-        linkedByUserId: userId,
-        active: true,
-      });
-    } catch (error: any) {
-      console.error('Guild link creation error:', error);
-      
-      // Handle duplicate guild ID constraint error (fallback)
-      if (error.code === '23505' && error.constraint?.includes('guild_id')) {
-        return ephemeral('⚠️ This Discord server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
-      }
-      
-      // Handle other errors
-      return ephemeral('❌ Failed to link Discord server. Please try again or contact support.');
-    }
+  if (existingLink && existingLink.active) {
+    return ephemeral('⚠️ This server is already linked to a BanterBox workspace. Use `/unlink` first if you want to link to a different workspace.');
   }
+
+  // Create the guild link
+  await storage.createGuildLink({
+    guildId,
+    workspaceId: linkCode.workspaceId,
+    linkedByUserId: userId,
+    active: true,
+  });
 
   // Mark code as consumed
   await storage.consumeLinkCode(code);
@@ -206,7 +186,7 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
     await storage.upsertGuildSettings({
       guildId,
       workspaceId: linkCode.workspaceId,
-      personality: 'witty',
+      personality: 'sarcastic',
       voiceProvider: 'openai',
       enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
       updatedAt: new Date(),
@@ -273,8 +253,7 @@ async function handleStatusCommand(guildId: string) {
   statusMessage += `🎛️ **Commands:**\n`;
   statusMessage += `• \`/join #channel\` - Start streaming mode\n`;
   statusMessage += `• \`/leave\` - Stop streaming mode\n`;
-  statusMessage += `• \`/personality\` - Quick personality change\n`;
-  statusMessage += `• \`/config\` - Advanced settings configuration\n`;
+  statusMessage += `• \`/config\` - Change personality/voice settings\n`;
   statusMessage += `• \`/unlink\` - Disconnect server`;
 
   return ephemeral(statusMessage);
@@ -294,7 +273,7 @@ async function handleConfigCommand(body: any, guildId: string) {
   const value = body.data.options?.find((o: any) => o.name === 'value')?.value;
 
   if (!key || !value) {
-    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - witty, friendly, sarcastic, hype, chill\n• `voice` - openai, elevenlabs');
+    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
   }
 
   let settings = await storage.getGuildSettings(guildId);
@@ -319,14 +298,13 @@ async function handleConfigCommand(body: any, guildId: string) {
   // Validate and update settings
   switch (key.toLowerCase()) {
     case 'personality':
-      const validPersonalities = ['witty', 'friendly', 'sarcastic', 'hype', 'chill'];
+      const validPersonalities = ['sarcastic', 'hype', 'friendly', 'roast', 'chill'];
       if (!validPersonalities.includes(value.toLowerCase())) {
         return ephemeral(`❌ Invalid personality. Valid options: ${validPersonalities.join(', ')}`);
       }
       await storage.upsertGuildSettings({
         ...settings,
         personality: value.toLowerCase(),
-        enabledEvents: settings.enabledEvents || ['discord_message', 'discord_member_join', 'discord_reaction'],
         updatedAt: new Date(),
       });
       return ephemeral(`✅ Updated personality to: \`${value.toLowerCase()}\``);
@@ -339,79 +317,13 @@ async function handleConfigCommand(body: any, guildId: string) {
       await storage.upsertGuildSettings({
         ...settings,
         voiceProvider: value.toLowerCase(),
-        enabledEvents: settings.enabledEvents || ['discord_message', 'discord_member_join', 'discord_reaction'],
         updatedAt: new Date(),
       });
       return ephemeral(`✅ Updated voice provider to: \`${value.toLowerCase()}\``);
 
     default:
-      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - witty, friendly, sarcastic, hype, chill\n• `voice` - openai, elevenlabs');
+      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
   }
-}
-
-/**
- * Handles /personality <type> command
- */
-async function handlePersonalityCommand(body: any, guildId: string) {
-  const guildLink = await storage.getGuildLink(guildId);
-  
-  if (!guildLink || !guildLink.active) {
-    return ephemeral('❌ This server must be linked to BanterBox before configuring personality. Use `/link <code>` first.');
-  }
-
-  const personalityType = body.data.options?.find((o: any) => o.name === 'type')?.value;
-
-  if (!personalityType) {
-    return ephemeral('❌ Please select a personality type. Usage: `/personality type:<personality>`');
-  }
-
-  const validPersonalities = ['witty', 'friendly', 'sarcastic', 'hype', 'chill'];
-  if (!validPersonalities.includes(personalityType.toLowerCase())) {
-    return ephemeral(`❌ Invalid personality. Valid options: ${validPersonalities.join(', ')}`);
-  }
-
-  let settings = await storage.getGuildSettings(guildId);
-  if (!settings) {
-    // Auto-create missing settings
-    console.log(`Auto-creating missing guild settings for ${guildId}`);
-    try {
-      settings = await storage.upsertGuildSettings({
-        guildId,
-        workspaceId: guildLink.workspaceId,
-        personality: personalityType.toLowerCase(),
-        voiceProvider: 'openai',
-        enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
-        updatedAt: new Date(),
-      });
-    } catch (error) {
-      console.error('Failed to auto-create guild settings:', error);
-      return ephemeral('❌ Guild settings error. Please try unlinking and linking again.');
-    }
-  }
-
-  // Update personality
-  await storage.upsertGuildSettings({
-    ...settings,
-    personality: personalityType.toLowerCase(),
-    enabledEvents: settings.enabledEvents || ['discord_message', 'discord_member_join', 'discord_reaction'],
-    updatedAt: new Date(),
-  });
-
-  const personalityDescriptions = {
-    witty: '🎭 **Witty & Clever** - Smart wordplay and clever responses',
-    friendly: '😊 **Friendly & Warm** - Encouraging and positive vibes',
-    sarcastic: '😏 **Playfully Sarcastic** - Fun sarcasm and witty comebacks',
-    hype: '🔥 **High-Energy Hype** - Explosive excitement and energy!',
-    chill: '😌 **Chill & Laid-back** - Relaxed, zen, and easygoing'
-  };
-
-  return ephemeral(`✅ **Personality Updated Successfully!**
-
-${personalityDescriptions[personalityType.toLowerCase() as keyof typeof personalityDescriptions]}
-
-The AI will now respond with this personality style in all banters. Try sending a message to see it in action!
-
-💡 **Tip:** Use \`/status\` to see all current settings.`);
 }
 
 /**
@@ -431,7 +343,7 @@ async function handleJoinCommand(body: any, guildId: string, userId: string) {
   }
 
   // Check if bot is already in a voice channel in this server
-  const currentlyInVoice = discordService?.isInVoiceChannel(guildId);
+  const currentlyInVoice = discordService.isInVoiceChannel(guildId);
   if (currentlyInVoice) {
     // Check if current user is already the active streamer
     const currentStreamer = await storage.getCurrentStreamer(guildId);

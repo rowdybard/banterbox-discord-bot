@@ -1,23 +1,12 @@
 services:
   - type: web
-    name: banterbox-streaming-platform
+    name: banterbox-discord-bot
     env: node
     region: oregon
-    plan: starter
-    buildCommand: npm install --legacy-peer-deps && npm run build
-    startCommand: node dist/server/index.js
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
-      - key: RENDER_EXTERNAL_HOSTNAME
-        sync: false
-    
-databases:
-  - name: banterbox-postgres
-    databaseName: banterbox
-    user: banterbox_user
-    region: oregon
-    plan: free

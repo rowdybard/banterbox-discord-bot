@@ -1,6 +1,6 @@
 import express from 'express';
-import { verifyDiscordRequest } from './verify.js';
-import { handleCommand, InteractionResponseType } from './slash.js';
+import { verifyDiscordRequest } from './verify';
+import { handleCommand, InteractionResponseType } from './slash';
 
 const router = express.Router();
 

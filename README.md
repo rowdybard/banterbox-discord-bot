@@ -1,179 +1,182 @@
-# BanterBox - AI-Powered Streaming Platform
+# BanterBox - AI-Powered Streaming Banter Platform
 
-> Transform your Discord and Twitch streams with AI-generated real-time banter and engagement
+An innovative AI-powered live stream interaction tool that generates real-time, witty responses to Twitch and Discord chat interactions, with TTS audio and customizable overlays.
 
-## 🚀 Features
+## 🌟 Features
 
-- **AI-Powered Banter Generation** - OpenAI integration for intelligent, witty responses
-- **Discord Bot Integration** - Slash commands, voice channel joining, real-time chat responses
-- **Twitch Integration** - Chat, subscription, donation, and raid event handling
-- **Audio Synthesis** - Text-to-speech with OpenAI and ElevenLabs support
-- **Real-time Overlays** - WebSocket-powered stream overlays for OBS
-- **Personality Marketplace** - Browse and create custom AI personalities
-- **Dual Authentication** - Google OAuth and email/password login
-- **Pro Features** - Advanced voice options and enhanced customization
+### Discord Integration
+- **Discord Bot Integration** with slash commands (`/link`, `/unlink`, `/status`, `/config`)
+- **Real-time Message Processing** - Responds to Discord messages containing "banterbox"
+- **Voice Channel Audio** - Plays TTS audio directly in Discord voice channels
+- **Guild-based Settings** - Separate configurations per Discord server
 
-## 🛠️ Tech Stack
+### AI & Audio
+- **OpenAI GPT Integration** - Generates contextual, personality-driven banter
+- **Multiple TTS Providers** - OpenAI TTS and ElevenLabs with emotional expressions
+- **Custom Personalities** - 5 predefined templates plus custom AI behavior
+- **Emotional Expressions** - Enhanced ElevenLabs output with bracket notation `[chuckles]`
 
-- **Frontend**: React 18, TypeScript, Tailwind CSS, Radix UI
-- **Backend**: Express.js, Node.js, WebSocket
-- **Database**: PostgreSQL with Drizzle ORM
-- **AI/Voice**: OpenAI GPT, ElevenLabs TTS
-- **Discord**: Discord.js, Slash Commands, Voice Channels
-- **Deployment**: Render.com, Docker-ready
+### Streaming Tools
+- **Stream Overlay** - Customizable overlay for OBS Browser Source
+- **WebSocket Real-time** - Instant banter delivery to overlay
+- **Twitch Integration** - EventSub webhooks for chat, subs, donations, raids
+- **Usage Analytics** - Daily statistics and Pro upgrade prompts
 
-## 🏃‍♂️ Quick Start
+### User Management
+- **Replit OAuth** - Secure authentication via OpenID Connect
+- **Pro Access System** - Premium features with advanced customization
+- **User Settings** - Voice provider selection and personality configuration
 
-### Development Setup
+## 🚀 Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/banterbox.git
-   cd banterbox
-   ```
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database
+- Discord bot application
+- OpenAI API key
+- ElevenLabs API key (optional)
 
-2. **Install dependencies**
-   ```bash
-   npm install --legacy-peer-deps
-   ```
+### Environment Variables
+```bash
+# Core Application
+NODE_ENV=production
+SESSION_SECRET=your_session_secret
 
-3. **Set up environment variables**
-   Copy `.env.example` to `.env` and fill in your credentials:
-   ```env
-   # Database
-   DATABASE_URL=postgresql://localhost:5432/banterbox
-   
-   # Discord Bot
-   DISCORD_BOT_TOKEN=your_discord_bot_token
-   DISCORD_APPLICATION_ID=your_discord_app_id
-   DISCORD_CLIENT_ID=your_discord_client_id
-   DISCORD_CLIENT_SECRET=your_discord_client_secret
-   DISCORD_PUBLIC_KEY=your_discord_public_key
-   
-   # AI Services
-   OPENAI_API_KEY=your_openai_api_key
-   ELEVENLABS_API_KEY=your_elevenlabs_api_key  # Optional
-   
-   # Authentication
-   GOOGLE_CLIENT_ID=your_google_client_id      # Optional
-   GOOGLE_CLIENT_SECRET=your_google_client_secret  # Optional
-   SESSION_SECRET=your_random_session_secret
-   ```
+# Database
+DATABASE_URL=postgresql://user:password@host:port/dbname
 
-4. **Set up database**
-   ```bash
-   npm run db:push
-   ```
+# Discord Bot
+DISCORD_APPLICATION_ID=your_app_id
+DISCORD_BOT_TOKEN=your_bot_token
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_PUBLIC_KEY=your_public_key
 
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open browser**
-   Navigate to `http://localhost:5000`
-
-### Production Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete deployment instructions for Render.com and other platforms.
-
-## 🎮 Discord Bot Setup
-
-1. **Create Discord Application**
-   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
-   - Create new application
-   - Create bot user and get token
-
-2. **Set Permissions**
-   Required bot permissions:
-   - Send Messages
-   - Use Slash Commands
-   - Connect to Voice
-   - Speak in Voice
-
-3. **Register Slash Commands**
-   Commands are automatically registered on startup:
-   - `/link <code>` - Link Discord server to BanterBox
-   - `/join <channel>` - Join voice channel for streaming
-   - `/leave` - Leave voice channel
-   - `/config <setting> <value>` - Configure bot settings
-   - `/status` - View current bot status
-   - `/unlink` - Unlink Discord server
-
-4. **Set Webhook URL**
-   In Discord Developer Portal, set webhook URL to:
-   `https://your-domain.com/api/discord/interactions`
-
-## 🎯 Usage
-
-### For Streamers
-
-1. **Sign up** at your deployed BanterBox instance
-2. **Link Discord** server using `/link` command
-3. **Configure personality** with `/config personality witty`
-4. **Join voice channel** with `/join #your-channel`
-5. **Start streaming** - AI responds to chat automatically
-
-### For Viewers
-
-- Chat normally in Discord - AI generates responses automatically
-- React to messages for additional engagement
-- Join/leave events trigger welcome/goodbye banter
-
-## 🔧 Configuration
-
-### Personality Types
-- **Witty**: Clever wordplay and smart responses
-- **Friendly**: Warm and encouraging
-- **Sarcastic**: Playful sarcasm and comebacks
-- **Hype**: High-energy excitement
-- **Chill**: Relaxed and laid-back
-
-### Voice Providers
-- **OpenAI**: Default TTS (free tier included)
-- **ElevenLabs**: Premium voices (requires API key)
-
-## 📁 Project Structure
-
-```
-banterbox/
-├── client/          # React frontend
-│   ├── src/
-│   │   ├── components/  # Reusable UI components
-│   │   ├── pages/       # Application pages
-│   │   └── hooks/       # Custom React hooks
-├── server/          # Express backend
-│   ├── discord/     # Discord bot integration
-│   ├── routes.ts    # API routes
-│   └── storage.ts   # Database layer
-├── shared/          # Shared TypeScript types
-└── docs/           # Documentation
+# AI Services
+OPENAI_API_KEY=your_openai_key
+ELEVENLABS_API_KEY=your_elevenlabs_key
 ```
 
-## 🤝 Contributing
+### Installation
+```bash
+npm install
+npm run db:push
+npm run build
+npm start
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Discord Bot Setup
+1. Create Discord application at [Discord Developer Portal](https://discord.com/developers/applications)
+2. Set Interactions Endpoint URL: `https://your-domain.com/api/discord/interactions`
+3. Add bot to server with required permissions
+4. Use `/link` command to connect Discord server to your account
 
-## 📄 License
+## 🏗️ Architecture
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for optimized builds
+- **Wouter** for lightweight routing
+- **TanStack Query** for server state
+- **Radix UI + shadcn/ui** components
+- **Tailwind CSS** styling
 
-## 🆘 Support
+### Backend
+- **Express.js** with TypeScript
+- **Drizzle ORM** with PostgreSQL
+- **WebSocket** real-time communication
+- **Discord.js** for bot integration
+- **OpenAI** and **ElevenLabs** APIs
 
-- **Documentation**: Check [DEPLOYMENT.md](./DEPLOYMENT.md) for setup help
-- **Issues**: Open an issue on GitHub
-- **Discord**: Join our community Discord server
+### Database Schema
+- Users and authentication
+- Guild links and settings
+- Banter items with audio URLs
+- Daily usage statistics
+
+## 🌐 Deployment
+
+### Recommended: Railway or Render
+For Discord voice functionality, deploy to Railway or Render (not Replit) due to UDP networking requirements.
+
+#### Railway Deployment
+1. Connect GitHub repository to Railway
+2. Add PostgreSQL service
+3. Configure environment variables
+4. Deploy automatically
+
+#### Render Deployment
+1. Connect GitHub repository to Render
+2. Auto-detects Node.js application
+3. Add PostgreSQL database
+4. Configure environment variables
+
+### Discord Voice Limitation
+⚠️ **Important**: Discord voice connections require UDP networking that doesn't work reliably in Replit's environment. Deploy to Railway, Render, or VPS for full functionality.
+
+## 📝 Usage
+
+### Discord Commands
+- `/link` - Connect Discord server to your BanterBox account
+- `/unlink` - Disconnect server
+- `/status` - Check connection status
+- `/config` - View server configuration
+
+### Triggering Banter
+- Send messages containing "banterbox" in linked Discord channels
+- Bot generates AI responses and plays TTS audio in voice channels
+- Banter appears in stream overlay via WebSocket
+
+### Stream Overlay Setup
+1. Add Browser Source in OBS
+2. Set URL to: `https://your-domain.com/overlay`
+3. Configure size and position
+4. Overlay displays banter with audio playback
+
+## 🔧 Development
+
+```bash
+# Development mode
+npm run dev
+
+# Type checking
+npm run check
+
+# Database migrations
+npm run db:push
+```
+
+## 📊 Tech Stack
+
+- **Frontend**: React, TypeScript, Vite, Radix UI, Tailwind CSS
+- **Backend**: Express.js, TypeScript, Drizzle ORM
+- **Database**: PostgreSQL
+- **Real-time**: WebSocket
+- **AI/TTS**: OpenAI, ElevenLabs
+- **Authentication**: Replit OAuth (OpenID Connect)
+- **Discord**: Discord.js, @discordjs/voice
+
+## 🎯 Features Status
+
+- ✅ Discord bot with slash commands
+- ✅ Real-time message processing
+- ✅ AI banter generation
+- ✅ TTS audio generation
+- ✅ WebSocket broadcasting
+- ✅ Stream overlay system
+- ✅ User authentication
+- ⚠️ Discord voice playback (requires proper hosting)
 
 ## 🔗 Links
 
-- [Demo](https://banterbox-demo.onrender.com)
-- [Discord Bot Invite](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=3146752)
-- [Documentation](./docs/)
+- **Discord Bot**: Add to your server via OAuth URL
+- **Stream Overlay**: `https://your-domain.com/overlay`
+- **Admin Dashboard**: `https://your-domain.com/`
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
 
 ---
 
-Built with ❤️ for the streaming community
+**Made with ❤️ for streamers who want AI-powered engagement**

@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { storage } from "./storage.js";
+import { storage } from "./storage";
 
 interface TwitchEventSubMessage {
   metadata: {
