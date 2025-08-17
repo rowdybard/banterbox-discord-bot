@@ -53,6 +53,8 @@ export const userSettings = pgTable("user_settings", {
   overlayAnimation: text("overlay_animation").default("fade"),
   banterPersonality: text("banter_personality").default("witty"),
   customPersonalityPrompt: text("custom_personality_prompt"),
+  favoritePersonalities: jsonb("favorite_personalities").default([]), // Array of saved personality objects
+  favoriteVoices: jsonb("favorite_voices").default([]), // Array of saved voice objects
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -111,6 +113,22 @@ export const guildSettings = pgTable("guild_settings", {
   enabledEvents: text("enabled_events").array().default(['discord_message', 'discord_member_join', 'discord_reaction']),
   currentStreamer: varchar("current_streamer"), // Discord user ID of active streamer
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Context Memory - stores conversation history and events for better AI responses
+export const contextMemory = pgTable("context_memory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  guildId: varchar("guild_id"), // For Discord context
+  eventType: varchar("event_type").notNull(), // 'discord_message', 'chat', etc.
+  eventData: jsonb("event_data"), // Full event details
+  contextSummary: text("context_summary").notNull(), // Human-readable summary for AI
+  originalMessage: text("original_message"), // The actual message content
+  banterResponse: text("banter_response"), // AI's response (if any)
+  importance: integer("importance").default(1), // 1-10 scale for relevance
+  participants: text("participants").array().default([]), // User IDs involved
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
 });
 
 // Legacy Discord settings (will be removed after migration)
@@ -207,6 +225,14 @@ export type GuildLink = typeof guildLinks.$inferSelect;
 
 export type InsertGuildSettings = z.infer<typeof insertGuildSettingsSchema>;
 export type GuildSettings = typeof guildSettings.$inferSelect;
+
+export const insertContextMemorySchema = createInsertSchema(contextMemory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertContextMemory = z.infer<typeof insertContextMemorySchema>;
+export type ContextMemory = typeof contextMemory.$inferSelect;
 
 // Legacy Discord types (to be removed)
 export type InsertDiscordSettings = z.infer<typeof insertDiscordSettingsSchema>;

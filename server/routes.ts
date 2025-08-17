@@ -13,6 +13,7 @@ import { setupGoogleAuth } from "./googleAuth";
 import { setupTwitchAuth } from "./twitchAuth";
 import { setupDiscordAuth } from "./discordAuth";
 import discordInteractions from "./discord/interactions";
+import { ContextService } from "./contextService";
 import { registerCommands, getBotInviteUrl } from "./discord/commands";
 import TwitchEventSubClient from "./twitch";
 import { DiscordService } from "./discord";
@@ -87,13 +88,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
-  // Generate banter using GPT
-  async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string): Promise<string> {
+    // Generate banter using GPT
+  async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string, guildId?: string): Promise<string> {
     try {
-      // Get user personality settings  
-      let personalityContext = "You are a witty and clever banter bot. Make responses under 20 words with clever wordplay and humor.";
+      // Get personality settings - use guild settings for Discord, user settings for other platforms
+      let personalityContext = "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.";
       
-      if (userId) {
+      // For Discord events, use guild personality settings
+      if (guildId && (eventType.startsWith('discord_') || eventType === 'discord_message')) {
+        try {
+          const guildSettings = await storage.getGuildSettings(guildId);
+          const personality = guildSettings?.personality || 'sarcastic';
+          
+          const personalityPrompts = {
+            witty: "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.",
+            friendly: "Use encouraging language and positive energy. Be warm and supportive in your responses.",
+            sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and witty comebacks.",
+            hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
+            chill: "Keep responses relaxed, zen, and easygoing. Stay laid-back and cool.",
+            roast: "Be roasting and teasing but keep it playful. Use clever burns and witty insults that are funny, not hurtful."
+          };
+          personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.sarcastic;
+          console.log(`Using guild personality: ${personality} for guild ${guildId}`);
+        } catch (error) {
+          console.log('Could not load guild settings, using default personality');
+        }
+      } 
+      // For non-Discord events (Twitch, etc.), use user personality settings
+      else if (userId) {
         try {
           const settings = await storage.getUserSettings(userId);
           const personality = settings?.banterPersonality || 'witty';
@@ -103,43 +125,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "You are a witty and clever banter bot. Make responses under 20 words with clever wordplay and humor.",
-              friendly: "You are a friendly and warm banter bot. Use encouraging language and positive energy in your responses.",
-              sarcastic: "You are a playfully sarcastic banter bot. Keep it fun, not mean. Use clever sarcasm and witty comebacks.",
-              hype: "You are a high-energy hype bot. Use caps and exclamation points with high energy and excitement.",
-              chill: "You are a chill and laid-back banter bot. Keep responses relaxed, zen, and easygoing."
+              witty: "Keep responses under 20 words with clever wordplay and humor. Be quick-witted and sharp.",
+              friendly: "Use encouraging language and positive energy. Be warm and supportive in your responses.",
+              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and witty comebacks.",
+              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
+              chill: "Keep responses relaxed, zen, and easygoing. Stay laid-back and cool.",
+              roast: "Be roasting and teasing but keep it playful. Use clever burns and witty insults that are funny, not hurtful."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
+          console.log(`Using user personality: ${personality} for user ${userId}`);
         } catch (error) {
           console.log('Could not load user settings, using default personality');
         }
       }
 
+      // Get conversation context
+      const contextualUserId = guildId ? (await storage.getGuildLink(guildId))?.workspaceId : userId;
+      let contextString = "";
+      
+      if (contextualUserId) {
+        contextString = await ContextService.getContextForBanter(contextualUserId, eventType, guildId);
+      }
+
       let prompt = "";
+      
+      // Add context to prompt if available
+      if (contextString) {
+        prompt = `${personalityContext}\n\nContext:\n${contextString}\n\n`;
+      } else {
+        prompt = `${personalityContext}\n\n`;
+      }
       
       switch (eventType) {
         case 'chat':
         case 'discord_message':
-          prompt = `${personalityContext}\n\nRespond to this chat message: "${originalMessage}"`;
+          prompt += `Respond to this chat message: "${originalMessage}"`;
           break;
         case 'subscription':
-          prompt = `${personalityContext}\n\nCreate a response for a new subscriber.`;
+          prompt += `Create a response for a new subscriber.`;
           break;
         case 'donation':
-          prompt = `${personalityContext}\n\nCreate a response for a $${eventData.amount} donation${eventData.message ? ` with message: "${eventData.message}"` : ''}.`;
+          prompt += `Create a response for a $${eventData.amount} donation${eventData.message ? ` with message: "${eventData.message}"` : ''}.`;
           break;
         case 'raid':
-          prompt = `${personalityContext}\n\nCreate a response for a raid with ${eventData.raiderCount} viewers.`;
+          prompt += `Create a response for a raid with ${eventData.raiderCount} viewers.`;
           break;
         case 'discord_member_join':
-          prompt = `${personalityContext}\n\nCreate a welcome response for a new Discord member: "${eventData.displayName}"`;
+          prompt += `Create a welcome response for a new Discord member: "${eventData.displayName}"`;
           break;
         case 'discord_reaction':
-          prompt = `${personalityContext}\n\nCreate a response for someone reacting with ${eventData.emoji}`;
+          prompt += `Create a response for someone reacting with ${eventData.emoji}`;
           break;
         default:
-          prompt = `${personalityContext}\n\nRespond to this interaction: "${originalMessage}"`;
+          prompt += `Respond to this interaction: "${originalMessage}"`;
           break;
       }
 
@@ -148,7 +187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: "You are BanterBox, an AI that generates entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested."
+            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested."
           },
           {
             role: "user",
@@ -159,7 +198,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         temperature: 0.9,
       });
 
-      return response.choices[0].message.content || "Thanks for the interaction!";
+      const banterResponse = response.choices[0].message.content || "Thanks for the interaction!";
+      
+      // Record this interaction in context memory
+      if (contextualUserId) {
+        try {
+          const contextId = await ContextService.recordEvent(
+            contextualUserId,
+            eventType,
+            eventData,
+            guildId,
+            eventType === 'discord_message' ? 3 : 2, // Messages are more important for context
+            originalMessage
+          );
+          
+          // Record the AI's response for future context
+          await storage.updateContextResponse(contextId, banterResponse);
+        } catch (contextError) {
+          console.error('Error recording context:', contextError);
+          // Don't fail banter generation if context recording fails
+        }
+      }
+      
+      return banterResponse;
     } catch (error) {
       console.error('Error generating banter:', error);
       return "Thanks for the interaction!";
@@ -315,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const banterText = await generateBanter(eventTypeForBanter, eventData, originalMessage, workspaceUserId);
+      const banterText = await generateBanter(eventTypeForBanter, eventData, originalMessage, workspaceUserId, eventData.guildId);
       
       // Generate TTS audio if bot is in voice channel for this guild
       let audioUrl = null;
@@ -907,6 +968,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error cleaning up stale connections:', error);
       res.status(500).json({ message: "Failed to clean up stale connections" });
+    }
+  });
+
+  // Manage favorite personalities
+  app.post("/api/favorites/personalities", isAuthenticated, async (req, res) => {
+    try {
+      const { name, prompt, description } = req.body;
+      const userId = req.user.id;
+      
+      if (!name || !prompt) {
+        return res.status(400).json({ message: "Name and prompt are required" });
+      }
+      
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoritePersonalities || [];
+      
+      const newPersonality = {
+        id: randomUUID(),
+        name,
+        prompt,
+        description: description || "",
+        createdAt: new Date()
+      };
+      
+      const updatedFavorites = [...currentFavorites, newPersonality];
+      
+      await storage.updateUserSettings(userId, {
+        favoritePersonalities: updatedFavorites
+      });
+      
+      res.json({ success: true, personality: newPersonality });
+    } catch (error) {
+      console.error('Error saving favorite personality:', error);
+      res.status(500).json({ message: "Failed to save personality" });
+    }
+  });
+
+  app.get("/api/favorites/personalities", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const settings = await storage.getUserSettings(userId);
+      const favorites = settings?.favoritePersonalities || [];
+      
+      res.json({ personalities: favorites });
+    } catch (error) {
+      console.error('Error getting favorite personalities:', error);
+      res.status(500).json({ message: "Failed to get personalities" });
+    }
+  });
+
+  app.delete("/api/favorites/personalities/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoritePersonalities || [];
+      const updatedFavorites = currentFavorites.filter((p: any) => p.id !== id);
+      
+      await storage.updateUserSettings(userId, {
+        favoritePersonalities: updatedFavorites
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting favorite personality:', error);
+      res.status(500).json({ message: "Failed to delete personality" });
+    }
+  });
+
+  // Manage favorite voices
+  app.post("/api/favorites/voices", isAuthenticated, async (req, res) => {
+    try {
+      const { name, voiceId, provider, description } = req.body;
+      const userId = req.user.id;
+      
+      if (!name || !voiceId || !provider) {
+        return res.status(400).json({ message: "Name, voiceId, and provider are required" });
+      }
+      
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoriteVoices || [];
+      
+      const newVoice = {
+        id: randomUUID(),
+        name,
+        voiceId,
+        provider,
+        description: description || "",
+        createdAt: new Date()
+      };
+      
+      const updatedFavorites = [...currentFavorites, newVoice];
+      
+      await storage.updateUserSettings(userId, {
+        favoriteVoices: updatedFavorites
+      });
+      
+      res.json({ success: true, voice: newVoice });
+    } catch (error) {
+      console.error('Error saving favorite voice:', error);
+      res.status(500).json({ message: "Failed to save voice" });
+    }
+  });
+
+  app.get("/api/favorites/voices", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const settings = await storage.getUserSettings(userId);
+      const favorites = settings?.favoriteVoices || [];
+      
+      res.json({ voices: favorites });
+    } catch (error) {
+      console.error('Error getting favorite voices:', error);
+      res.status(500).json({ message: "Failed to get voices" });
+    }
+  });
+
+  app.delete("/api/favorites/voices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoriteVoices || [];
+      const updatedFavorites = currentFavorites.filter((v: any) => v.id !== id);
+      
+      await storage.updateUserSettings(userId, {
+        favoriteVoices: updatedFavorites
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting favorite voice:', error);
+      res.status(500).json({ message: "Failed to delete voice" });
     }
   });
 

@@ -14,8 +14,9 @@ export class ContextService {
     eventType: EventType,
     eventData: EventData,
     guildId?: string,
-    importance: number = 1
-  ): Promise<void> {
+    importance: number = 1,
+    originalMessage?: string
+  ): Promise<string> {
     // Generate context summary based on event type
     const contextSummary = this.generateContextSummary(eventType, eventData);
 
@@ -23,35 +24,91 @@ export class ContextService {
     const hoursToRetain = Math.max(1, importance * 2); // 1-20 hours based on importance
     const expiresAt = new Date(Date.now() + hoursToRetain * 60 * 60 * 1000);
 
+    // Extract participants from event data
+    const participants: string[] = [];
+    if (eventData.displayName) participants.push(eventData.displayName);
+    if (eventData.username) participants.push(eventData.username);
+
     const contextMemory: InsertContextMemory = {
       userId,
       guildId: guildId || null,
       eventType,
       eventData,
       contextSummary,
+      originalMessage: originalMessage || null,
+      banterResponse: null,
       importance: Math.min(10, Math.max(1, importance)), // Clamp between 1-10
+      participants,
       expiresAt,
     };
 
-    await storage.createContextMemory(contextMemory);
+    const result = await storage.createContextMemory(contextMemory);
 
     // Clean expired context occasionally
     if (Math.random() < 0.1) {
       // 10% chance
       await storage.cleanExpiredContext();
     }
+
+    return result.id;
   }
 
   /**
    * Gets relevant context for AI banter generation
-   * (Disabled for now to avoid overly-aggressive references)
    */
   static async getContextForBanter(
-    _userId: string,
-    _currentEventType: EventType,
-    _guildId?: string
+    userId: string,
+    currentEventType: EventType,
+    guildId?: string
   ): Promise<string> {
-    return "";
+    try {
+      // Get recent context (last 5 interactions)
+      const recentContext = await storage.getRecentContext(userId, guildId, 5);
+      
+      // Get similar event context (last 3 of same type)
+      const similarContext = await storage.getContextByType(userId, currentEventType, guildId, 3);
+      
+      if (recentContext.length === 0 && similarContext.length === 0) {
+        return "";
+      }
+      
+      let contextString = "";
+      
+      // Add recent conversation context
+      if (recentContext.length > 0) {
+        contextString += "Recent conversation:\n";
+        recentContext.reverse().forEach(ctx => {
+          if (ctx.originalMessage) {
+            contextString += `- User: ${ctx.originalMessage}\n`;
+          }
+          if (ctx.banterResponse) {
+            contextString += `- You: ${ctx.banterResponse}\n`;
+          }
+        });
+        contextString += "\n";
+      }
+      
+      // Add similar event context
+      if (similarContext.length > 0 && currentEventType !== 'discord_message') {
+        contextString += `Previous ${currentEventType} responses:\n`;
+        similarContext.forEach(ctx => {
+          if (ctx.banterResponse) {
+            contextString += `- "${ctx.banterResponse}"\n`;
+          }
+        });
+        contextString += "\n";
+      }
+      
+      // Add context instruction
+      if (contextString) {
+        contextString += "Keep your response fresh but contextually aware. Don't repeat previous responses exactly.";
+      }
+      
+      return contextString;
+    } catch (error) {
+      console.error('Error getting context for banter:', error);
+      return "";
+    }
   }
 
   /**

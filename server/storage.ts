@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings } from "@shared/schema";
+import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type ContextMemory, type InsertContextMemory, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings, contextMemory } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -57,6 +57,13 @@ export interface IStorage {
   getCurrentStreamer(guildId: string): Promise<string | null>;
   setCurrentStreamer(guildId: string, userId: string): Promise<void>;
   clearCurrentStreamer(guildId: string): Promise<void>;
+
+  // Context memory methods
+  createContextMemory(context: InsertContextMemory): Promise<ContextMemory>;
+  getRecentContext(userId: string, guildId?: string, limit?: number): Promise<ContextMemory[]>;
+  getContextByType(userId: string, eventType: string, guildId?: string, limit?: number): Promise<ContextMemory[]>;
+  updateContextResponse(contextId: string, banterResponse: string): Promise<void>;
+  cleanExpiredContext(): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -69,6 +76,7 @@ export class MemStorage implements IStorage {
   private linkCodes: Map<string, LinkCode> = new Map();
   private guildLinks: Map<string, GuildLink> = new Map();
   private guildSettings: Map<string, GuildSettings> = new Map();
+  private contextMemory: Map<string, ContextMemory> = new Map();
 
   constructor() {
     // Create a demo user for Replit Auth compatibility
@@ -518,6 +526,66 @@ export class MemStorage implements IStorage {
       settings.currentStreamer = null;
     }
   }
+
+  // Context memory methods
+  async createContextMemory(context: InsertContextMemory): Promise<ContextMemory> {
+    const id = randomUUID();
+    const contextMemory: ContextMemory = {
+      ...context,
+      id,
+      createdAt: new Date(),
+    };
+    this.contextMemory.set(id, contextMemory);
+    return contextMemory;
+  }
+
+  async getRecentContext(userId: string, guildId?: string, limit: number = 10): Promise<ContextMemory[]> {
+    const contexts = Array.from(this.contextMemory.values())
+      .filter(ctx => {
+        if (ctx.userId !== userId) return false;
+        if (guildId && ctx.guildId !== guildId) return false;
+        if (ctx.expiresAt < new Date()) return false;
+        return true;
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+    return contexts;
+  }
+
+  async getContextByType(userId: string, eventType: string, guildId?: string, limit: number = 5): Promise<ContextMemory[]> {
+    const contexts = Array.from(this.contextMemory.values())
+      .filter(ctx => {
+        if (ctx.userId !== userId) return false;
+        if (ctx.eventType !== eventType) return false;
+        if (guildId && ctx.guildId !== guildId) return false;
+        if (ctx.expiresAt < new Date()) return false;
+        return true;
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+    return contexts;
+  }
+
+  async updateContextResponse(contextId: string, banterResponse: string): Promise<void> {
+    const context = this.contextMemory.get(contextId);
+    if (context) {
+      context.banterResponse = banterResponse;
+    }
+  }
+
+  async cleanExpiredContext(): Promise<number> {
+    const now = new Date();
+    let cleanedCount = 0;
+    
+    for (const [id, context] of this.contextMemory.entries()) {
+      if (context.expiresAt < now) {
+        this.contextMemory.delete(id);
+        cleanedCount++;
+      }
+    }
+    
+    return cleanedCount;
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -831,6 +899,90 @@ export class DatabaseStorage implements IStorage {
       .update(guildSettings)
       .set({ currentStreamer: null })
       .where(eq(guildSettings.guildId, guildId));
+  }
+
+  // Context memory methods
+  async createContextMemory(context: InsertContextMemory): Promise<ContextMemory> {
+    const [result] = await db.insert(contextMemory).values(context).returning();
+    return result;
+  }
+
+  async getRecentContext(userId: string, guildId?: string, limit: number = 10): Promise<ContextMemory[]> {
+    let query = db
+      .select()
+      .from(contextMemory)
+      .where(
+        and(
+          eq(contextMemory.userId, userId),
+          sql`${contextMemory.expiresAt} > NOW()`
+        )
+      )
+      .orderBy(desc(contextMemory.createdAt))
+      .limit(limit);
+
+    if (guildId) {
+      query = db
+        .select()
+        .from(contextMemory)
+        .where(
+          and(
+            eq(contextMemory.userId, userId),
+            eq(contextMemory.guildId, guildId),
+            sql`${contextMemory.expiresAt} > NOW()`
+          )
+        )
+        .orderBy(desc(contextMemory.createdAt))
+        .limit(limit);
+    }
+
+    return await query;
+  }
+
+  async getContextByType(userId: string, eventType: string, guildId?: string, limit: number = 5): Promise<ContextMemory[]> {
+    let query = db
+      .select()
+      .from(contextMemory)
+      .where(
+        and(
+          eq(contextMemory.userId, userId),
+          eq(contextMemory.eventType, eventType),
+          sql`${contextMemory.expiresAt} > NOW()`
+        )
+      )
+      .orderBy(desc(contextMemory.createdAt))
+      .limit(limit);
+
+    if (guildId) {
+      query = db
+        .select()
+        .from(contextMemory)
+        .where(
+          and(
+            eq(contextMemory.userId, userId),
+            eq(contextMemory.eventType, eventType),
+            eq(contextMemory.guildId, guildId),
+            sql`${contextMemory.expiresAt} > NOW()`
+          )
+        )
+        .orderBy(desc(contextMemory.createdAt))
+        .limit(limit);
+    }
+
+    return await query;
+  }
+
+  async updateContextResponse(contextId: string, banterResponse: string): Promise<void> {
+    await db
+      .update(contextMemory)
+      .set({ banterResponse })
+      .where(eq(contextMemory.id, contextId));
+  }
+
+  async cleanExpiredContext(): Promise<number> {
+    const result = await db
+      .delete(contextMemory)
+      .where(sql`${contextMemory.expiresAt} < NOW()`);
+    return result.rowCount || 0;
   }
 }
 

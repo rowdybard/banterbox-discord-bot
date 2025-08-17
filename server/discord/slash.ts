@@ -139,6 +139,9 @@ export async function handleCommand(body: any) {
       case 'leave':
         return await handleLeaveCommand(guildId, userId);
       
+      case 'favorites':
+        return await handleFavoritesCommand(body, guildId, userId);
+      
       default:
         return ephemeral('❌ Unknown command.');
     }
@@ -345,7 +348,7 @@ async function handleConfigCommand(body: any, guildId: string) {
   const value = body.data.options?.find((o: any) => o.name === 'value')?.value;
 
   if (!key || !value) {
-    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
+    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `personality` - sarcastic, hype, friendly, roast, chill, witty\n• `voice` - openai, elevenlabs');
   }
 
   let settings = await storage.getGuildSettings(guildId);
@@ -370,7 +373,7 @@ async function handleConfigCommand(body: any, guildId: string) {
   // Validate and update settings
   switch (key.toLowerCase()) {
     case 'personality':
-      const validPersonalities = ['sarcastic', 'hype', 'friendly', 'roast', 'chill'];
+      const validPersonalities = ['sarcastic', 'hype', 'friendly', 'roast', 'chill', 'witty'];
       if (!validPersonalities.includes(value.toLowerCase())) {
         return ephemeral(`❌ Invalid personality. Valid options: ${validPersonalities.join(', ')}`);
       }
@@ -394,7 +397,7 @@ async function handleConfigCommand(body: any, guildId: string) {
       return ephemeral(`✅ Updated voice provider to: \`${value.toLowerCase()}\``);
 
     default:
-      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - sarcastic, hype, friendly, roast, chill\n• `voice` - openai, elevenlabs');
+      return ephemeral('❌ Invalid setting key. Available settings:\n• `personality` - sarcastic, hype, friendly, roast, chill, witty\n• `voice` - openai, elevenlabs');
   }
 }
 
@@ -468,6 +471,80 @@ async function handleJoinCommand(body: any, guildId: string, userId: string) {
         flags: 64 // Ephemeral flag
       }
     };
+  }
+}
+
+/**
+ * Handles /favorites command
+ */
+async function handleFavoritesCommand(body: any, guildId: string, userId: string) {
+  try {
+    const guildLink = await storage.getGuildLink(guildId);
+    if (!guildLink || !guildLink.active) {
+      return ephemeral('❌ This server must be linked to BanterBox before using favorites. Use `/link <code>` first.');
+    }
+
+    const workspaceUserId = guildLink.workspaceId;
+    const type = body.data.options?.find((o: any) => o.name === 'type')?.value;
+    const action = body.data.options?.find((o: any) => o.name === 'action')?.value;
+    const name = body.data.options?.find((o: any) => o.name === 'name')?.value;
+
+    if (!type || !action) {
+      return ephemeral('❌ Please specify type and action.');
+    }
+
+    if (type === 'personality') {
+      if (action === 'list') {
+        // Get user's favorite personalities
+        try {
+          const response = await fetch(`${process.env.RENDER_EXTERNAL_HOSTNAME || 'http://localhost:5000'}/api/favorites/personalities`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${workspaceUserId}`, // This would need proper auth
+            }
+          });
+          
+          if (!response.ok) {
+            return ephemeral('❌ Could not fetch your favorite personalities.');
+          }
+          
+          const data = await response.json();
+          const personalities = data.personalities || [];
+          
+          if (personalities.length === 0) {
+            return ephemeral('📝 You have no saved favorite personalities yet.\n\nSave personalities from the BanterBox marketplace to use them here!');
+          }
+          
+          const personalityList = personalities.map((p: any) => `• **${p.name}** - ${p.description || 'No description'}`).join('\n');
+          return ephemeral(`🎭 **Your Favorite Personalities:**\n\n${personalityList}\n\nUse \`/favorites type:personality action:select name:<name>\` to apply one!`);
+          
+        } catch (error) {
+          console.error('Error fetching personalities:', error);
+          return ephemeral('❌ Error fetching your favorite personalities.');
+        }
+      } 
+      else if (action === 'select') {
+        if (!name) {
+          return ephemeral('❌ Please specify the name of the personality to select.');
+        }
+        
+        // This is a simplified version - you'd need proper auth and personality application
+        return ephemeral(`🎭 Applied personality: **${name}**\n\n*(Note: Full implementation requires marketplace integration)*`);
+      }
+    } 
+    else if (type === 'voice') {
+      if (action === 'list') {
+        return ephemeral('🎤 **Voice Favorites:**\n\n*(Voice favorites feature coming soon!)*\n\nFor now, use `/config voice:elevenlabs` to switch voice providers.');
+      } 
+      else if (action === 'select') {
+        return ephemeral('🎤 **Voice Selection:**\n\n*(Voice selection feature coming soon!)*\n\nFor now, use `/config voice:elevenlabs` to switch voice providers.');
+      }
+    }
+
+    return ephemeral('❌ Invalid type or action specified.');
+  } catch (error) {
+    console.error('Error in handleFavoritesCommand:', error);
+    return ephemeral('❌ An error occurred while managing favorites.');
   }
 }
 

@@ -62,6 +62,38 @@ const commands = [
   {
     name: 'leave',
     description: 'Leave voice channel and stop streaming mode'
+  },
+  {
+    name: 'favorites',
+    description: 'Manage favorite personalities and voices for this server',
+    options: [
+      {
+        name: 'type',
+        description: 'What to manage',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'personality', value: 'personality' },
+          { name: 'voice', value: 'voice' }
+        ]
+      },
+      {
+        name: 'action',
+        description: 'Action to perform',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: 'list', value: 'list' },
+          { name: 'select', value: 'select' }
+        ]
+      },
+      {
+        name: 'name',
+        description: 'Name of the favorite to select (required for select action)',
+        type: 3, // STRING
+        required: false
+      }
+    ]
   }
 ];
 
