@@ -82,9 +82,20 @@ GOOGLE_CLOUD_KEY_FILE=path-to-service-account-json
 4. **✅ Database Schema**: Added password field for local auth
 5. **✅ Frontend Integration**: Fixed API endpoint mismatches
 
+## 🔄 **Database Migration Required**
+
+**IMPORTANT**: After deploying, you MUST run the database migration to add the `passwordHash` column:
+
+1. **Go to your Render dashboard**
+2. **Open the Shell** for your web service
+3. **Run the migration**:
+   ```bash
+   npm run db:migrate
+   ```
+
 ## 🔄 **Testing Authentication**
 
-After setting environment variables:
+After setting environment variables and running the migration:
 
 1. **Local Registration**: 
    - Go to `/auth`
