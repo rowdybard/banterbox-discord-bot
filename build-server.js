@@ -7,7 +7,15 @@ const dependencies = Object.keys(packageJson.dependencies || {});
 
 // Filter out local dependencies that should be bundled
 const externalDeps = dependencies.filter(dep => !dep.startsWith('@shared'));
-
+esbuild.build({
+  entryPoints: ['server/index.ts'],
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',              // ← this is the key
+  outdir: 'dist/server',
+  loader: { '.ts': 'ts', '.tsx': 'tsx' }
+}),
 try {
   await build({
     entryPoints: ['server/index.ts'],
