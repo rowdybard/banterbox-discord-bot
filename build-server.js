@@ -1,6 +1,5 @@
 import { build } from 'esbuild';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
 // (optional) outExtension: { '.js': '.mjs' }
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 const dependencies = Object.keys(packageJson.dependencies || {});
