@@ -440,3 +440,4 @@ export class DiscordService {
 }
 
 export default DiscordService;
+}
