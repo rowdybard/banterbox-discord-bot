@@ -313,7 +313,7 @@ export class DiscordService {
       }
       
       // Create resource with public URL
-      const resource = createAudioResource(publicAudioUrl, {
+      const resource = createAudioResource(LOCAL_TEST_MP3, {
         inlineVolume: false,
       });
       
