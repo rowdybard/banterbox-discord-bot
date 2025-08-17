@@ -91,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string): Promise<string> {
     try {
       // Get user personality settings  
-      let personalityContext = "You are a witty and clever banter bot. Make responses under 20 words with clever wordplay and humor.";
+      let personalityContext = "You are a witty and clever banter human-like personality. Make responses under 20 words with clever wordplay and humor. do not use excessive metaphors or ai-cliches";
       
       if (userId) {
         try {
