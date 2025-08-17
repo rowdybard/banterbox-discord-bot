@@ -144,14 +144,15 @@ export function setupDiscordAuth(app: express.Application) {
       const discordUser = await discordAuth.getUser(accessToken);
 
       // Persist connection (trim guilds server-side if you wish)
-      await storage.upsertDiscordSettings({
-        userId,
-        discordUserId: discordUser.id,
-        discordUsername: discordUser.username,
-        accessToken,
-        isConnected: true,
-        enabledEvents: ['discord_message', 'discord_member_join'],
-      });
+     await storage.upsertDiscordSettings({
+  userId,
+  discordUserId: discordUser.id,
+  discordUsername: discordUser.username,
+  accessToken,
+  isConnected: true,
+  // send as JSON string to satisfy current type
+  enabledEvents: JSON.stringify(['discord_message', 'discord_member_join']),
+});
 
       // Where to go post-connect
       const returnTo = (req.session as any).returnTo as string | undefined;
