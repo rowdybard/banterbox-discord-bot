@@ -1,5 +1,5 @@
 import { storage } from "./storage.js";
-import { InsertContextMemory, EventType, EventData } from "../shared/schema.js";
+import type { InsertContextMemory, EventType, EventData } from "../shared/schema.js";
 
 /**
  * Context Memory Service
@@ -18,10 +18,10 @@ export class ContextService {
   ): Promise<void> {
     // Generate context summary based on event type
     const contextSummary = this.generateContextSummary(eventType, eventData);
-    
+
     // Calculate expiration time based on importance (more important = longer retention)
     const hoursToRetain = Math.max(1, importance * 2); // 1-20 hours based on importance
-    const expiresAt = new Date(Date.now() + (hoursToRetain * 60 * 60 * 1000));
+    const expiresAt = new Date(Date.now() + hoursToRetain * 60 * 60 * 1000);
 
     const contextMemory: InsertContextMemory = {
       userId,
@@ -34,66 +34,24 @@ export class ContextService {
     };
 
     await storage.createContextMemory(contextMemory);
-    
+
     // Clean expired context occasionally
-    if (Math.random() < 0.1) { // 10% chance
+    if (Math.random() < 0.1) {
+      // 10% chance
       await storage.cleanExpiredContext();
     }
   }
 
   /**
    * Gets relevant context for AI banter generation
+   * (Disabled for now to avoid overly-aggressive references)
    */
   static async getContextForBanter(
-    userId: string,
-    currentEventType: EventType,
-    guildId?: string
+    _userId: string,
+    _currentEventType: EventType,
+    _guildId?: string
   ): Promise<string> {
-    // DISABLED: Context feature is too aggressive and references other users inappropriately
-    // Return empty string to disable context injection into AI prompts
-    return '';
-    
-    // Original implementation commented out:
-    /*
-    // Get recent general context
-    const recentContext = await storage.getRecentContext(userId, guildId, 5);
-    
-    // Get specific context for similar events
-    const similarEventContext = await storage.getContextByEventType(userId, currentEventType, guildId, 3);
-    
-    // Build context prompt
-    let contextPrompt = '';
-    
-    if (recentContext.length > 0) {
-      const recentSummary = recentContext
-        .map(ctx => ctx.contextSummary)
-        .filter(s => s)
-        .join('. ');
-      
-      if (recentSummary) {
-        contextPrompt += `Recent stream activity: ${recentSummary}. `;
-      }
-    }
-
-    if (similarEventContext.length > 0) {
-      const similarSummary = similarEventContext
-        .map(ctx => ctx.contextSummary)
-        .filter(s => s)
-        .slice(0, 2) // Limit to avoid too much context
-        .join('. ');
-      
-      if (similarSummary) {
-        contextPrompt += `Previous ${currentEventType} events: ${similarSummary}. `;
-      }
-    }
-
-    // Add guidance for using context
-    if (contextPrompt) {
-      contextPrompt = `Context (reference this naturally in your response): ${contextPrompt}Use this context to create a more engaging, contextual response that acknowledges recent stream activity. `;
-    }
-
-    return contextPrompt;
-    */
+    return "";
   }
 
   /**
@@ -107,8 +65,6 @@ export class ContextService {
     guildId?: string
   ): Promise<void> {
     // Record successful banter patterns for future reference
-    const contextSummary = `Generated successful banter "${banterText.substring(0, 50)}..." for ${eventType}`;
-    
     await this.recordEvent(userId, eventType, { ...eventData, banterText }, guildId, 2); // Higher importance for successful banters
   }
 
@@ -117,72 +73,84 @@ export class ContextService {
    */
   private static generateContextSummary(eventType: EventType, eventData: EventData): string {
     switch (eventType) {
-      case 'chat':
-        return `${eventData.username || 'Someone'} chatted${eventData.message ? ': "' + eventData.message.substring(0, 30) + '"' : ''}`;
-      
-      case 'subscription':
-        return `${eventData.username || 'Someone'} subscribed${eventData.amount ? ` with a $${eventData.amount} sub` : ''}`;
-      
-      case 'donation':
-        return `${eventData.username || 'Someone'} donated $${eventData.amount || 0}${eventData.message ? ' saying "' + eventData.message.substring(0, 30) + '"' : ''}`;
-      
-      case 'raid':
-        return `${eventData.username || 'Someone'} raided with ${eventData.raiderCount || 0} viewers`;
-      
-      case 'discord_message':
-        const content = eventData.messageContent || eventData.message || '';
-        return `${eventData.username || eventData.displayName || 'Someone'} sent message in Discord${content ? ': "' + content.substring(0, 30) + '"' : ''}`;
-      
-      case 'discord_member_join':
-        return `${eventData.username || eventData.displayName || 'Someone'} joined the Discord server`;
-      
-      case 'discord_reaction':
-        return `${eventData.username || eventData.displayName || 'Someone'} reacted with ${eventData.emoji || 'emoji'} in Discord`;
-      
+      case "chat":
+        return `${eventData.username || "Someone"} chatted${
+          eventData.message ? ': "' + eventData.message.substring(0, 30) + '"' : ""
+        }`;
+
+      case "subscription":
+        return `${eventData.username || "Someone"} subscribed$${
+          eventData.amount ? ` with a $${eventData.amount} sub` : ""
+        }`;
+
+      case "donation":
+        return `${eventData.username || "Someone"} donated $${
+          eventData.amount || 0
+        }${eventData.message ? ' saying "' + eventData.message.substring(0, 30) + '"' : ""}`;
+
+      case "raid":
+        return `${eventData.username || "Someone"} raided with ${eventData.raiderCount || 0} viewers`;
+
+      case "discord_message": {
+        const content = eventData.messageContent || eventData.message || "";
+        return `${
+          eventData.username || eventData.displayName || "Someone"
+        } sent message in Discord${content ? ': "' + content.substring(0, 30) + '"' : ""}`;
+      }
+
+      case "discord_member_join":
+        return `${eventData.username || eventData.displayName || "Someone"} joined the Discord server`;
+
+      case "discord_reaction":
+        return `${eventData.username || eventData.displayName || "Someone"} reacted with ${
+          eventData.emoji || "emoji"
+        } in Discord`;
+
       default:
-        return `${eventData.username || 'Someone'} triggered ${eventType} event`;
+        return `${eventData.username || "Someone"} triggered ${eventType} event`;
     }
   }
 
   /**
    * Gets a summary of recent stream activity for status displays
    */
-  static async getStreamActivitySummary(userId: string, guildId?: string): Promise<{
-    totalEvents: number;
-    recentActivity: string;
-    topEventTypes: string[];
-  }> {
+  static async getStreamActivitySummary(
+    userId: string,
+    guildId?: string
+  ): Promise<{ totalEvents: number; recentActivity: string; topEventTypes: string[] }> {
     const recentContext = await storage.getRecentContext(userId, guildId, 20);
-    
-    if (recentContext.length === 0) {
-      return {
-        totalEvents: 0,
-        recentActivity: "No recent activity",
-        topEventTypes: []
-      };
+
+    if (!recentContext.length) {
+      return { totalEvents: 0, recentActivity: "No recent activity", topEventTypes: [] };
     }
 
-    // Count event types
-    const eventCounts = recentContext.reduce((acc, ctx) => {
-      acc[ctx.eventType] = (acc[ctx.eventType] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    // Narrow the shape so TS is happy
+    type ContextItem = { importance: number; contextSummary?: string; eventType: string };
+    const items = recentContext as unknown as ContextItem[];
 
+    // Count event types
+    const eventCounts = items.reduce<Record<string, number>>((acc, ctx) => {
+      acc[ctx.eventType] = (acc[ctx.eventType] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    // Top 3 event types
     const topEventTypes = Object.entries(eventCounts)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([type]) => type);
 
-    const recentActivity = recentContext
+    // Short recent activity summary
+    const recentActivity = items
+      .map((c) => c.contextSummary)
+      .filter((s): s is string => Boolean(s))
       .slice(0, 3)
-      .map(ctx => ctx.contextSummary)
-      .filter(s => s)
-      .join('; ');
+      .join("; ");
 
     return {
-      totalEvents: recentContext.length,
+      totalEvents: items.length,
       recentActivity,
-      topEventTypes
+      topEventTypes,
     };
   }
 }
