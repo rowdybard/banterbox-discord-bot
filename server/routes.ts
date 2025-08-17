@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
+import { setupGoogleAuth } from "./googleAuth";
 import { setupTwitchAuth } from "./twitchAuth";
 import { setupDiscordAuth } from "./discordAuth";
 import discordInteractions from "./discord/interactions";
@@ -22,8 +23,9 @@ const openai = new OpenAI({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication middleware
+  // Setup authentication middleware (local and Google)
   await setupAuth(app);
+  await setupGoogleAuth(app);
   
   // Setup Twitch authentication
   setupTwitchAuth(app);
@@ -735,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a link code for Discord bot linking
   app.post("/api/discord/link-code", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req.user as any)?.claims?.sub;
+      const userId = req.user.id;
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -776,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/discord/status/:userId", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = (req.user as any)?.claims?.sub;
+      const authenticatedUserId = req.user.id;
       
       // Ensure user can only access their own data
       if (userId !== authenticatedUserId) {

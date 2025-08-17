@@ -58,7 +58,7 @@ export default function AuthPage() {
         throw new Error("Passwords don't match");
       }
       
-      const response = await apiRequest("POST", "/api/auth/signup", {
+      const response = await apiRequest("POST", "/api/auth/register", {
         email: signupEmail,
         password: signupPassword,
         firstName: signupFirstName,
