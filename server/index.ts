@@ -10,7 +10,13 @@ app.use(express.urlencoded({ extended: false }));
 
 // ── NEW: one switch to enable/disable the Discord pieces ───────────────
 const ENABLE_DISCORD = process.env.BB_ENABLE_DISCORD === "1";
-
+if (ENABLE_DISCORD) {
+  try {
+    await registerRoutes(app); // your existing bootstrap that wires Discord
+  } catch (err) {
+    console.warn("Discord failed to start:", (err as any)?.message);
+  }
+}
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
