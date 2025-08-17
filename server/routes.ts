@@ -4,22 +4,22 @@ import { createServer, type Server } from "http";
 import { join } from "path";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage.js";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService } from "./objectStorage.js";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
-import { setupGoogleAuth, isAuthenticated } from "./googleAuth";
-import { setupLocalAuth } from "./localAuth";
-import { setupTwitchAuth } from "./twitchAuth";
-import { setupDiscordAuth } from "./discordAuth";
-import discordInteractions from "./discord/interactions";
-import { registerCommands, getBotInviteUrl } from "./discord/commands";
-import TwitchEventSubClient from "./twitch";
-import { DiscordService } from "./discord";
+import { setupGoogleAuth, isAuthenticated } from "./googleAuth.js";
+import { setupLocalAuth } from "./localAuth.js";
+import { setupTwitchAuth } from "./twitchAuth.js";
+import { setupDiscordAuth } from "./discordAuth.js";
+import discordInteractions from "./discord/interactions.js";
+import { registerCommands, getBotInviteUrl } from "./discord/commands.js";
+import TwitchEventSubClient from "./twitch.js";
+import { DiscordService } from "./discord.js";
 import OpenAI from "openai";
-import { elevenLabsService } from "./elevenlabs";
-import { ContextService } from "./contextService";
+import { elevenLabsService } from "./elevenlabs.js";
+import { ContextService } from "./contextService.js";
 
 // Create OpenAI client with dynamic API key loading
 const getOpenAIClient = () => {
