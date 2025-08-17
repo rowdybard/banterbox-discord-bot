@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: npm install --legacy-peer-deps && npm run build
-    startCommand: npm start
+    startCommand: node dist/server/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
