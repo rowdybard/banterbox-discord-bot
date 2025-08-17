@@ -275,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]
     };
 
-    const eventFallbacks = fallbacks[eventType] || fallbacks.chat;
+    const bucket = routeBuckets[eventType as unknown as keyof typeof routeBuckets];
     return eventFallbacks[Math.floor(Math.random() * eventFallbacks.length)];
   }
 
@@ -1441,7 +1441,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
       // Find all guild links for this workspace
       const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, userId));
-      const activeGuildLinks = allGuildLinks.filter(link => link.active);
+      const activeGuildLinks = allGuildLinks.filter((link: { active?: boolean }) => Boolean(link?.active));
+      links.forEach((link: GuildLink) => { /* … */ });
+      links.map((link: GuildLink) => /* … */);
   
       res.json({
         isConnected: activeGuildLinks.length > 0,
