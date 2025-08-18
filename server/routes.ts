@@ -300,6 +300,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
               audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
             }
           }
+        } else if (voiceProvider === 'favorite') {
+          // Use downloaded favorite voice
+          const favoriteVoices = userSettings?.favoriteVoices || [];
+          const selectedVoiceId = userSettings?.voiceId;
+          
+          if (selectedVoiceId && favoriteVoices.length > 0) {
+            // Find the selected voice in favorites
+            const selectedVoice = favoriteVoices.find((voice: any) => 
+              voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
+            );
+            
+            if (selectedVoice) {
+              const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+              const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
+              if (audioBuffer) {
+                // Try Firebase first, fallback to object storage
+                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+              }
+            }
+          }
+          
+          // Fallback to default voice if no favorite voice found
+          if (!audioUrl) {
+            const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
+            if (audioBuffer) {
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+            }
+          }
         } else {
           // Use OpenAI TTS (default)
           const response = await openai.audio.speech.create({
@@ -376,6 +404,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use ElevenLabs for Pro users
         const voiceId = settings?.voiceId || elevenLabsService.getDefaultVoice();
         return await elevenLabsService.generateSpeech(enhancedText, voiceId);
+      } else if (voiceProvider === 'favorite') {
+        // Use downloaded favorite voice
+        const favoriteVoices = settings?.favoriteVoices || [];
+        const selectedVoiceId = settings?.voiceId;
+        
+        if (selectedVoiceId && favoriteVoices.length > 0) {
+          // Find the selected voice in favorites
+          const selectedVoice = favoriteVoices.find((voice: any) => 
+            voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
+          );
+          
+          if (selectedVoice) {
+            const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+            return await elevenLabsService.generateSpeech(enhancedText, voiceId);
+          }
+        }
+        
+        // Fallback to default voice if no favorite voice found
+        return await elevenLabsService.generateSpeech(enhancedText, elevenLabsService.getDefaultVoice());
       } else {
         // Use OpenAI TTS (default)
         const response = await openai.audio.speech.create({
@@ -387,18 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error('Error generating TTS:', error);
-      // Fallback to OpenAI if ElevenLabs fails
-      try {
-        const response = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: "alloy",
-          input: text,
-        });
-        return Buffer.from(await response.arrayBuffer());
-      } catch (fallbackError) {
-        console.error('Fallback TTS also failed:', fallbackError);
-        return null;
-      }
+      return null;
     }
   }
 
@@ -475,6 +511,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (audioBuffer) {
             // Try Firebase first, fallback to object storage
             audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+          }
+        } else if (voiceProvider === 'favorite') {
+          // Use downloaded favorite voice
+          const favoriteVoices = userSettings?.favoriteVoices || [];
+          const selectedVoiceId = userSettings?.voiceId;
+          
+          if (selectedVoiceId && favoriteVoices.length > 0) {
+            // Find the selected voice in favorites
+            const selectedVoice = favoriteVoices.find((voice: any) => 
+              voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
+            );
+            
+            if (selectedVoice) {
+              const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+              const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
+              if (audioBuffer) {
+                // Try Firebase first, fallback to object storage
+                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+              }
+            }
+          }
+          
+          // Fallback to default voice if no favorite voice found
+          if (!audioUrl) {
+            const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
+            if (audioBuffer) {
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+            }
           }
         } else {
           // Use OpenAI TTS

@@ -18,11 +18,17 @@ import Landing from "@/pages/landing";
 import Auth from "@/pages/auth";
 import NotFound from "@/pages/not-found";
 import MobileNav from "./components/ui/mobile-nav";
+import DesktopNav from "./components/ui/desktop-nav";
 import { OfflineBanner } from "@/components/ui/offline-banner";
 
-function AuthenticatedMobileNav() {
+function AuthenticatedNav() {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <MobileNav /> : null;
+  return isAuthenticated ? (
+    <>
+      <DesktopNav />
+      <MobileNav />
+    </>
+  ) : null;
 }
 
 function Router() {
@@ -65,7 +71,7 @@ function App() {
           <OfflineBanner />
           <Toaster />
           <Router />
-          <AuthenticatedMobileNav />
+          <AuthenticatedNav />
         </div>
       </TooltipProvider>
     </QueryClientProvider>

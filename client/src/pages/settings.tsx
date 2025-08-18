@@ -64,7 +64,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen pb-20 md:pb-6">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800">
+      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800 md:ml-64">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
@@ -79,8 +79,9 @@ export default function Settings() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="max-w-2xl mx-auto space-y-6">
+      <main className="md:ml-64">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-2xl mx-auto space-y-6">
           
           {/* Platform Integrations */}
           <TwitchSettings />

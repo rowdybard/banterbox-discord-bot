@@ -38,17 +38,15 @@ export default function Tools() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800">
+      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800 md:ml-64">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
-                  <i className="fas fa-microphone-alt text-white text-sm"></i>
+                  <i className="fas fa-tools text-white text-sm"></i>
                 </div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  BanterBox
-                </h1>
+                <h1 className="text-xl font-bold text-white">Tools</h1>
               </div>
             </div>
             
@@ -416,19 +414,21 @@ export default function Tools() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white mb-2">Data Management Tools</h2>
-          <p className="text-gray-400">Export your banter history and manage backups</p>
-        </div>
-
-        {/* Tools Grid */}
-        <section className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ExportData userId={userId} />
-            <BackupSystem userId={userId} />
+      <main className="md:ml-64 pb-20 md:pb-0">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-white mb-2">Data Management Tools</h2>
+            <p className="text-gray-400">Export your banter history and manage backups</p>
           </div>
-        </section>
+
+          {/* Tools Grid */}
+          <section className="mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ExportData userId={userId} />
+              <BackupSystem userId={userId} />
+            </div>
+          </section>
+        </div>
       </main>
     </div>
   );

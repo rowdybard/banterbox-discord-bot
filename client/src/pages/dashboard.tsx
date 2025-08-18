@@ -88,7 +88,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800">
+      <header className="sticky top-0 z-50 bg-dark/80 backdrop-blur-lg border-b border-gray-800 md:ml-64">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
@@ -469,7 +469,23 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 md:pb-6">
+      <main className="md:ml-64 pb-20 md:pb-0">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Onboarding Modal */}
+          <OnboardingModal 
+            isOpen={isOnboardingOpen} 
+            onComplete={handleOnboardingComplete}
+          />
+
+          {/* Welcome Section */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-2">
+              Welcome back, {user?.firstName || 'Streamer'}! 🎮
+            </h2>
+            <p className="text-gray-400">
+              Ready to create some amazing banter for your stream?
+            </p>
+          </div>
 
 
         {/* Dashboard Controls */}
@@ -503,16 +519,8 @@ export default function Dashboard() {
         <section className="mb-8">
           <BanterHistory userId={userId} />
         </section>
+        </div>
       </main>
-
-        {/* Onboarding Modal */}
-        {user && !user.hasCompletedOnboarding && (
-          <OnboardingModal
-            isOpen={isOnboardingOpen}
-            onClose={() => setIsOnboardingOpen(false)}
-            onComplete={handleOnboardingComplete}
-          />
-        )}
     </div>
   );
 }

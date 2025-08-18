@@ -213,7 +213,8 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
     } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
-      setVoiceId(favoriteVoices.voices[0].voiceId); // Set to first favorite voice
+      // Use baseVoiceId for downloaded voices
+      setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
     }
   };
 
@@ -395,7 +396,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                         Saved Voices
                       </div>
                       {favoriteVoices.voices.map((voice: any) => (
-                        <SelectItem key={voice.id} value={voice.voiceId} className="text-white hover:bg-gray-700">
+                        <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId} className="text-white hover:bg-gray-700">
                           <div className="flex flex-col">
                             <div className="flex items-center space-x-2">
                               <Star className="h-3 w-3 text-yellow-400" />
@@ -431,7 +432,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
                   {favoriteVoices.voices.map((voice: any) => (
-                    <SelectItem key={voice.id} value={voice.voiceId} className="text-white hover:bg-gray-700">
+                    <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId} className="text-white hover:bg-gray-700">
                       <div className="flex flex-col">
                         <div className="flex items-center space-x-2">
                           <Star className="h-3 w-3 text-yellow-400" />

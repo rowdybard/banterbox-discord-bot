@@ -6,22 +6,23 @@ export default function MobileNav() {
 
   const navItems = [
     { path: "/dashboard", icon: "fas fa-tachometer-alt", label: "Dashboard" },
-    { path: "/overlay", icon: "fas fa-layer-group", label: "Overlay" },
-    { path: "/settings", icon: "fas fa-cog", label: "Settings" },
+    { path: "/tools", icon: "fas fa-tools", label: "Tools" },
+    { path: "/voice-marketplace", icon: "fas fa-microphone", label: "Voices" },
     { path: "/marketplace", icon: "fas fa-store", label: "Market" },
     { path: "/personality-builder", icon: "fas fa-brain", label: "AI" },
-    { path: "/voice-builder", icon: "fas fa-microphone", label: "Voice" },
+    { path: "/voice-builder", icon: "fas fa-microphone-alt", label: "Build" },
+    { path: "/settings", icon: "fas fa-cog", label: "Settings" },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-dark/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2 z-40">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-dark/95 backdrop-blur-lg border-t border-gray-800 px-2 py-2 z-40">
       <div className="flex items-center justify-around">
         {navItems.map((item) => (
           <button
             key={item.path}
             onClick={() => setLocation(item.path)}
             className={cn(
-              "flex flex-col items-center space-y-1 py-2 px-3 transition-colors touch-manipulation",
+              "flex flex-col items-center space-y-1 py-2 px-2 transition-colors touch-manipulation min-w-0",
               location === item.path || (item.path === "/dashboard" && location === "/")
                 ? "text-primary"
                 : "text-gray-400 hover:text-white"
@@ -29,7 +30,7 @@ export default function MobileNav() {
             data-testid={`nav-${item.label.toLowerCase()}`}
           >
             <i className={`${item.icon} text-lg`}></i>
-            <span className="text-xs font-medium">{item.label}</span>
+            <span className="text-xs font-medium truncate w-full text-center">{item.label}</span>
           </button>
         ))}
       </div>
