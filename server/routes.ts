@@ -2178,5 +2178,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Voice Marketplace API routes
+  app.get("/api/marketplace/voices", async (req, res) => {
+    try {
+      const { category, sortBy, limit } = req.query;
+      
+      // For now, return some sample voices
+      // In a real implementation, this would fetch from a database
+      const sampleVoices = [
+        {
+          id: "1",
+          name: "Gaming Warrior",
+          description: "Perfect for gaming streams with energetic commentary",
+          category: "Gaming",
+          tags: ["gaming", "energetic", "warrior"],
+          baseVoiceId: "21m00Tcm4TlvDq8ikWAM",
+          settings: {
+            stability: 60,
+            similarityBoost: 80,
+            style: 20,
+            useSpeakerBoost: true
+          },
+          sampleText: "Welcome to the stream! Let's dominate this game!",
+          downloads: 850,
+          upvotes: 67,
+          downvotes: 2,
+          createdAt: "2024-01-15T10:00:00Z",
+          authorId: "user1"
+        },
+        {
+          id: "2",
+          name: "Chill Vibes",
+          description: "Relaxed and laid-back voice for casual streams",
+          category: "Entertainment",
+          tags: ["chill", "relaxed", "casual"],
+          baseVoiceId: "ErXwobaYiN019PkySvjV",
+          settings: {
+            stability: 75,
+            similarityBoost: 70,
+            style: 10,
+            useSpeakerBoost: false
+          },
+          sampleText: "Hey everyone, thanks for hanging out with us today.",
+          downloads: 1200,
+          upvotes: 89,
+          downvotes: 5,
+          createdAt: "2024-01-10T14:30:00Z",
+          authorId: "user2"
+        },
+        {
+          id: "3",
+          name: "Professional Narrator",
+          description: "Clear and professional voice for educational content",
+          category: "Education",
+          tags: ["professional", "clear", "educational"],
+          baseVoiceId: "JBFqnCBsd6RMkjVDRZzb",
+          settings: {
+            stability: 85,
+            similarityBoost: 90,
+            style: 5,
+            useSpeakerBoost: true
+          },
+          sampleText: "Today we'll be exploring the fascinating world of science.",
+          downloads: 650,
+          upvotes: 45,
+          downvotes: 1,
+          createdAt: "2024-01-20T09:15:00Z",
+          authorId: "user3"
+        }
+      ];
+      
+      // Filter by category if specified
+      let filteredVoices = sampleVoices;
+      if (category && category !== 'all') {
+        filteredVoices = sampleVoices.filter(voice => voice.category === category);
+      }
+      
+      // Sort voices
+      if (sortBy === 'popular') {
+        filteredVoices.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+      } else if (sortBy === 'downloads') {
+        filteredVoices.sort((a, b) => b.downloads - a.downloads);
+      } else {
+        // Default: recent
+        filteredVoices.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+      
+      // Apply limit
+      const limitNum = parseInt(limit as string) || 20;
+      filteredVoices = filteredVoices.slice(0, limitNum);
+      
+      res.json(filteredVoices);
+    } catch (error) {
+      console.error('Error getting marketplace voices:', error);
+      res.status(500).json({ message: "Failed to get marketplace voices" });
+    }
+  });
+
+  app.post("/api/marketplace/voices/:voiceId/download", isAuthenticated, async (req, res) => {
+    try {
+      const { voiceId } = req.params;
+      const userId = req.user.id;
+      
+      // In a real implementation, this would:
+      // 1. Fetch the voice from the marketplace database
+      // 2. Add it to the user's custom voices
+      // 3. Increment download count
+      
+      // For now, we'll just return success
+      res.json({ 
+        success: true, 
+        message: "Voice downloaded successfully",
+        voiceId 
+      });
+    } catch (error) {
+      console.error('Error downloading voice:', error);
+      res.status(500).json({ message: "Failed to download voice" });
+    }
+  });
+
+  // Voice Builder API routes
+  app.post("/api/voice-builder/preview", async (req, res) => {
+    try {
+      const { text, baseVoiceId, settings } = req.body;
+      
+      if (!text || !baseVoiceId) {
+        return res.status(400).json({ message: "Text and baseVoiceId are required" });
+      }
+      
+      // Generate audio using ElevenLabs with the provided settings
+      const audioBuffer = await elevenLabsService.generateSpeech(text, baseVoiceId, settings);
+      
+      // Set appropriate headers for audio
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioBuffer.length,
+      });
+      
+      res.send(audioBuffer);
+    } catch (error) {
+      console.error("Error generating voice preview:", error);
+      res.status(500).json({ message: "Failed to generate voice preview" });
+    }
+  });
+
+  app.post("/api/voice-builder/save", isAuthenticated, async (req, res) => {
+    try {
+      const { name, description, category, tags, baseVoiceId, settings, addToMarketplace, sampleText } = req.body;
+      const userId = req.user.id;
+      
+      if (!name || !baseVoiceId) {
+        return res.status(400).json({ message: "Name and baseVoiceId are required" });
+      }
+      
+      // In a real implementation, this would:
+      // 1. Save the custom voice to the user's library
+      // 2. If addToMarketplace is true, also save to marketplace database
+      
+      const customVoice = {
+        id: randomUUID(),
+        name,
+        description: description || "",
+        category: category || "Custom",
+        tags: tags || ["custom"],
+        baseVoiceId,
+        settings: settings || {},
+        sampleText: sampleText || "Sample text for this voice.",
+        authorId: userId,
+        createdAt: new Date().toISOString(),
+        isActive: true
+      };
+      
+      // Save to user's favorite voices
+      const userSettings = await storage.getUserSettings(userId);
+      const currentFavorites = userSettings?.favoriteVoices || [];
+      const updatedFavorites = [...currentFavorites, customVoice];
+      
+      await storage.updateUserSettings(userId, {
+        favoriteVoices: updatedFavorites
+      });
+      
+      res.json({ 
+        success: true, 
+        voice: customVoice,
+        message: addToMarketplace 
+          ? "Voice saved and added to marketplace!" 
+          : "Voice saved to your library!"
+      });
+    } catch (error) {
+      console.error('Error saving custom voice:', error);
+      res.status(500).json({ message: "Failed to save custom voice" });
+    }
+  });
+
   return httpServer;
         }

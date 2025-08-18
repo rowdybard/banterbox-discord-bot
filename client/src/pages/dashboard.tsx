@@ -191,6 +191,26 @@ export default function Dashboard() {
                         <span>AI Builder</span>
                       </button>
                     </Link>
+                    <Link href="/voice-marketplace">
+                      <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center space-x-3"
+                        data-testid="menu-voice-marketplace"
+                      >
+                        <i className="fas fa-microphone w-4"></i>
+                        <span>Voice Market</span>
+                      </button>
+                    </Link>
+                    <Link href="/voice-builder">
+                      <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center space-x-3"
+                        data-testid="menu-voice-builder"
+                      >
+                        <i className="fas fa-microphone-alt w-4"></i>
+                        <span>Voice Builder</span>
+                      </button>
+                    </Link>
                     <Link href="/overlay">
                       <button 
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -292,6 +312,30 @@ export default function Dashboard() {
                     data-testid="button-personality-builder"
                   >
                     AI Builder
+                  </button>
+                </Link>
+                <Link href="/voice-marketplace">
+                  <button 
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      location === '/voice-marketplace' 
+                        ? 'text-white bg-primary/20' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                    data-testid="button-voice-marketplace"
+                  >
+                    Voice Market
+                  </button>
+                </Link>
+                <Link href="/voice-builder">
+                  <button 
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      location === '/voice-builder' 
+                        ? 'text-white bg-primary/20' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                    data-testid="button-voice-builder"
+                  >
+                    Voice Builder
                   </button>
                 </Link>
                 <Link href="/overlay">
