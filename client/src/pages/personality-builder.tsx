@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Brain, 
   Save, 
@@ -21,6 +22,7 @@ import {
   Shield
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 const PERSONALITY_CATEGORIES = [
   'Gaming', 'Streaming', 'Comedy', 'Education', 'Music', 'Custom', 'Entertainment', 'Professional'
@@ -74,6 +76,28 @@ export default function PersonalityBuilderPage() {
   const [moderationResult, setModerationResult] = useState<{ passed: boolean; issues: string[] } | null>(null);
 
   const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // Check if user has Pro subscription
+  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
+
+  if (!isPro) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark via-dark-lighter to-gray-900 flex items-center justify-center">
+        <Card className="w-full max-w-md p-6 text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
+          <CardTitle className="text-2xl font-bold mb-2">Pro Subscription Required</CardTitle>
+          <CardDescription className="mb-4 text-gray-600 dark:text-gray-400">
+            Personality Builder requires a Pro subscription to create custom personalities.
+            Upgrade to unlock advanced AI personality creation.
+          </CardDescription>
+          <Link href="/pricing">
+            <Button className="w-full">Upgrade Now</Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   const testPersonalityMutation = useMutation({
     mutationFn: async () => {
@@ -82,39 +106,72 @@ export default function PersonalityBuilderPage() {
         prompt: personalityPrompt,
         message: testScenario
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 403) {
+          throw new Error(`Subscription required: ${errorData.message}`);
+        }
+        throw new Error(`Test failed: ${errorData.message || response.statusText}`);
+      }
+      
       return response.json();
     },
     onSuccess: (data) => {
       setTestResult(data.banterText);
     },
-    onError: () => {
-      toast({
-        title: "Test Failed",
-        description: "Could not test personality. Try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error.message.includes('Subscription required')) {
+        toast({
+          title: "Pro Subscription Required",
+          description: "Personality Builder requires a Pro subscription. Upgrade to create custom personalities!",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Test Failed",
+          description: error.message || "Could not test personality. Try again.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
   const savePersonalityMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/marketplace/personalities', {
-        name: personalityName,
-        description: personalityDescription,
-        prompt: personalityPrompt,
+      // Ensure we have all required data
+      const personalityData = {
+        name: personalityName.trim(),
+        description: personalityDescription.trim(),
+        prompt: personalityPrompt.trim(), // Ensure prompt is included
         category: selectedCategory,
-        tags: selectedTags,
-        isVerified: false // User-generated content needs verification
-      });
+        tags: selectedTags.length > 0 ? selectedTags : ['custom'],
+        isVerified: false
+      };
+
+      console.log('Saving personality with data:', personalityData); // Debug log
+
+      const response = await apiRequest('POST', '/api/marketplace/personalities', personalityData);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 403) {
+          throw new Error(`Subscription required: ${errorData.message}`);
+        }
+        throw new Error(`Save failed: ${errorData.message || response.statusText}`);
+      }
+      
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: addToMarketplace ? "Personality Saved & Added to Marketplace!" : "Personality Saved!",
         description: addToMarketplace 
           ? `Custom personality "${personalityName}" has been saved and added to the marketplace for review.`
           : `Custom personality "${personalityName}" has been saved to your library.`,
       });
+      
+      // Reset form
       setPersonalityName('');
       setPersonalityDescription('');
       setPersonalityPrompt('');
@@ -122,17 +179,30 @@ export default function PersonalityBuilderPage() {
       setSelectedTags(['custom']);
       setAddToMarketplace(false);
       setModerationResult(null);
+      setTestResult('');
     },
-    onError: () => {
-      toast({
-        title: "Save Failed",
-        description: "Could not save personality. Try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      console.error('Save personality error:', error); // Debug log
+      if (error.message.includes('Subscription required')) {
+        toast({
+          title: "Pro Subscription Required",
+          description: "Personality Builder requires a Pro subscription. Upgrade to create custom personalities!",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Save Failed",
+          description: error.message || "Could not save personality. Try again.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
   const handleSavePersonality = () => {
+    // Clear previous moderation results
+    setModerationResult(null);
+    
     if (!personalityName.trim()) {
       toast({
         title: "Name Required",
@@ -183,6 +253,7 @@ export default function PersonalityBuilderPage() {
       return;
     }
     
+    console.log('Submitting personality with prompt:', personalityPrompt); // Debug log
     savePersonalityMutation.mutate();
   };
 
@@ -280,14 +351,21 @@ export default function PersonalityBuilderPage() {
               {addToMarketplace && (
                 <>
                   <div className="space-y-3">
-                    <Label htmlFor="personality-description" className="text-sm font-medium">Public Description</Label>
+                    <Label htmlFor="personality-description" className="text-sm font-medium">
+                      Public Description
+                      <span className="text-red-500 ml-1">*</span>
+                    </Label>
                     <Textarea
                       id="personality-description"
                       placeholder="A brief description for other users to understand this personality"
                       value={personalityDescription}
                       onChange={(e) => setPersonalityDescription(e.target.value)}
                       data-testid="personality-description-input"
+                      className={addToMarketplace && !personalityDescription.trim() ? "border-red-300 focus:border-red-500" : ""}
                     />
+                    {addToMarketplace && !personalityDescription.trim() && (
+                      <p className="text-xs text-red-500">Description is required for marketplace personalities</p>
+                    )}
                   </div>
                   
                   <div className="space-y-3">
@@ -328,18 +406,21 @@ export default function PersonalityBuilderPage() {
                         </button>
                       ))}
                     </div>
+                    {addToMarketplace && selectedTags.length === 0 && (
+                      <p className="text-xs text-red-500">At least one tag is required for marketplace personalities</p>
+                    )}
                   </div>
                 </>
               )}
 
-              <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200 dark:border-purple-700">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-2 border-purple-200 dark:border-purple-700">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500">
                     <Upload className="h-4 w-4 text-white" />
                   </div>
                   <div>
-                    <span className="text-sm font-medium">Add to Marketplace</span>
-                    <p className="text-xs text-gray-500">Share your personality with the community (subject to moderation)</p>
+                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">Add to Marketplace</span>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Share your personality with the community (subject to moderation)</p>
                   </div>
                 </div>
                 <Button
@@ -347,8 +428,9 @@ export default function PersonalityBuilderPage() {
                   size="sm"
                   onClick={() => setAddToMarketplace(!addToMarketplace)}
                   data-testid="marketplace-toggle-button"
+                  className={addToMarketplace ? "bg-purple-600 hover:bg-purple-700" : ""}
                 >
-                  {addToMarketplace ? "ON" : "OFF"}
+                  {addToMarketplace ? "ENABLED" : "DISABLED"}
                 </Button>
               </div>
 
@@ -380,12 +462,27 @@ export default function PersonalityBuilderPage() {
               <Button
                 onClick={handleSavePersonality}
                 disabled={savePersonalityMutation.isPending || !personalityName.trim() || !personalityPrompt.trim()}
-                className="w-full flex items-center gap-2"
+                className={`w-full flex items-center gap-2 h-12 text-base font-medium ${
+                  addToMarketplace 
+                    ? "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700" 
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
                 data-testid="save-personality-button"
               >
-                <Save className="h-4 w-4" />
-                {savePersonalityMutation.isPending ? "Saving..." : addToMarketplace ? "Save & Add to Marketplace" : "Save Personality"}
+                <Save className="h-5 w-5" />
+                {savePersonalityMutation.isPending 
+                  ? "Saving..." 
+                  : addToMarketplace 
+                    ? "Save & Add to Marketplace" 
+                    : "Save Personality"
+                }
               </Button>
+              
+              {addToMarketplace && (
+                <p className="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">
+                  Your personality will be reviewed before appearing in the marketplace
+                </p>
+              )}
             </CardContent>
           </Card>
 

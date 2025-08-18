@@ -50,12 +50,25 @@ export class ElevenLabsService {
   }
 
   // Generate speech from text
-  async generateSpeech(text: string, voiceId: string): Promise<Buffer> {
+  async generateSpeech(text: string, voiceId: string, settings?: any): Promise<Buffer> {
     if (!this.apiKey) {
       throw new Error('ElevenLabs API key not configured');
     }
     
     try {
+      // Use provided settings or defaults
+      const voiceSettings = settings ? {
+        stability: settings.stability / 100, // Convert from percentage to decimal
+        similarity_boost: settings.similarityBoost / 100,
+        style: settings.style / 100,
+        use_speaker_boost: settings.useSpeakerBoost || true
+      } : {
+        stability: 0.5,
+        similarity_boost: 0.5,
+        style: 0,
+        use_speaker_boost: true
+      };
+
       const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceId}`, {
         method: 'POST',
         headers: {
@@ -66,10 +79,7 @@ export class ElevenLabsService {
         body: JSON.stringify({
           text,
           model_id: 'eleven_monolingual_v1',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5,
-          },
+          voice_settings: voiceSettings,
         }),
       });
 

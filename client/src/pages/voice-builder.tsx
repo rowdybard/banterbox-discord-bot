@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Wand2, 
   Play, 
@@ -21,9 +22,12 @@ import {
   Sparkles,
   Download,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Crown,
+  AlertTriangle
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 interface VoiceSettings {
   stability: number;
@@ -90,6 +94,28 @@ export default function VoiceBuilderPage() {
   });
 
   const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // Check if user has Pro subscription
+  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
+
+  if (!isPro) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark via-dark-lighter to-gray-900 flex items-center justify-center">
+        <Card className="w-full max-w-md p-6 text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
+          <CardTitle className="text-2xl font-bold mb-2">Pro Subscription Required</CardTitle>
+          <CardDescription className="mb-4 text-gray-600 dark:text-gray-400">
+            Voice Builder requires a Pro subscription to create custom voices.
+            Upgrade to unlock advanced customization features.
+          </CardDescription>
+          <Link href="/pricing">
+            <Button className="w-full">Upgrade Now</Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   const selectedVoice = BASE_VOICES.find(v => v.id === selectedBaseVoice);
 
@@ -106,7 +132,11 @@ export default function VoiceBuilderPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Preview failed: ${response.status}`);
+        const errorData = await response.json();
+        if (response.status === 403) {
+          throw new Error(`Subscription required: ${errorData.message}`);
+        }
+        throw new Error(`Preview failed: ${errorData.message || response.statusText}`);
       }
 
       return response.blob();
@@ -136,48 +166,84 @@ export default function VoiceBuilderPage() {
       setIsPlaying(true);
       await audio.play();
     },
-    onError: (error) => {
-      toast({
-        title: "Preview Failed",
-        description: "Could not generate voice preview. Try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error.message.includes('Subscription required')) {
+        toast({
+          title: "Pro Subscription Required",
+          description: "Voice Builder requires a Pro subscription. Upgrade to create custom voices!",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Preview Failed",
+          description: error.message || "Could not generate voice preview. Try again.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
   const saveVoiceMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/voice-builder/save', {
-        name: voiceName,
-        description: voiceDescription,
+      // Ensure we have all required data
+      const voiceData = {
+        name: voiceName.trim(),
+        description: voiceDescription.trim(),
         category: selectedCategory,
-        tags: selectedTags,
+        tags: selectedTags.length > 0 ? selectedTags : ['custom'],
         baseVoiceId: selectedBaseVoice,
         settings: voiceSettings,
         addToMarketplace: addToMarketplace,
         sampleText: sampleText
-      });
+      };
+
+      console.log('Saving voice with data:', voiceData); // Debug log
+
+      const response = await apiRequest('POST', '/api/voice-builder/save', voiceData);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 403) {
+          throw new Error(`Subscription required: ${errorData.message}`);
+        }
+        throw new Error(`Save failed: ${errorData.message || response.statusText}`);
+      }
+      
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Voice save success:', data); // Debug log
       toast({
         title: addToMarketplace ? "Voice Saved & Added to Marketplace!" : "Voice Saved!",
         description: addToMarketplace 
           ? `Custom voice "${voiceName}" has been saved and added to the marketplace for others to discover.`
           : `Custom voice "${voiceName}" has been saved to your library.`,
       });
+      
+      // Reset form
       setVoiceName('');
       setVoiceDescription('');
       setSelectedCategory('Custom');
       setSelectedTags(['custom']);
       setAddToMarketplace(false);
+      setSampleText(SAMPLE_TEXTS[0]);
+      resetSettings();
     },
-    onError: () => {
-      toast({
-        title: "Save Failed",
-        description: "Could not save custom voice. Try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      console.error('Save voice error:', error); // Debug log
+      if (error.message.includes('Subscription required')) {
+        toast({
+          title: "Pro Subscription Required",
+          description: "Voice Builder requires a Pro subscription. Upgrade to create custom voices!",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Save Failed",
+          description: error.message || "Could not save custom voice. Try again.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -191,6 +257,8 @@ export default function VoiceBuilderPage() {
   };
 
   const handleSaveVoice = () => {
+    console.log('Attempting to save voice...'); // Debug log
+    
     if (!voiceName.trim()) {
       toast({
         title: "Name Required",
@@ -199,6 +267,16 @@ export default function VoiceBuilderPage() {
       });
       return;
     }
+    
+    if (!selectedBaseVoice) {
+      toast({
+        title: "Base Voice Required",
+        description: "Please select a base voice to customize.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (addToMarketplace && !voiceDescription.trim()) {
       toast({
         title: "Description Required",
@@ -207,6 +285,7 @@ export default function VoiceBuilderPage() {
       });
       return;
     }
+    
     if (addToMarketplace && selectedTags.length === 0) {
       toast({
         title: "Tags Required",
@@ -215,6 +294,8 @@ export default function VoiceBuilderPage() {
       });
       return;
     }
+    
+    console.log('Validation passed, calling save mutation...'); // Debug log
     saveVoiceMutation.mutate();
   };
 

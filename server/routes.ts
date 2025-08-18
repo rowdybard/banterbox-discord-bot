@@ -2249,6 +2249,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Name and prompt are required" });
       }
       
+      // Check subscription tier - personality builder requires Pro or higher
+      const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+      
+      if (!isPro) {
+        return res.status(403).json({ 
+          message: "Personality Builder requires Pro subscription",
+          upgrade: "Upgrade to Pro to access custom personality creation"
+        });
+      }
+      
       // In a real implementation, this would save to a marketplace database
       // For now, we'll just save it to the user's favorites
       const settings = await storage.getUserSettings(userId);
@@ -2400,6 +2412,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personality, prompt, message } = req.body;
       const userId = req.user.id;
+      
+      // Check subscription tier - personality builder requires Pro or higher
+      const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+      
+      if (!isPro) {
+        return res.status(403).json({ 
+          message: "Personality Builder requires Pro subscription",
+          upgrade: "Upgrade to Pro to access custom personality creation"
+        });
+      }
       
       // Use the provided prompt or get from personality preset
       let personalityPrompt = prompt;
@@ -2679,12 +2703,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Voice Builder API routes
-  app.post("/api/voice-builder/preview", async (req, res) => {
+  app.post("/api/voice-builder/preview", isAuthenticated, async (req, res) => {
     try {
       const { text, baseVoiceId, settings } = req.body;
+      const userId = req.user.id;
       
       if (!text || !baseVoiceId) {
         return res.status(400).json({ message: "Text and baseVoiceId are required" });
+      }
+      
+      // Check subscription tier - voice builder requires Pro or higher
+      const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+      
+      if (!isPro) {
+        return res.status(403).json({ 
+          message: "Voice Builder requires Pro subscription",
+          upgrade: "Upgrade to Pro to access custom voice creation"
+        });
       }
       
       // Generate audio using ElevenLabs with the provided settings
@@ -2708,20 +2745,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { name, description, category, tags, baseVoiceId, settings, addToMarketplace, sampleText } = req.body;
       const userId = req.user.id;
       
+      console.log('Voice save request:', { userId, name, baseVoiceId, addToMarketplace }); // Debug log
+      
       if (!name || !baseVoiceId) {
+        console.log('Missing required fields:', { name, baseVoiceId }); // Debug log
         return res.status(400).json({ message: "Name and baseVoiceId are required" });
       }
       
-      // In a real implementation, this would:
-      // 1. Save the custom voice to the user's library
-      // 2. If addToMarketplace is true, also save to marketplace database
+      // Check subscription tier - voice builder requires Pro or higher
+      const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
+      console.log('User subscription check:', { userId, subscriptionTier, isPro }); // Debug log
+      
+      if (!isPro) {
+        return res.status(403).json({ 
+          message: "Voice Builder requires Pro subscription",
+          upgrade: "Upgrade to Pro to access custom voice creation"
+        });
+      }
+      
+      // Create the custom voice object
       const customVoice = {
         id: randomUUID(),
-        name,
-        description: description || "",
+        name: name.trim(),
+        description: description ? description.trim() : "",
         category: category || "Custom",
-        tags: tags || ["custom"],
+        tags: tags && tags.length > 0 ? tags : ["custom"],
         baseVoiceId,
         settings: settings || {},
         sampleText: sampleText || "Sample text for this voice.",
@@ -2730,14 +2781,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: true
       };
       
+      console.log('Created custom voice object:', customVoice); // Debug log
+      
       // Save to user's favorite voices
       const userSettings = await storage.getUserSettings(userId);
       const currentFavorites = userSettings?.favoriteVoices || [];
       const updatedFavorites = [...currentFavorites, customVoice];
       
-      await storage.updateUserSettings(userId, {
+      console.log('Updating user settings with voice:', { 
+        userId, 
+        currentFavoritesCount: currentFavorites.length,
+        updatedFavoritesCount: updatedFavorites.length 
+      }); // Debug log
+      
+      const updatedSettings = await storage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
+      
+      console.log('User settings updated successfully:', !!updatedSettings); // Debug log
       
       res.json({ 
         success: true, 
@@ -2748,7 +2809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Error saving custom voice:', error);
-      res.status(500).json({ message: "Failed to save custom voice" });
+      res.status(500).json({ message: "Failed to save custom voice", error: error.message });
     }
   });
 
