@@ -6,7 +6,6 @@ import BanterQueue from "@/components/dashboard/banter-queue";
 import StatsUpgrade from "@/components/dashboard/stats-upgrade";
 import { UsageDashboard } from "@/components/dashboard/usage-dashboard";
 import BillingDashboard from "@/components/dashboard/billing-dashboard";
-import SubscriptionUpdater from "@/components/dashboard/subscription-updater";
 import UserDebug from "@/components/dashboard/user-debug";
 import { AuthDebug } from "@/components/ui/auth-debug";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -66,10 +65,7 @@ export default function Dashboard() {
             <AuthDebug />
           </div>
 
-          {/* Subscription Updater (for testing) */}
-          <div className="lg:col-span-2 xl:col-span-1">
-            <SubscriptionUpdater />
-          </div>
+
 
           {/* Banter Queue */}
           <div className="lg:col-span-2 xl:col-span-1">

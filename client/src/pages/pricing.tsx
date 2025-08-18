@@ -26,14 +26,13 @@ import {
 } from "lucide-react";
 import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings } from "@shared/billing";
 import type { SubscriptionTier } from "@shared/types";
-import { AuthDebug } from "@/components/ui/auth-debug";
 
 export default function PricingPage() {
   const { user } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('pro');
 
-  const handleUpgrade = (tier: SubscriptionTier) => {
+  const handlePlanChange = (tier: SubscriptionTier) => {
     setSelectedTier(tier);
     
     if (tier === 'enterprise') {
@@ -42,6 +41,14 @@ export default function PricingPage() {
       return;
     }
     
+    // Handle downgrades
+    if (canDowngrade(tier)) {
+      // Redirect to downgrade confirmation page
+      window.location.href = `/downgrade-confirmation?tier=${tier}`;
+      return;
+    }
+    
+    // Handle upgrades
     if (tier === 'byok') {
       // BYOK requires API key setup
       const hasKeys = confirm(
@@ -71,7 +78,7 @@ export default function PricingPage() {
     }
     
     // TODO: Implement Stripe checkout for other tiers
-    console.log(`Upgrading to ${tier} tier`);
+    console.log(`Changing to ${tier} tier`);
   };
 
   const getCurrentTier = () => {
@@ -88,6 +95,14 @@ export default function PricingPage() {
     const currentIndex = tierOrder.indexOf(currentTier);
     const targetIndex = tierOrder.indexOf(tier);
     return targetIndex > currentIndex;
+  };
+
+  const canDowngrade = (tier: SubscriptionTier) => {
+    const currentTier = getCurrentTier();
+    const tierOrder = ['free', 'pro', 'byok', 'enterprise'];
+    const currentIndex = tierOrder.indexOf(currentTier);
+    const targetIndex = tierOrder.indexOf(tier);
+    return targetIndex < currentIndex;
   };
 
   // Check if user is already Pro or higher
@@ -150,10 +165,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* Auth Debug (for testing) */}
-        <div className="mb-8">
-          <AuthDebug />
-        </div>
+
 
         {/* Pricing Cards */}
         <div className="grid lg:grid-cols-4 gap-6 mb-12">
@@ -247,25 +259,32 @@ export default function PricingPage() {
                       >
                         Current Plan
                       </Button>
-                    ) : canUpgrade(tier.id) ? (
-                      <Button 
-                        className={`w-full ${
-                          tier.popular 
-                            ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80' 
-                            : 'bg-gray-600 hover:bg-gray-500'
-                        } text-white font-semibold`}
-                        onClick={() => handleUpgrade(tier.id)}
-                      >
-                        {tier.id === 'enterprise' ? 'Contact Sales' : 'Upgrade Now'}
-                      </Button>
-                    ) : (
-                      <Button 
-                        className="w-full bg-gray-600 text-white" 
-                        disabled
-                      >
-                        Downgrade
-                      </Button>
-                    )}
+                                         ) : canUpgrade(tier.id) ? (
+                       <Button 
+                         className={`w-full ${
+                           tier.popular 
+                             ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80' 
+                             : 'bg-gray-600 hover:bg-gray-500'
+                         } text-white font-semibold`}
+                         onClick={() => handlePlanChange(tier.id)}
+                       >
+                         {tier.id === 'enterprise' ? 'Contact Sales' : 'Upgrade Now'}
+                       </Button>
+                     ) : canDowngrade(tier.id) ? (
+                       <Button 
+                         className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold"
+                         onClick={() => handlePlanChange(tier.id)}
+                       >
+                         Downgrade
+                       </Button>
+                     ) : (
+                       <Button 
+                         className="w-full bg-gray-600 text-white" 
+                         disabled
+                       >
+                         Unavailable
+                       </Button>
+                     )}
                   </div>
                 </CardContent>
               </Card>
@@ -411,19 +430,19 @@ export default function PricingPage() {
                 Join thousands of streamers who've already upgraded to Pro
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  className="bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80 text-white font-semibold px-8 py-3"
-                  onClick={() => handleUpgrade('pro')}
-                >
-                  Start Free Trial
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="border-green-400 text-green-400 hover:bg-green-400/10 px-8 py-3"
-                  onClick={() => handleUpgrade('byok')}
-                >
-                  Try BYOK Plan
-                </Button>
+                                 <Button 
+                   className="bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80 text-white font-semibold px-8 py-3"
+                   onClick={() => handlePlanChange('pro')}
+                 >
+                   Start Free Trial
+                 </Button>
+                 <Button 
+                   variant="outline" 
+                   className="border-green-400 text-green-400 hover:bg-green-400/10 px-8 py-3"
+                   onClick={() => handlePlanChange('byok')}
+                 >
+                   Try BYOK Plan
+                 </Button>
               </div>
             </CardContent>
           </Card>
