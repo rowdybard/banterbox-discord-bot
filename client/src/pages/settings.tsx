@@ -187,7 +187,8 @@ export default function Settings() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
+  </div>
   );
 }
