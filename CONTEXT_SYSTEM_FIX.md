@@ -35,12 +35,13 @@ if (similarContext.length > 0 && currentEventType !== 'discord_message') {
 ## ✅ **Solution Applied**
 
 ### **1. Fixed Context Recording Order**
-Now context is recorded BEFORE generating the AI response:
+Now context is recorded BEFORE retrieving context for AI:
 
 ```typescript
 // ✅ CORRECT ORDER:
-let contextId = await ContextService.recordEvent(...); // Context recorded FIRST
-const response = await openai.chat.completions.create({...}); // AI can use context
+let contextId = await ContextService.recordEvent(...); // Record current event FIRST
+const contextString = await ContextService.getContextForBanter(...); // Get context AFTER recording
+const response = await openai.chat.completions.create({...}); // AI uses context
 const banterResponse = response.choices[0].message.content;
 await storage.updateContextResponse(contextId, banterResponse); // Update with response
 ```

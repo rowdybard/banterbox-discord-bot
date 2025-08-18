@@ -62,13 +62,18 @@ export class ContextService {
     guildId?: string
   ): Promise<string> {
     try {
+      console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
+      
       // Get recent context (last 5 interactions)
       const recentContext = await storage.getRecentContext(userId, guildId, 5);
+      console.log(`Found ${recentContext.length} recent context items`);
       
       // Get similar event context (last 3 of same type)
       const similarContext = await storage.getContextByType(userId, currentEventType, guildId, 3);
+      console.log(`Found ${similarContext.length} similar context items`);
       
       if (recentContext.length === 0 && similarContext.length === 0) {
+        console.log('No context found, returning empty string');
         return "";
       }
       

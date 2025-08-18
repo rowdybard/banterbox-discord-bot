@@ -120,12 +120,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Get conversation context
+      // Record this interaction in context memory FIRST
       const contextualUserId = guildId ? (await storage.getGuildLink(guildId))?.workspaceId : userId;
+      let contextId: string | null = null;
+      
+      if (contextualUserId) {
+        try {
+          contextId = await ContextService.recordEvent(
+            contextualUserId,
+            eventType,
+            eventData,
+            guildId,
+            eventType === 'discord_message' ? 3 : 2, // Messages are more important for context
+            originalMessage
+          );
+        } catch (contextError) {
+          console.error('Error recording context:', contextError);
+          // Continue without context if recording fails
+        }
+      }
+
+      // Get conversation context AFTER recording current event
       let contextString = "";
       
       if (contextualUserId) {
         contextString = await ContextService.getContextForBanter(contextualUserId, eventType, guildId);
+        console.log(`Context retrieved for user ${contextualUserId}:`, contextString ? 'Has context' : 'No context');
       }
 
       let prompt = "";
@@ -160,24 +180,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         default:
           prompt += `Respond to this interaction: "${originalMessage}"`;
           break;
-      }
-
-      // Record this interaction in context memory BEFORE generating response
-      let contextId: string | null = null;
-      if (contextualUserId) {
-        try {
-          contextId = await ContextService.recordEvent(
-            contextualUserId,
-            eventType,
-            eventData,
-            guildId,
-            eventType === 'discord_message' ? 3 : 2, // Messages are more important for context
-            originalMessage
-          );
-        } catch (contextError) {
-          console.error('Error recording context:', contextError);
-          // Continue without context if recording fails
-        }
       }
 
       const response = await openai.chat.completions.create({
