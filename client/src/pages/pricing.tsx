@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings } from "@shared/billing";
 import type { SubscriptionTier } from "@shared/types";
+import { AuthDebug } from "@/components/ui/auth-debug";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -147,6 +148,11 @@ export default function PricingPage() {
               )}
             </span>
           </div>
+        </div>
+
+        {/* Auth Debug (for testing) */}
+        <div className="mb-8">
+          <AuthDebug />
         </div>
 
         {/* Pricing Cards */}
