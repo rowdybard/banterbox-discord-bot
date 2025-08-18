@@ -13,7 +13,8 @@ import Marketplace from "@/pages/marketplace";
 import PersonalityBuilder from "@/pages/personality-builder";
 import VoiceBuilder from "@/pages/voice-builder";
 import VoiceMarketplace from "@/pages/voice-marketplace";
-import Pro from "@/pages/pro";
+import ProPage from "@/pages/pro";
+import PricingPage from "@/pages/pricing";
 import Landing from "@/pages/landing";
 import Auth from "@/pages/auth";
 import NotFound from "@/pages/not-found";
@@ -29,6 +30,20 @@ function AuthenticatedNav() {
       <MobileNav />
     </>
   ) : null;
+}
+
+function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  
+  if (!isAuthenticated) {
+    return <>{children}</>;
+  }
+  
+  return (
+    <div className="md:ml-64 pb-20 md:pb-0">
+      {children}
+    </div>
+  );
 }
 
 function Router() {
@@ -51,7 +66,8 @@ function Router() {
           <Route path="/voice-marketplace" component={VoiceMarketplace} />
           <Route path="/personality-builder" component={PersonalityBuilder} />
           <Route path="/voice-builder" component={VoiceBuilder} />
-          <Route path="/pro" component={Pro} />
+          <Route path="/pro" component={ProPage} />
+          <Route path="/pricing" component={PricingPage} />
         </>
       )}
       {/* Auth page is always accessible */}
@@ -70,7 +86,9 @@ function App() {
         <div className="min-h-screen bg-gradient-to-br from-dark via-dark-lighter to-gray-900">
           <OfflineBanner />
           <Toaster />
-          <Router />
+          <AuthenticatedLayout>
+            <Router />
+          </AuthenticatedLayout>
           <AuthenticatedNav />
         </div>
       </TooltipProvider>

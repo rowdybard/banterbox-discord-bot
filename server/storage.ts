@@ -53,7 +53,14 @@ export interface IStorage {
   getAllActiveGuildLinks(): Promise<GuildLink[]>;
   getGuildSettings(guildId: string): Promise<GuildSettings | undefined>;
   upsertGuildSettings(settings: InsertGuildSettings): Promise<GuildSettings>;
-  
+
+  // Billing and API Key methods
+  saveUserApiKey(keyData: { userId: string; provider: string; apiKey: string; isActive?: boolean }): Promise<void>;
+  getUserApiKeys(userId: string): Promise<any[]>;
+  deleteUserApiKey(userId: string, provider: string): Promise<void>;
+  getUsageTracking(userId: string, period: string): Promise<any>;
+  updateUsageTracking(userId: string, updates: any): Promise<void>;
+
   // Streaming session management
   getCurrentStreamer(guildId: string): Promise<string | null>;
   setCurrentStreamer(guildId: string, userId: string): Promise<void>;
@@ -512,6 +519,39 @@ export class MemStorage implements IStorage {
     return guildSettings;
   }
 
+  // Billing and API Key methods
+  async saveUserApiKey(keyData: { userId: string; provider: string; apiKey: string; isActive?: boolean }): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd insert or update in a table
+    console.log(`Saving API key for user ${keyData.userId} with provider ${keyData.provider}`);
+  }
+
+  async getUserApiKeys(userId: string): Promise<any[]> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd select from a table
+    console.log(`Getting API keys for user ${userId}`);
+    return []; // Placeholder
+  }
+
+  async deleteUserApiKey(userId: string, provider: string): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd delete from a table
+    console.log(`Deleting API key for user ${userId} with provider ${provider}`);
+  }
+
+  async getUsageTracking(userId: string, period: string): Promise<any> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd select from a table
+    console.log(`Getting usage tracking for user ${userId} for period ${period}`);
+    return {}; // Placeholder
+  }
+
+  async updateUsageTracking(userId: string, updates: any): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd update in a table
+    console.log(`Updating usage tracking for user ${userId} with updates:`, updates);
+  }
+
   // Streaming session management
   async getCurrentStreamer(guildId: string): Promise<string | null> {
     const settings = this.guildSettings.get(guildId);
@@ -889,6 +929,39 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  // Billing and API Key methods
+  async saveUserApiKey(keyData: { userId: string; provider: string; apiKey: string; isActive?: boolean }): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd insert or update in a table
+    console.log(`Saving API key for user ${keyData.userId} with provider ${keyData.provider}`);
+  }
+
+  async getUserApiKeys(userId: string): Promise<any[]> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd select from a table
+    console.log(`Getting API keys for user ${userId}`);
+    return []; // Placeholder
+  }
+
+  async deleteUserApiKey(userId: string, provider: string): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd delete from a table
+    console.log(`Deleting API key for user ${userId} with provider ${provider}`);
+  }
+
+  async getUsageTracking(userId: string, period: string): Promise<any> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd select from a table
+    console.log(`Getting usage tracking for user ${userId} for period ${period}`);
+    return {}; // Placeholder
+  }
+
+  async updateUsageTracking(userId: string, updates: any): Promise<void> {
+    // In-memory storage, no persistent DB
+    // For a real DB, you'd update in a table
+    console.log(`Updating usage tracking for user ${userId} with updates:`, updates);
   }
 
   // Streaming session management

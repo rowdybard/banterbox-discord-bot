@@ -11,6 +11,7 @@ export default function MobileNav() {
     { path: "/marketplace", icon: "fas fa-store", label: "Market" },
     { path: "/personality-builder", icon: "fas fa-brain", label: "AI" },
     { path: "/voice-builder", icon: "fas fa-microphone-alt", label: "Build" },
+    { path: "/pricing", icon: "fas fa-crown", label: "Pricing" },
     { path: "/settings", icon: "fas fa-cog", label: "Settings" },
   ];
 

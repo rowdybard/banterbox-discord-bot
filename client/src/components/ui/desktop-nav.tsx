@@ -11,6 +11,7 @@ export default function DesktopNav() {
     { path: "/marketplace", icon: "fas fa-store", label: "Personality Marketplace" },
     { path: "/personality-builder", icon: "fas fa-brain", label: "AI Personality Builder" },
     { path: "/voice-builder", icon: "fas fa-microphone-alt", label: "Voice Builder" },
+    { path: "/pricing", icon: "fas fa-crown", label: "Pricing" },
     { path: "/settings", icon: "fas fa-cog", label: "Settings" },
   ];
 

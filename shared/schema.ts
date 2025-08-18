@@ -22,8 +22,49 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  isPro: boolean("is_pro").default(false),
+  subscriptionTier: text("subscription_tier").default("free"), // 'free', 'pro', 'byok', 'enterprise'
+  subscriptionStatus: text("subscription_status").default("active"), // 'active', 'canceled', 'past_due', 'trialing'
+  subscriptionId: varchar("subscription_id"), // External subscription ID (Stripe, etc.)
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// API Keys for "Bring Your Own Key" tier
+export const userApiKeys = pgTable("user_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  provider: text("provider").notNull(), // 'openai', 'elevenlabs'
+  apiKey: text("api_key").notNull(), // Encrypted API key
+  isActive: boolean("is_active").default(true),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Billing information
+export const billingInfo = pgTable("billing_info", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  customerId: varchar("customer_id"), // External customer ID (Stripe, etc.)
+  name: varchar("name"),
+  email: varchar("email"),
+  address: jsonb("address"), // Billing address
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Usage tracking for billing
+export const usageTracking = pgTable("usage_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD format
+  bantersGenerated: integer("banters_generated").default(0),
+  openaiTokensUsed: integer("openai_tokens_used").default(0),
+  elevenlabsCharactersUsed: integer("elevenlabs_characters_used").default(0),
+  audioMinutesGenerated: integer("audio_minutes_generated").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

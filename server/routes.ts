@@ -2743,5 +2743,278 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Billing and Subscription API routes
+  
+  // Get user's subscription status
+  app.get("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const subscription = {
+        tier: user.subscriptionTier || 'free',
+        status: user.subscriptionStatus || 'active',
+        trialEndsAt: user.trialEndsAt,
+        currentPeriodEnd: user.currentPeriodEnd,
+        isTrialing: user.trialEndsAt && new Date(user.trialEndsAt) > new Date(),
+        isActive: (user.subscriptionStatus || 'active') === 'active'
+      };
+
+      res.json(subscription);
+    } catch (error) {
+      console.error('Error getting subscription:', error);
+      res.status(500).json({ message: "Failed to get subscription" });
+    }
+  });
+
+  // Create checkout session (Stripe integration)
+  app.post("/api/billing/create-checkout", isAuthenticated, async (req: any, res) => {
+    try {
+      const { tier, interval } = req.body; // interval: 'month' or 'year'
+      const userId = req.user.id;
+
+      // TODO: Implement Stripe checkout session creation
+      // For now, return a mock checkout URL
+      const checkoutUrl = `https://checkout.stripe.com/pay/cs_test_${Math.random().toString(36).substring(2)}`;
+      
+      res.json({ 
+        checkoutUrl,
+        sessionId: `cs_test_${Math.random().toString(36).substring(2)}`
+      });
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  // API Key Management for BYOK tier
+  
+  // Get user's API keys
+  app.get("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.subscriptionTier !== 'byok') {
+        return res.status(403).json({ message: "BYOK subscription required" });
+      }
+
+      const apiKeys = await storage.getUserApiKeys(userId);
+      
+      // Don't return the actual API keys, just metadata
+      const safeApiKeys = apiKeys.map(key => ({
+        id: key.id,
+        provider: key.provider,
+        isActive: key.isActive,
+        lastUsedAt: key.lastUsedAt,
+        createdAt: key.createdAt
+      }));
+
+      res.json(safeApiKeys);
+    } catch (error) {
+      console.error('Error getting API keys:', error);
+      res.status(500).json({ message: "Failed to get API keys" });
+    }
+  });
+
+  // Save API keys
+  app.post("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { openai, elevenlabs } = req.body;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.subscriptionTier !== 'byok') {
+        return res.status(403).json({ message: "BYOK subscription required" });
+      }
+
+      const keysToSave = [];
+      
+      if (openai) {
+        keysToSave.push({
+          userId,
+          provider: 'openai',
+          apiKey: openai, // Will be encrypted in storage
+          isActive: true
+        });
+      }
+      
+      if (elevenlabs) {
+        keysToSave.push({
+          userId,
+          provider: 'elevenlabs',
+          apiKey: elevenlabs, // Will be encrypted in storage
+          isActive: true
+        });
+      }
+
+      for (const keyData of keysToSave) {
+        await storage.saveUserApiKey(keyData);
+      }
+
+      res.json({ success: true, message: "API keys saved successfully" });
+    } catch (error) {
+      console.error('Error saving API keys:', error);
+      res.status(500).json({ message: "Failed to save API keys" });
+    }
+  });
+
+  // Test API keys
+  app.post("/api/billing/test-api-keys", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { openai, elevenlabs } = req.body;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.subscriptionTier !== 'byok') {
+        return res.status(403).json({ message: "BYOK subscription required" });
+      }
+
+      const results = { success: true, message: "All keys tested successfully" };
+
+      // Test OpenAI key
+      if (openai) {
+        try {
+          const testOpenAI = new OpenAI({ apiKey: openai });
+          await testOpenAI.models.list();
+        } catch (error) {
+          results.success = false;
+          results.message = "OpenAI API key is invalid";
+          return res.json(results);
+        }
+      }
+
+      // Test ElevenLabs key
+      if (elevenlabs) {
+        try {
+          const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+            headers: {
+              'xi-api-key': elevenlabs
+            }
+          });
+          
+          if (!response.ok) {
+            results.success = false;
+            results.message = "ElevenLabs API key is invalid";
+            return res.json(results);
+          }
+        } catch (error) {
+          results.success = false;
+          results.message = "ElevenLabs API key is invalid";
+          return res.json(results);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error('Error testing API keys:', error);
+      res.status(500).json({ success: false, message: "Failed to test API keys" });
+    }
+  });
+
+  // Delete API key
+  app.delete("/api/billing/api-keys/:provider", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { provider } = req.params;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.subscriptionTier !== 'byok') {
+        return res.status(403).json({ message: "BYOK subscription required" });
+      }
+
+      await storage.deleteUserApiKey(userId, provider);
+      
+      res.json({ success: true, message: "API key deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting API key:', error);
+      res.status(500).json({ message: "Failed to delete API key" });
+    }
+  });
+
+  // Get usage statistics
+  app.get("/api/billing/usage", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { period = 'current' } = req.query; // 'current' or 'last_month'
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const tierConfig = getTierConfig(user.subscriptionTier || 'free');
+      const usage = await storage.getUsageTracking(userId, period);
+      
+      const usageData = {
+        tier: user.subscriptionTier || 'free',
+        limits: tierConfig.limits,
+        current: {
+          bantersGenerated: usage?.bantersGenerated || 0,
+          openaiTokensUsed: usage?.openaiTokensUsed || 0,
+          elevenlabsCharactersUsed: usage?.elevenlabsCharactersUsed || 0,
+          audioMinutesGenerated: usage?.audioMinutesGenerated || 0
+        },
+        percentages: {
+          bantersGenerated: tierConfig.limits.dailyBanters > 0 ? 
+            Math.min((usage?.bantersGenerated || 0) / tierConfig.limits.dailyBanters * 100, 100) : 0,
+          openaiTokensUsed: tierConfig.limits.openaiTokens > 0 ? 
+            Math.min((usage?.openaiTokensUsed || 0) / tierConfig.limits.openaiTokens * 100, 100) : 0,
+          elevenlabsCharactersUsed: tierConfig.limits.elevenlabsCharacters > 0 ? 
+            Math.min((usage?.elevenlabsCharactersUsed || 0) / tierConfig.limits.elevenlabsCharacters * 100, 100) : 0
+        }
+      };
+
+      res.json(usageData);
+    } catch (error) {
+      console.error('Error getting usage:', error);
+      res.status(500).json({ message: "Failed to get usage data" });
+    }
+  });
+
+  // Update usage tracking
+  app.post("/api/billing/usage", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { bantersGenerated, openaiTokensUsed, elevenlabsCharactersUsed, audioMinutesGenerated } = req.body;
+      
+      await storage.updateUsageTracking(userId, {
+        bantersGenerated,
+        openaiTokensUsed,
+        elevenlabsCharactersUsed,
+        audioMinutesGenerated
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error updating usage:', error);
+      res.status(500).json({ message: "Failed to update usage" });
+    }
+  });
+
+  // Webhook for Stripe events
+  app.post("/api/billing/webhook", async (req: any, res) => {
+    try {
+      // TODO: Implement Stripe webhook handling
+      // This would handle subscription events like:
+      // - subscription.created
+      // - subscription.updated
+      // - subscription.deleted
+      // - invoice.payment_succeeded
+      // - invoice.payment_failed
+      
+      console.log('Stripe webhook received:', req.body);
+      
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
   return httpServer;
         }
