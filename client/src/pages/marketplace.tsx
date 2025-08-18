@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,7 @@ export default function MarketplacePage() {
   const [testResult, setTestResult] = useState<string>('');
   const [testPersonalityId, setTestPersonalityId] = useState<string>('');
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: personalities = [], isLoading } = useQuery({
     queryKey: ['/api/marketplace/personalities'],
@@ -125,12 +126,32 @@ export default function MarketplacePage() {
     testPersonalityMutation.mutate({ personality, scenario: testScenario });
   };
 
+  const downloadMutation = useMutation({
+    mutationFn: async (personalityId: string) => {
+      const response = await apiRequest('POST', `/api/marketplace/personalities/${personalityId}/download`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Personality Downloaded!",
+        description: `"${data.personalityName}" has been added to your library and is now available in your dashboard.`,
+      });
+      // Invalidate queries to refresh the dashboard options
+      queryClient.invalidateQueries({ queryKey: ['/api/favorites/personalities'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || "Could not download personality. Please try again.";
+      toast({
+        title: "Download Failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleDownload = (personality: Personality) => {
-    // In a real app, this would add the personality to the user's library
-    toast({
-      title: "Personality Downloaded!",
-      description: `"${personality.name}" has been added to your library.`,
-    });
+    downloadMutation.mutate(personality.id);
   };
 
   const getRating = (upvotes: number, downvotes: number) => {

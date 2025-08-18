@@ -2136,6 +2136,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/marketplace/personalities/:personalityId/download", isAuthenticated, async (req, res) => {
+    try {
+      const { personalityId } = req.params;
+      const userId = req.user.id;
+      
+      // Find the personality in the marketplace (using sample data for now)
+      const samplePersonalities = [
+        {
+          id: "1",
+          name: "Gaming Guru",
+          description: "Perfect for gaming streams with witty commentary",
+          prompt: "You are a gaming expert with deep knowledge of games. Provide insightful commentary, tips, and reactions to gaming moments. Keep responses engaging and informative.",
+          category: "Gaming",
+          tags: ["gaming", "expert", "commentary"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 1250,
+          upvotes: 89,
+          downvotes: 3,
+          isActive: true,
+          createdAt: "2024-01-15T10:00:00Z",
+          updatedAt: "2024-01-15T10:00:00Z"
+        },
+        {
+          id: "2",
+          name: "Comedy Master",
+          description: "Hilarious responses that keep everyone laughing",
+          prompt: "You are a comedy master who creates hilarious responses. Use clever jokes, puns, and witty observations. Keep the humor clean and entertaining for all ages.",
+          category: "Comedy",
+          tags: ["comedy", "humor", "entertainment"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 2100,
+          upvotes: 156,
+          downvotes: 7,
+          isActive: true,
+          createdAt: "2024-01-10T14:30:00Z",
+          updatedAt: "2024-01-10T14:30:00Z"
+        },
+        {
+          id: "3",
+          name: "Educational Expert",
+          description: "Great for educational content and learning streams",
+          prompt: "You are an educational expert who explains concepts clearly and engagingly. Provide helpful insights, answer questions, and make learning fun and accessible.",
+          category: "Education",
+          tags: ["education", "learning", "helpful"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 890,
+          upvotes: 67,
+          downvotes: 2,
+          isActive: true,
+          createdAt: "2024-01-20T09:15:00Z",
+          updatedAt: "2024-01-20T09:15:00Z"
+        }
+      ];
+      
+      const personalityToDownload = samplePersonalities.find(personality => personality.id === personalityId);
+      if (!personalityToDownload) {
+        return res.status(404).json({ message: "Personality not found" });
+      }
+      
+      // Check if user already has this personality
+      const userSettings = await storage.getUserSettings(userId);
+      const currentFavorites = userSettings?.favoritePersonalities || [];
+      const alreadyDownloaded = currentFavorites.some((personality: any) => 
+        personality.name === personalityToDownload.name && 
+        personality.prompt === personalityToDownload.prompt
+      );
+      
+      if (alreadyDownloaded) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Personality already downloaded",
+          personalityId 
+        });
+      }
+      
+      // Add personality to user's favorite personalities
+      const downloadedPersonality = {
+        id: randomUUID(),
+        name: personalityToDownload.name,
+        description: personalityToDownload.description,
+        prompt: personalityToDownload.prompt,
+        category: personalityToDownload.category,
+        tags: personalityToDownload.tags,
+        authorName: personalityToDownload.authorName,
+        isVerified: personalityToDownload.isVerified,
+        downloadedAt: new Date().toISOString(),
+        originalPersonalityId: personalityId
+      };
+      
+      const updatedFavorites = [...currentFavorites, downloadedPersonality];
+      
+      await storage.updateUserSettings(userId, {
+        favoritePersonalities: updatedFavorites
+      });
+      
+      console.log(`Personality "${personalityToDownload.name}" downloaded by user ${userId}`);
+      
+      res.json({ 
+        success: true, 
+        message: "Personality downloaded successfully and added to your library",
+        personalityId,
+        personalityName: personalityToDownload.name
+      });
+    } catch (error) {
+      console.error('Error downloading personality:', error);
+      res.status(500).json({ message: "Failed to download personality" });
+    }
+  });
+
   app.post("/api/personality/test", isAuthenticated, async (req, res) => {
     try {
       const { personality, prompt, message } = req.body;
@@ -2298,16 +2410,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { voiceId } = req.params;
       const userId = req.user.id;
       
-      // In a real implementation, this would:
-      // 1. Fetch the voice from the marketplace database
-      // 2. Add it to the user's custom voices
-      // 3. Increment download count
+      // Find the voice in the marketplace (using sample data for now)
+      const sampleVoices = [
+        {
+          id: "1",
+          name: "Gaming Warrior",
+          description: "Perfect for gaming streams with energetic commentary",
+          category: "Gaming",
+          tags: ["gaming", "energetic", "warrior"],
+          baseVoiceId: "21m00Tcm4TlvDq8ikWAM",
+          settings: {
+            stability: 60,
+            similarityBoost: 80,
+            style: 20,
+            useSpeakerBoost: true
+          },
+          sampleText: "Welcome to the stream! Let's dominate this game!",
+          downloads: 850,
+          upvotes: 67,
+          downvotes: 2,
+          createdAt: "2024-01-15T10:00:00Z",
+          authorId: "user1"
+        },
+        {
+          id: "2",
+          name: "Chill Vibes",
+          description: "Relaxed and laid-back voice for casual streams",
+          category: "Entertainment",
+          tags: ["chill", "relaxed", "casual"],
+          baseVoiceId: "ErXwobaYiN019PkySvjV",
+          settings: {
+            stability: 75,
+            similarityBoost: 70,
+            style: 10,
+            useSpeakerBoost: false
+          },
+          sampleText: "Hey everyone, thanks for hanging out with us today.",
+          downloads: 1200,
+          upvotes: 89,
+          downvotes: 5,
+          createdAt: "2024-01-10T14:30:00Z",
+          authorId: "user2"
+        },
+        {
+          id: "3",
+          name: "Professional Narrator",
+          description: "Clear and professional voice for educational content",
+          category: "Education",
+          tags: ["professional", "clear", "educational"],
+          baseVoiceId: "JBFqnCBsd6RMkjVDRZzb",
+          settings: {
+            stability: 85,
+            similarityBoost: 90,
+            style: 5,
+            useSpeakerBoost: true
+          },
+          sampleText: "Today we'll be exploring the fascinating world of science.",
+          downloads: 650,
+          upvotes: 45,
+          downvotes: 1,
+          createdAt: "2024-01-20T09:15:00Z",
+          authorId: "user3"
+        }
+      ];
       
-      // For now, we'll just return success
+      const voiceToDownload = sampleVoices.find(voice => voice.id === voiceId);
+      if (!voiceToDownload) {
+        return res.status(404).json({ message: "Voice not found" });
+      }
+      
+      // Check if user already has this voice
+      const userSettings = await storage.getUserSettings(userId);
+      const currentFavorites = userSettings?.favoriteVoices || [];
+      const alreadyDownloaded = currentFavorites.some((voice: any) => 
+        voice.baseVoiceId === voiceToDownload.baseVoiceId && 
+        voice.name === voiceToDownload.name
+      );
+      
+      if (alreadyDownloaded) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Voice already downloaded",
+          voiceId 
+        });
+      }
+      
+      // Add voice to user's favorite voices
+      const downloadedVoice = {
+        id: randomUUID(),
+        name: voiceToDownload.name,
+        description: voiceToDownload.description,
+        category: voiceToDownload.category,
+        tags: voiceToDownload.tags,
+        baseVoiceId: voiceToDownload.baseVoiceId,
+        settings: voiceToDownload.settings,
+        sampleText: voiceToDownload.sampleText,
+        provider: 'elevenlabs', // All marketplace voices are ElevenLabs
+        downloadedAt: new Date().toISOString(),
+        originalVoiceId: voiceId
+      };
+      
+      const updatedFavorites = [...currentFavorites, downloadedVoice];
+      
+      await storage.updateUserSettings(userId, {
+        favoriteVoices: updatedFavorites
+      });
+      
+      console.log(`Voice "${voiceToDownload.name}" downloaded by user ${userId}`);
+      
       res.json({ 
         success: true, 
-        message: "Voice downloaded successfully",
-        voiceId 
+        message: "Voice downloaded successfully and added to your library",
+        voiceId,
+        voiceName: voiceToDownload.name
       });
     } catch (error) {
       console.error('Error downloading voice:', error);

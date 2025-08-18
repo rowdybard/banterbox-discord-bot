@@ -68,12 +68,14 @@ export default function VoiceMarketplacePage() {
       const response = await apiRequest('POST', `/api/marketplace/voices/${voiceId}/download`);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Voice Downloaded!",
-        description: "Voice has been added to your custom voices library.",
+        description: `"${data.voiceName}" has been added to your library and is now available in your dashboard.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/marketplace/voices'] });
+      // Invalidate queries to refresh the dashboard options
+      queryClient.invalidateQueries({ queryKey: ['/api/favorites/voices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
     },
     onError: () => {
       toast({
