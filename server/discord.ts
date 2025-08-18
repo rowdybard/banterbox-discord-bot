@@ -24,6 +24,10 @@ export class DiscordService {
   private autoReconnectInterval?: NodeJS.Timeout;
   private maxAutoReconnectAttempts: number = 3;
   private autoReconnectAttempts: Map<string, number> = new Map(); // guildId -> attempts
+  
+  // Message deduplication to prevent duplicate responses
+  private recentMessages: Map<string, number> = new Map(); // messageId -> timestamp
+  private messageCooldown: number = 5000; // 5 seconds cooldown between responses to same message
 
   constructor(config: DiscordConfig) {
     this.config = config;
@@ -100,6 +104,14 @@ export class DiscordService {
         
         console.log(`Discord message received from ${message.author.username}: ${message.content}`);
         
+        // Check message deduplication to prevent duplicate responses
+        const now = Date.now();
+        const lastResponseTime = this.recentMessages.get(message.id);
+        if (lastResponseTime && (now - lastResponseTime) < this.messageCooldown) {
+          console.log(`Ignoring message "${message.content}" - duplicate response prevention (cooldown: ${this.messageCooldown}ms)`);
+          return;
+        }
+        
         // Check if bot is in a voice channel in this guild (streaming mode)
         const voiceConnection = this.voiceConnections.get(message.guild.id);
         const isStreamingMode = !!voiceConnection;
@@ -108,18 +120,18 @@ export class DiscordService {
         let shouldRespond = false;
         let responseReason = '';
         
-        // Always respond to direct mentions
+        // Priority 1: Always respond to direct mentions
         if (message.mentions.has(this.client.user!.id)) {
           shouldRespond = true;
           responseReason = 'direct mention';
         }
-        // Respond to messages containing banterbox/banter keywords
+        // Priority 2: Respond to messages containing banterbox/banter keywords
         else if (message.content.toLowerCase().includes('banterbox') || 
                  message.content.toLowerCase().includes('banter')) {
           shouldRespond = true;
           responseReason = 'keyword trigger';
         }
-        // In streaming mode, respond to more messages for better engagement
+        // Priority 3: In streaming mode, respond to more messages for better engagement
         else if (isStreamingMode) {
           // Respond to questions, greetings, and conversational messages
           const content = message.content.toLowerCase();
@@ -132,7 +144,7 @@ export class DiscordService {
             responseReason = 'conversational trigger';
           }
         }
-        // Even when not in streaming mode, respond to direct questions and greetings
+        // Priority 4: Even when not in streaming mode, respond to direct questions and greetings
         else {
           const content = message.content.toLowerCase();
           const isDirectQuestion = content.includes('?') && (content.includes('banterbox') || content.includes('you'));
@@ -148,6 +160,17 @@ export class DiscordService {
         if (!shouldRespond) {
           console.log(`Ignoring message "${message.content}" - no trigger conditions met`);
           return;
+        }
+        
+        // Mark this message as recently responded to
+        this.recentMessages.set(message.id, now);
+        
+        // Clean up old message entries (older than 1 minute)
+        const oneMinuteAgo = now - 60000;
+        for (const [msgId, timestamp] of this.recentMessages.entries()) {
+          if (timestamp < oneMinuteAgo) {
+            this.recentMessages.delete(msgId);
+          }
         }
         
         console.log(`Triggering banter generation for Discord message (${responseReason}) in guild ${message.guild.id}`);
@@ -355,6 +378,7 @@ export class DiscordService {
     this.stopAutoReconnect();
     this.voiceChannelMemory.clear();
     this.autoReconnectAttempts.clear();
+    this.recentMessages.clear(); // Clear message cache on disconnect
     this.client.destroy();
     console.log('Discord bot disconnected');
   }
