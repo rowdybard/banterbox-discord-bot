@@ -19,6 +19,7 @@ import TwitchEventSubClient from "./twitch";
 import { DiscordService } from "./discord";
 import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
+import { getSubscriptionTier } from "@shared/subscription";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
@@ -293,7 +294,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (voiceProvider === 'elevenlabs') {
           // Use ElevenLabs if configured
           const user = await storage.getUser(userId);
-          if (user?.isPro && voiceId) {
+          const subscriptionTier = user?.subscriptionTier || 'free';
+          const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+          
+          if (isPro && voiceId) {
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
             if (audioBuffer) {
               // Try Firebase first, fallback to object storage
@@ -302,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = userSettings?.favoriteVoices || [];
+          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
@@ -351,7 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
         }
       } catch (audioError) {
-        console.error("Error generating audio:", audioError);
+        console.error("Error generating audio:", audioError as Error);
         // Continue without audio
       }
       
@@ -536,7 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = userSettings?.favoriteVoices || [];
+          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
@@ -634,7 +638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Skipping Discord audio playback - audioUrl: ${!!audioUrl}, globalDiscordService: ${!!globalDiscordService}, isInVoiceChannel: ${isInVoiceChannel}`);
         }
       } catch (audioError) {
-        console.error("Error generating Discord audio:", audioError);
+        console.error("Error generating Discord audio:", audioError as Error);
         // Continue without audio
       }
       
@@ -1828,8 +1832,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
-      if (!user?.isPro) {
+      if (!isPro) {
         return res.status(403).json({ message: "Pro subscription required" });
       }
 
@@ -1846,8 +1852,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
-      if (!user?.isPro) {
+      if (!isPro) {
         return res.status(403).json({ message: "Pro subscription required" });
       }
 
@@ -2959,7 +2967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const usage = await storage.getUsageTracking(userId, period);
       
       const usageData = {
-        tier: user.subscriptionTier || 'free',
+        tier: getSubscriptionTier(user),
         limits: tierConfig.limits,
         current: {
           bantersGenerated: usage?.bantersGenerated || 0,

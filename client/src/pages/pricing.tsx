@@ -25,6 +25,7 @@ import {
   Settings
 } from "lucide-react";
 import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, type SubscriptionTier } from "@shared/billing";
+import { getSubscriptionTier, isProUser } from "@shared/subscription";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -38,7 +39,7 @@ export default function PricingPage() {
   };
 
   const getCurrentTier = () => {
-    return user?.subscriptionTier || 'free';
+    return getSubscriptionTier(user);
   };
 
   const isCurrentTier = (tier: SubscriptionTier) => {
@@ -52,6 +53,9 @@ export default function PricingPage() {
     const targetIndex = tierOrder.indexOf(tier);
     return targetIndex > currentIndex;
   };
+
+  // Check if user is already Pro or higher
+  const isAlreadyPro = isProUser(user);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark via-dark-lighter to-gray-900">
@@ -71,6 +75,18 @@ export default function PricingPage() {
           <p className="text-xl text-gray-300 mb-8">
             Start free, upgrade when you're ready to unlock premium features
           </p>
+
+          {/* Show current plan status */}
+          {isAlreadyPro && (
+            <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 rounded-lg p-4 border border-yellow-500/30 mb-8">
+              <div className="flex items-center justify-center space-x-2">
+                <Crown className="w-5 h-5 text-yellow-400" />
+                <span className="text-yellow-400 font-medium">
+                  You're currently on the {getCurrentTier()} plan
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Billing Toggle */}
           <div className="flex items-center justify-center space-x-4 mb-8">
