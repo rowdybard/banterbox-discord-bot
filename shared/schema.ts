@@ -27,6 +27,8 @@ export const users = pgTable("users", {
   subscriptionId: varchar("subscription_id"), // External subscription ID (Stripe, etc.)
   trialEndsAt: timestamp("trial_ends_at"),
   currentPeriodEnd: timestamp("current_period_end"),
+  lastPlanChangeAt: timestamp("last_plan_change_at"), // Track when user last changed plans
+  planChangeCount: integer("plan_change_count").default(0), // Track number of plan changes
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

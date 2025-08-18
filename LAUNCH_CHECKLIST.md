@@ -48,6 +48,13 @@
 - [x] Error monitoring setup
 - [x] Launch readiness confirmation
 
+## ✅ **POST-LAUNCH: Plan Switching Limits Fix**
+- [x] Fixed cooldown bypass issue in `canChangePlan` function
+- [x] Moved cooldown and monthly limit checks to beginning of function
+- [x] Updated `getPlanChangeInfo` to include reason for restrictions
+- [x] Enhanced UI to show specific restriction reasons
+- [x] Verified that both upgrades and downgrades now respect limits
+
 ## 🎯 **CRITICAL SUCCESS INDICATORS**
 
 ### **Database**
@@ -175,6 +182,18 @@ If critical issues are found:
   - Updated subscription updater to redirect to confirmation page
   - Added proper route and navigation
 - **Impact**: Users are strongly discouraged from downgrading with multiple warnings
+
+### **Plan Switching Limits & BYOK Downgrade Fix** ✅ **COMPLETE**
+- **Issue**: BYOK users couldn't downgrade to Pro/Free, and no limits on plan switching
+- **Solution**: 
+  - Fixed tier hierarchy: BYOK is now same level as Pro (not higher)
+  - BYOK users can now downgrade to Pro or Free
+  - Added plan switching limits: 3 changes per month, 7-day cooldown
+  - Added database columns: `last_plan_change_at`, `plan_change_count`
+  - Updated subscription updater to show plan change limits
+  - Added server-side validation for plan change limits
+  - Created migration script for new database columns
+- **Impact**: BYOK users can now downgrade, and all users have reasonable plan switching limits
 
 ### **Subscription Tier Logic Fixed** ✅ **COMPLETE**
 - **Issue**: BYOK tier was incorrectly treated as a downgrade from Pro, and users could upgrade without payment

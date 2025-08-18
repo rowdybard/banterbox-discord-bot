@@ -2793,12 +2793,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid subscription tier" });
       }
 
+      // Get current user data
+      const [currentUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+
+      if (!currentUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if it's actually a change
+      if (currentUser.subscriptionTier === tier) {
+        return res.status(400).json({ message: "You're already on this plan" });
+      }
+
+      // Check plan change limits
+      const { canChangePlan } = await import('@shared/billing');
+      const changeResult = canChangePlan(
+        currentUser.subscriptionTier as any,
+        tier as any,
+        currentUser.lastPlanChangeAt,
+        currentUser.planChangeCount || 0
+      );
+
+      if (!changeResult.allowed) {
+        return res.status(400).json({ 
+          message: changeResult.reason || "Cannot change to this plan at this time",
+          nextAllowedDate: changeResult.nextAllowedDate
+        });
+      }
+
       // Update user's subscription tier in database
       const [updatedUser] = await db
         .update(users)
         .set({ 
           subscriptionTier: tier,
           subscriptionStatus: status,
+          lastPlanChangeAt: new Date(),
+          planChangeCount: (currentUser.planChangeCount || 0) + 1,
           updatedAt: new Date()
         })
         .where(eq(users.id, userId))
@@ -2816,6 +2849,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isPro,
         trialEndsAt: updatedUser.trialEndsAt,
         currentPeriodEnd: updatedUser.currentPeriodEnd,
+        lastPlanChangeAt: updatedUser.lastPlanChangeAt,
+        planChangeCount: updatedUser.planChangeCount,
         message: `Subscription updated to ${tier} tier`
       });
     } catch (error) {

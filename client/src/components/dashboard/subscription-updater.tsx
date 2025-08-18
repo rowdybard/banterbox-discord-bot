@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock } from "lucide-react";
+import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock, Clock, Calendar } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { getTierOrder, isDowngrade as checkIsDowngrade, canChangePlan, getPlanChangeInfo } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
@@ -77,31 +79,31 @@ export default function SubscriptionUpdater() {
     }
   };
 
-  const getTierOrder = (tier: string) => {
-    switch (tier) {
-      case 'free': return 0;
-      case 'pro': return 1;
-      case 'byok': return 2;
-      case 'enterprise': return 3;
-      default: return 0;
-    }
-  };
+  // Get plan change information
+  const planChangeInfo = getPlanChangeInfo(
+    user?.lastPlanChangeAt ? new Date(user.lastPlanChangeAt) : null,
+    user?.planChangeCount || 0
+  );
 
   const canDowngradeTo = (targetTier: string) => {
     const currentTier = user?.subscriptionTier || 'free';
-    const currentOrder = getTierOrder(currentTier);
-    const targetOrder = getTierOrder(targetTier);
-    
-    // Can only downgrade to lower tiers
-    return targetOrder < currentOrder;
+    return checkIsDowngrade(currentTier as SubscriptionTier, targetTier as SubscriptionTier);
   };
 
   const isDowngrade = (targetTier: string) => {
     const currentTier = user?.subscriptionTier || 'free';
-    const currentOrder = getTierOrder(currentTier);
-    const targetOrder = getTierOrder(targetTier);
-    
-    return targetOrder < currentOrder;
+    return checkIsDowngrade(currentTier as SubscriptionTier, targetTier as SubscriptionTier);
+  };
+
+  const canChangeToTier = (targetTier: string) => {
+    const currentTier = user?.subscriptionTier || 'free';
+    const result = canChangePlan(
+      currentTier as SubscriptionTier,
+      targetTier as SubscriptionTier,
+      user?.lastPlanChangeAt ? new Date(user.lastPlanChangeAt) : null,
+      user?.planChangeCount || 0
+    );
+    return result;
   };
 
   const isRestrictedTier = (tier: string) => {
@@ -154,6 +156,23 @@ export default function SubscriptionUpdater() {
             <p className="text-xs text-gray-500 text-center">
               All upgrades require payment and are handled through our secure billing system
             </p>
+          </div>
+        </div>
+
+        {/* Plan Change Limits */}
+        <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div className="flex items-center space-x-2 mb-2">
+            <Calendar className="w-4 h-4 text-blue-400" />
+            <span className="text-sm font-medium text-blue-400">Plan Change Limits</span>
+          </div>
+          <div className="text-xs text-blue-300 space-y-1">
+            <p>Changes this month: {planChangeInfo.changesThisMonth}/{planChangeInfo.maxChangesPerMonth}</p>
+            {planChangeInfo.daysUntilNextChange && (
+              <p>Next change allowed in: {planChangeInfo.daysUntilNextChange} days</p>
+            )}
+            {!planChangeInfo.canChangeNow && planChangeInfo.reason && (
+              <p className="text-yellow-300 font-medium">⚠️ {planChangeInfo.reason}</p>
+            )}
           </div>
         </div>
 
@@ -216,6 +235,17 @@ export default function SubscriptionUpdater() {
         {/* Action Button */}
         <Button
           onClick={() => {
+            const changeResult = canChangeToTier(selectedTier);
+            
+            if (!changeResult.allowed) {
+              toast({
+                title: "Plan Change Restricted",
+                description: changeResult.reason || "Cannot change to this plan at this time",
+                variant: "destructive",
+              });
+              return;
+            }
+
             if (isDowngrade(selectedTier)) {
               // Redirect to downgrade confirmation page
               setLocation(`/downgrade-confirmation?tier=${selectedTier}`);
@@ -224,10 +254,17 @@ export default function SubscriptionUpdater() {
               updateSubscriptionMutation.mutate(selectedTier);
             }
           }}
-          disabled={updateSubscriptionMutation.isPending || selectedTier === user?.subscriptionTier || isRestrictedTier(selectedTier)}
+          disabled={
+            updateSubscriptionMutation.isPending || 
+            selectedTier === user?.subscriptionTier || 
+            isRestrictedTier(selectedTier) ||
+            !planChangeInfo.canChangeNow
+          }
           className="w-full bg-gray-600 hover:bg-gray-500 text-white"
         >
-          {updateSubscriptionMutation.isPending ? "Updating..." : "Downgrade Subscription"}
+          {updateSubscriptionMutation.isPending ? "Updating..." : 
+           !planChangeInfo.canChangeNow ? `Plan Changes Restricted (${planChangeInfo.reason?.split('.')[0]})` :
+           "Downgrade Subscription"}
         </Button>
 
         <div className="text-xs text-gray-500">

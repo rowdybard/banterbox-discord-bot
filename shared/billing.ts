@@ -27,11 +27,19 @@ export interface BillingConfig {
   trialDays: number;
   currency: string;
   stripePublishableKey?: string;
+  planSwitching: {
+    maxChangesPerMonth: number;
+    cooldownDays: number; // Days between plan changes
+  };
 }
 
 export const BILLING_CONFIG: BillingConfig = {
   trialDays: 7,
   currency: 'USD',
+  planSwitching: {
+    maxChangesPerMonth: 3, // Allow up to 3 plan changes per month
+    cooldownDays: 7, // 7 days between plan changes
+  },
   tiers: {
     free: {
       id: 'free',
@@ -233,8 +241,8 @@ export function getTierOrder(tier: SubscriptionTier): number {
   switch (tier) {
     case 'free': return 0;
     case 'pro': return 1;
-    case 'byok': return 2;
-    case 'enterprise': return 3;
+    case 'byok': return 1; // BYOK is same level as Pro, not higher
+    case 'enterprise': return 2;
     default: return 0;
   }
 }
@@ -246,7 +254,118 @@ export function canUpgradeTo(currentTier: SubscriptionTier, targetTier: Subscrip
 }
 
 export function isDowngrade(currentTier: SubscriptionTier, targetTier: SubscriptionTier): boolean {
-  const currentOrder = getTierOrder(currentTier);
-  const targetOrder = getTierOrder(targetTier);
-  return targetOrder < currentOrder;
+  // Special case: BYOK can downgrade to Pro or Free
+  if (currentTier === 'byok') {
+    return targetTier === 'pro' || targetTier === 'free';
+  }
+  
+  // Special case: Pro can downgrade to Free
+  if (currentTier === 'pro') {
+    return targetTier === 'free';
+  }
+  
+  // Enterprise can downgrade to any tier
+  if (currentTier === 'enterprise') {
+    return targetTier === 'byok' || targetTier === 'pro' || targetTier === 'free';
+  }
+  
+  // Free cannot downgrade
+  return false;
+}
+
+export function canDowngradeTo(currentTier: SubscriptionTier, targetTier: SubscriptionTier): boolean {
+  return isDowngrade(currentTier, targetTier);
+}
+
+export function canChangePlan(
+  currentTier: SubscriptionTier, 
+  targetTier: SubscriptionTier, 
+  lastPlanChangeAt?: Date | null,
+  planChangeCount: number = 0
+): { allowed: boolean; reason?: string; nextAllowedDate?: Date } {
+  // Check if it's a valid plan change
+  if (currentTier === targetTier) {
+    return { allowed: false, reason: "You're already on this plan" };
+  }
+
+  // Check cooldown period FIRST (applies to all plan changes)
+  if (lastPlanChangeAt) {
+    const cooldownMs = BILLING_CONFIG.planSwitching.cooldownDays * 24 * 60 * 60 * 1000;
+    const nextAllowedDate = new Date(lastPlanChangeAt.getTime() + cooldownMs);
+    
+    if (new Date() < nextAllowedDate) {
+      return { 
+        allowed: false, 
+        reason: `Plan changes are limited to once every ${BILLING_CONFIG.planSwitching.cooldownDays} days`,
+        nextAllowedDate 
+      };
+    }
+  }
+
+  // Check monthly limit SECOND (applies to all plan changes)
+  if (planChangeCount >= BILLING_CONFIG.planSwitching.maxChangesPerMonth) {
+    return { 
+      allowed: false, 
+      reason: `You've reached the monthly limit of ${BILLING_CONFIG.planSwitching.maxChangesPerMonth} plan changes` 
+    };
+  }
+
+  // Check if it's a valid downgrade
+  if (isDowngrade(currentTier, targetTier)) {
+    return { allowed: true };
+  }
+
+  // Check if it's a valid upgrade
+  if (canUpgradeTo(currentTier, targetTier)) {
+    return { allowed: true };
+  }
+
+  // If we get here, it's not a valid plan change
+  return { allowed: false, reason: "Invalid plan change" };
+}
+
+export function getPlanChangeInfo(
+  lastPlanChangeAt?: Date | null,
+  planChangeCount: number = 0
+): {
+  changesThisMonth: number;
+  maxChangesPerMonth: number;
+  daysUntilNextChange: number | null;
+  canChangeNow: boolean;
+  reason?: string;
+} {
+  const maxChanges = BILLING_CONFIG.planSwitching.maxChangesPerMonth;
+  const cooldownDays = BILLING_CONFIG.planSwitching.cooldownDays;
+  
+  let daysUntilNextChange: number | null = null;
+  let canChangeNow = true;
+  let reason: string | undefined;
+
+  // Check cooldown period
+  if (lastPlanChangeAt) {
+    const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+    const nextAllowedDate = new Date(lastPlanChangeAt.getTime() + cooldownMs);
+    const now = new Date();
+    
+    if (now < nextAllowedDate) {
+      const diffMs = nextAllowedDate.getTime() - now.getTime();
+      daysUntilNextChange = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+      canChangeNow = false;
+      reason = `Plan changes are limited to once every ${cooldownDays} days`;
+    }
+  }
+
+  // Check monthly limit
+  if (planChangeCount >= maxChanges) {
+    canChangeNow = false;
+    reason = `You've reached the monthly limit of ${maxChanges} plan changes`;
+  }
+
+  return {
+    changesThisMonth: planChangeCount,
+    maxChangesPerMonth: maxChanges,
+    daysUntilNextChange,
+    canChangeNow,
+    reason
+  };
 }
