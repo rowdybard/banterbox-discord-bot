@@ -1,9 +1,10 @@
-import { storage } from "./storage.js";
-import type { InsertContextMemory, EventType, EventData } from "../shared/schema.js";
+import { FirebaseContextService } from "./firebaseContextService.js";
+import type { EventType, EventData } from "../shared/schema.js";
 
 /**
  * Context Memory Service
  * Manages AI context memory for creating more coherent, contextual banter responses
+ * Uses Firebase Firestore for storage
  */
 export class ContextService {
   /**
@@ -17,40 +18,7 @@ export class ContextService {
     importance: number = 1,
     originalMessage?: string
   ): Promise<string> {
-    // Generate context summary based on event type
-    const contextSummary = this.generateContextSummary(eventType, eventData);
-
-    // Calculate expiration time based on importance (more important = longer retention)
-    const hoursToRetain = Math.max(2, importance * 3); // 2-30 hours based on importance
-    const expiresAt = new Date(Date.now() + hoursToRetain * 60 * 60 * 1000);
-
-    // Extract participants from event data
-    const participants: string[] = [];
-    if (eventData.displayName) participants.push(eventData.displayName);
-    if (eventData.username) participants.push(eventData.username);
-
-    const contextMemory: InsertContextMemory = {
-      userId,
-      guildId: guildId || null,
-      eventType,
-      eventData,
-      contextSummary,
-      originalMessage: originalMessage || null,
-      banterResponse: null,
-      importance: Math.min(10, Math.max(1, importance)), // Clamp between 1-10
-      participants,
-      expiresAt,
-    };
-
-    const result = await storage.createContextMemory(contextMemory);
-
-    // Clean expired context occasionally
-    if (Math.random() < 0.1) {
-      // 10% chance
-      await storage.cleanExpiredContext();
-    }
-
-    return result.id;
+    return FirebaseContextService.recordEvent(userId, eventType, eventData, guildId, importance, originalMessage);
   }
 
   /**
@@ -61,86 +29,7 @@ export class ContextService {
     currentEventType: EventType,
     guildId?: string
   ): Promise<string> {
-    try {
-      console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
-      
-      // Get recent context (last 8 interactions for better memory) - try both with and without guildId
-      let recentContext = await storage.getRecentContext(userId, guildId, 8);
-      console.log(`Found ${recentContext.length} recent context items with guildId ${guildId}`);
-      
-      // If we don't have enough context with guildId, also get context without guildId
-      if (recentContext.length < 4 && guildId) {
-        const globalContext = await storage.getRecentContext(userId, undefined, 8);
-        console.log(`Found ${globalContext.length} global context items (no guildId)`);
-        
-        // Combine and deduplicate context
-        const allContext = [...recentContext, ...globalContext];
-        const uniqueContext = allContext.filter((ctx, index, self) => 
-          index === self.findIndex(c => c.id === ctx.id)
-        );
-        recentContext = uniqueContext.slice(0, 8);
-        console.log(`Combined to ${recentContext.length} total recent context items`);
-      }
-      
-      // Get similar event context (last 5 of same type) - also try both with and without guildId
-      let similarContext = await storage.getContextByType(userId, currentEventType, guildId, 5);
-      console.log(`Found ${similarContext.length} similar context items with guildId ${guildId}`);
-      
-      if (similarContext.length < 3 && guildId) {
-        const globalSimilarContext = await storage.getContextByType(userId, currentEventType, undefined, 5);
-        console.log(`Found ${globalSimilarContext.length} global similar context items (no guildId)`);
-        
-        // Combine and deduplicate similar context
-        const allSimilarContext = [...similarContext, ...globalSimilarContext];
-        const uniqueSimilarContext = allSimilarContext.filter((ctx, index, self) => 
-          index === self.findIndex(c => c.id === ctx.id)
-        );
-        similarContext = uniqueSimilarContext.slice(0, 5);
-        console.log(`Combined to ${similarContext.length} total similar context items`);
-      }
-      
-      if (recentContext.length === 0 && similarContext.length === 0) {
-        console.log('No context found, returning empty string');
-        return "";
-      }
-      
-      let contextString = "";
-      
-      // Add recent conversation context with better formatting
-      if (recentContext.length > 0) {
-        contextString += "Recent conversation history:\n";
-        recentContext.reverse().forEach((ctx, index) => {
-          if (ctx.originalMessage) {
-            contextString += `${index + 1}. User said: "${ctx.originalMessage}"\n`;
-          }
-          if (ctx.banterResponse) {
-            contextString += `   You responded: "${ctx.banterResponse}"\n`;
-          }
-        });
-        contextString += "\n";
-      }
-      
-      // Add similar event context for variety
-      if (similarContext.length > 0) {
-        contextString += `Previous responses to similar ${currentEventType} events:\n`;
-        similarContext.forEach((ctx, index) => {
-          if (ctx.banterResponse) {
-            contextString += `${index + 1}. "${ctx.banterResponse}"\n`;
-          }
-        });
-        contextString += "\n";
-      }
-      
-      // Add improved context instruction with specific guidance for car mentions
-      if (contextString) {
-        contextString += "IMPORTANT: Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. If someone mentioned something specific (like a car model, hobby, etc.), reference it naturally in your response. For example, if someone mentioned they drive an Altima, remember that and refer to it in future responses. Be creative and varied while staying connected to the conversation.";
-      }
-      
-      return contextString;
-    } catch (error) {
-      console.error('Error getting context for banter:', error);
-      return "";
-    }
+    return FirebaseContextService.getContextForBanter(userId, currentEventType, guildId);
   }
 
   /**
@@ -153,51 +42,21 @@ export class ContextService {
     banterText: string,
     guildId?: string
   ): Promise<void> {
-    // Record successful banter patterns for future reference
-    await this.recordEvent(userId, eventType, { ...eventData, banterText }, guildId, 3); // Higher importance for successful banters
+    return FirebaseContextService.recordBanterSuccess(userId, eventType, eventData, banterText, guildId);
   }
 
   /**
-   * Generates human-readable context summaries for events
+   * Updates a context memory with the banter response
    */
-  private static generateContextSummary(eventType: EventType, eventData: EventData): string {
-    switch (eventType) {
-      case "chat":
-        return `${eventData.username || "Someone"} chatted${
-          eventData.message ? ': "' + eventData.message.substring(0, 50) + '"' : ""
-        }`;
+  static async updateContextResponse(contextId: string, banterResponse: string): Promise<void> {
+    return FirebaseContextService.updateContextResponse(contextId, banterResponse);
+  }
 
-      case "subscription":
-        return `${eventData.username || "Someone"} subscribed$${
-          eventData.amount ? ` with a $${eventData.amount} sub` : ""
-        }`;
-
-      case "donation":
-        return `${eventData.username || "Someone"} donated $${
-          eventData.amount || 0
-        }${eventData.message ? ' saying "' + eventData.message.substring(0, 50) + '"' : ""}`;
-
-      case "raid":
-        return `${eventData.username || "Someone"} raided with ${eventData.raiderCount || 0} viewers`;
-
-      case "discord_message": {
-        const content = eventData.messageContent || eventData.message || "";
-        return `${
-          eventData.username || eventData.displayName || "Someone"
-        } sent message in Discord${content ? ': "' + content.substring(0, 50) + '"' : ""}`;
-      }
-
-      case "discord_member_join":
-        return `${eventData.username || eventData.displayName || "Someone"} joined the Discord server`;
-
-      case "discord_reaction":
-        return `${eventData.username || eventData.displayName || "Someone"} reacted with ${
-          eventData.emoji || "emoji"
-        } in Discord`;
-
-      default:
-        return `${eventData.username || "Someone"} triggered ${eventType} event`;
-    }
+  /**
+   * Cleans expired context memory
+   */
+  static async cleanExpiredContext(): Promise<number> {
+    return FirebaseContextService.cleanExpiredContext();
   }
 
   /**
@@ -207,39 +66,6 @@ export class ContextService {
     userId: string,
     guildId?: string
   ): Promise<{ totalEvents: number; recentActivity: string; topEventTypes: string[] }> {
-    const recentContext = await storage.getRecentContext(userId, guildId, 20);
-
-    if (!recentContext.length) {
-      return { totalEvents: 0, recentActivity: "No recent activity", topEventTypes: [] };
-    }
-
-    // Narrow the shape so TS is happy
-    type ContextItem = { importance: number; contextSummary?: string; eventType: string };
-    const items = recentContext as unknown as ContextItem[];
-
-    // Count event types
-    const eventCounts = items.reduce<Record<string, number>>((acc, ctx) => {
-      acc[ctx.eventType] = (acc[ctx.eventType] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    // Top 3 event types
-    const topEventTypes = Object.entries(eventCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 3)
-      .map(([type]) => type);
-
-    // Short recent activity summary
-    const recentActivity = items
-      .map((c) => c.contextSummary)
-      .filter((s): s is string => Boolean(s))
-      .slice(0, 3)
-      .join("; ");
-
-    return {
-      totalEvents: items.length,
-      recentActivity,
-      topEventTypes,
-    };
+    return FirebaseContextService.getStreamActivitySummary(userId, guildId);
   }
 }

@@ -1,6 +1,7 @@
 // server/firebase.ts
 import admin from 'firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
+import { getFirestore } from 'firebase-admin/firestore';
 import { randomUUID } from 'node:crypto';
 import { Storage } from '@google-cloud/storage';
 
@@ -15,6 +16,7 @@ export const bucket: any = fallbackBucketName ? gcs.bucket(fallbackBucketName) :
 // Firebase Admin state (kept separate to avoid name collisions with the exported `bucket`)
 let firebaseApp: admin.app.App | null = null;
 let adminBucket: any = null;
+let firestoreDb: any = null;
 
 export function initializeFirebase(): any | null {
   // Reuse if already initialized
@@ -39,7 +41,8 @@ export function initializeFirebase(): any | null {
         });
 
     adminBucket = getStorage(firebaseApp).bucket();
-    console.log('✅ Firebase Admin storage initialized');
+    firestoreDb = getFirestore(firebaseApp);
+    console.log('✅ Firebase Admin storage and Firestore initialized');
     return adminBucket;
   } catch (err) {
     console.error('Failed to initialize Firebase Admin:', err);
@@ -111,3 +114,11 @@ export class FirebaseStorageService {
 
 // Export a singleton instance for convenience
 export const firebaseStorage = new FirebaseStorageService();
+
+// Export Firestore instance
+export function getFirestoreDb() {
+  if (!firestoreDb) {
+    initializeFirebase();
+  }
+  return firestoreDb;
+}

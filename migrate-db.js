@@ -176,6 +176,24 @@ async function migrate() {
       console.log('✅ Sessions expire index already exists');
     }
     
+    // 10. Add participants column to context_memory table
+    const contextParticipantsCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'context_memory' AND column_name = 'participants'
+    `);
+    
+    if (contextParticipantsCheck.rows.length === 0) {
+      console.log('➕ Adding participants column to context_memory table...');
+      await client.query(`
+        ALTER TABLE context_memory 
+        ADD COLUMN participants TEXT[] DEFAULT '{}'
+      `);
+      console.log('✅ participants column added to context_memory successfully');
+    } else {
+      console.log('✅ participants column already exists in context_memory');
+    }
+    
     console.log('✅ Sessions table configured');
     console.log('🎉 Comprehensive database migration completed successfully!');
     

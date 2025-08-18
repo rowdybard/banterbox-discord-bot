@@ -105,7 +105,7 @@ export class MemStorage implements IStorage {
       overlayPosition: "bottom-center",
       overlayDuration: 5,
       overlayAnimation: "fade",
-      banterPersonality: "witty",
+              banterPersonality: "context",
       customPersonalityPrompt: null,
       updatedAt: new Date(),
     };

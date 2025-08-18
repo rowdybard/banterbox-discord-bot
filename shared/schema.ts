@@ -51,7 +51,7 @@ export const userSettings = pgTable("user_settings", {
   overlayPosition: text("overlay_position").default("bottom-center"),
   overlayDuration: integer("overlay_duration").default(12),
   overlayAnimation: text("overlay_animation").default("fade"),
-  banterPersonality: text("banter_personality").default("witty"),
+  banterPersonality: text("banter_personality").default("context"),
   customPersonalityPrompt: text("custom_personality_prompt"),
   favoritePersonalities: jsonb("favorite_personalities").default([]), // Array of saved personality objects
   favoriteVoices: jsonb("favorite_voices").default([]), // Array of saved voice objects
@@ -108,7 +108,7 @@ export const guildLinks = pgTable("guild_links", {
 export const guildSettings = pgTable("guild_settings", {
   guildId: varchar("guild_id").primaryKey(),
   workspaceId: varchar("workspace_id").notNull(),
-  personality: varchar("personality").default("sarcastic"),
+  personality: varchar("personality").default("context"),
   voiceProvider: varchar("voice_provider").default("openai"),
   enabledEvents: text("enabled_events").array().default(['discord_message', 'discord_member_join', 'discord_reaction']),
   currentStreamer: varchar("current_streamer"), // Discord user ID of active streamer

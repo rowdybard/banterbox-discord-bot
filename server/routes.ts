@@ -98,7 +98,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userId) {
         try {
           const settings = await storage.getUserSettings(userId);
-          const personality = settings?.banterPersonality || 'witty';
+          const personality = settings?.banterPersonality || 'context';
           const customPrompt = settings?.customPersonalityPrompt;
 
           if (personality === 'custom' && customPrompt) {
@@ -113,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Use plain text only. Make connections to past events when appropriate.",
               roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
             };
-            personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
+            personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.context;
           }
           console.log(`Using web dashboard personality: ${personality} for user ${userId}`);
         } catch (error) {
@@ -653,7 +653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           overlayPosition: 'bottom-center',
           overlayDuration: 5,
           overlayAnimation: 'fade',
-          banterPersonality: 'witty',
+          banterPersonality: 'context',
           customPersonalityPrompt: null,
         });
         return res.json(defaultSettings);
@@ -692,7 +692,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           overlayPosition: updates.overlayPosition || 'bottom-center',
           overlayDuration: updates.overlayDuration || 5,
           overlayAnimation: updates.overlayAnimation || 'fade',
-          banterPersonality: updates.banterPersonality || 'witty',
+                      banterPersonality: updates.banterPersonality || 'context',
           customPersonalityPrompt: updates.customPersonalityPrompt || null,
         });
         updated = newSettings;
