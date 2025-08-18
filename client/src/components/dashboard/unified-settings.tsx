@@ -88,16 +88,6 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     }
   }, [settings]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Voice settings debug:', {
-      voiceProvider,
-      voiceId,
-      favoriteVoices: favoriteVoices?.voices,
-      settings: settings
-    });
-  }, [voiceProvider, voiceId, favoriteVoices, settings]);
-
   // Fetch ElevenLabs voices for Pro users
   const { data: elevenLabsVoices } = useQuery({
     queryKey: ['/api/elevenlabs/voices'],
@@ -118,6 +108,16 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     enabled: true,
     retry: false,
   });
+
+  // Debug logging - moved after queries are defined
+  useEffect(() => {
+    console.log('Voice settings debug:', {
+      voiceProvider,
+      voiceId,
+      favoriteVoices: favoriteVoices?.voices,
+      settings: settings
+    });
+  }, [voiceProvider, voiceId, favoriteVoices, settings]);
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
