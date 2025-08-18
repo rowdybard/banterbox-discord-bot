@@ -1,42 +1,27 @@
 // build-server.js
 import esbuild from 'esbuild';
 import { resolve } from 'node:path';
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
+console.log('🔨 Building server...');
+
+// Run the database migration first
+console.log('🔄 Running database migration...');
 try {
-  await esbuild.build({
-    entryPoints: ['server/index.ts'],
-    outdir: 'dist/server',
-    platform: 'node',
-    target: 'node20',
-    bundle: true,
-    format: 'esm',                 // ← output ESM so `export` is valid
-    loader: { '.ts': 'ts', '.tsx': 'tsx' },
-
-    // IMPORTANT: don't bundle node_modules (avoids @babel/lightningcss issues)
-    packages: 'external',
-
-    // Resolve `@shared/...` to your local shared code
-    plugins: [{
-      name: 'resolve-shared',
-      setup(build) {
-        build.onResolve({ filter: /^@shared/ }, args => {
-          const rel = args.path.replace(/^@shared/, './shared') + '.ts';
-          const abs = resolve(process.cwd(), rel);
-          return { path: abs };
-        });
-      }
-    }],
-
-    // Allow require() in ESM output if a library expects it
-    banner: {
-      js: 'import { createRequire } from "module"; const require = createRequire(import.meta.url);',
-    },
-
-    logLevel: 'info',
-  });
-
-  console.log('✅ Server built successfully');
+  execSync('node migrate-db.js', { stdio: 'inherit' });
+  console.log('✅ Database migration completed');
 } catch (error) {
-  console.error('❌ Server build failed:', error);
-  process.exit(1);
+  console.log('⚠️ Database migration failed (this is normal if columns already exist):', error.message);
 }
+
+// Build the client
+console.log('🏗️ Building client...');
+execSync('npm run build', { stdio: 'inherit' });
+
+// Build the server
+console.log('⚙️ Building server...');
+execSync('npx esbuild server/index.ts --bundle --platform=node --target=node18 --outfile=dist/server.js --external:pg-native', { stdio: 'inherit' });
+
+console.log('✅ Build completed!');

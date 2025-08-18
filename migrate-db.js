@@ -2,6 +2,13 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 
+// Check if DATABASE_URL is set
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is not set');
+  console.log('Please set DATABASE_URL to your database connection string');
+  process.exit(1);
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -324,8 +331,15 @@ async function migrate() {
     console.log('🎉 Comprehensive database migration completed successfully!');
     
   } catch (error) {
-    console.error('❌ Migration failed:', error);
-    throw error;
+    console.error('❌ Migration failed:', error.message);
+    if (error.code === 'ECONNREFUSED') {
+      console.log('💡 Make sure your database is running and DATABASE_URL is correct');
+    } else if (error.code === 'ENOTFOUND') {
+      console.log('💡 Check that your DATABASE_URL hostname is correct');
+    } else if (error.message.includes('password authentication failed')) {
+      console.log('💡 Check that your DATABASE_URL username and password are correct');
+    }
+    process.exit(1);
   } finally {
     client.release();
     await pool.end();

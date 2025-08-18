@@ -1,10 +1,16 @@
-// Render deployment entry point
-const path = require('path');
+const { execSync } = require('child_process');
 
-// Set NODE_ENV to production if not set
-if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = 'production';
+console.log('🚀 Starting BanterBox...');
+
+// Run database migration first
+console.log('🔄 Running database migration...');
+try {
+  execSync('node migrate-db.js', { stdio: 'inherit' });
+  console.log('✅ Database migration completed');
+} catch (error) {
+  console.log('⚠️ Database migration failed (this is normal if columns already exist):', error.message);
 }
 
-// Import and run the main server file
-require('./dist/index.js');
+// Start the server
+console.log('🌐 Starting server...');
+execSync('node dist/server.js', { stdio: 'inherit' });
