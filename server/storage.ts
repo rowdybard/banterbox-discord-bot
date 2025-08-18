@@ -378,7 +378,8 @@ export class MemStorage implements IStorage {
 
   async checkAndIncrementDailyUsage(userId: string): Promise<{ allowed: boolean; current: number; limit: number; isPro: boolean }> {
     const user = await this.getUser(userId);
-    const isPro = user?.isPro ?? false;
+    const subscriptionTier = user?.subscriptionTier || 'free';
+    const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
     const limit = isPro ? 999999 : 50; // Unlimited for Pro, 50 for free tier
     
     const today = new Date().toISOString().split('T')[0];
@@ -788,7 +789,8 @@ export class DatabaseStorage implements IStorage {
 
   async checkAndIncrementDailyUsage(userId: string): Promise<{ allowed: boolean; current: number; limit: number; isPro: boolean }> {
     const user = await this.getUser(userId);
-    const isPro = user?.isPro ?? false;
+    const subscriptionTier = user?.subscriptionTier || 'free';
+    const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
     const limit = isPro ? 999999 : 50;
     
     const today = new Date().toISOString().split('T')[0];

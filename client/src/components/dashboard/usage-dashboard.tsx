@@ -1,12 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ErrorDisplay } from "@/components/ui/error-display";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Crown, TrendingUp, Clock, Target } from "lucide-react";
+import { ErrorDisplay } from "@/components/ui/error-display";
+import { 
+  BarChart3, 
+  Crown, 
+  Zap, 
+  TrendingUp, 
+  Users, 
+  Clock,
+  AlertTriangle,
+  Infinity
+} from "lucide-react";
+import { Link } from "wouter";
 import type { DailyStats, User } from "@shared/schema";
+import { isProUser } from "@shared/subscription";
 
 interface UsageDashboardProps {
   userId: string;
@@ -19,7 +30,7 @@ export function UsageDashboard({ userId, user }: UsageDashboardProps) {
     retry: 2,
   }) as { data: DailyStats | undefined, isLoading: boolean, error: any };
 
-  const isProUser = user?.isPro;
+  const isProUser = isProUser(user);
   const dailyLimit = isProUser ? Infinity : 50;
   const currentUsage = stats?.bantersGenerated || 0;
   const usagePercentage = isProUser ? 0 : Math.min((currentUsage / dailyLimit) * 100, 100);
@@ -67,109 +78,97 @@ export function UsageDashboard({ userId, user }: UsageDashboardProps) {
 
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-white flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            Daily Usage
-          </CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-lg font-semibold text-white flex items-center space-x-2">
+          <BarChart3 className="w-5 h-5 text-primary" />
+          <span>Daily Usage</span>
           {isProUser && (
-            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+            <Badge className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-0">
               <Crown className="w-3 h-3 mr-1" />
               Pro
             </Badge>
           )}
+        </CardTitle>
+        <div className="flex items-center space-x-2">
+          <Clock className="w-4 h-4 text-gray-400" />
+          <span className="text-sm text-gray-400">Resets daily</span>
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         {/* Usage Progress */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-300">
-              Banters Generated Today
-            </span>
-            <span className={`text-lg font-bold ${getUsageColor()}`}>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-400">Banter Generation</span>
+            <span className={`text-sm font-medium ${getUsageColor()}`}>
               {currentUsage}{!isProUser && ` / ${dailyLimit}`}
             </span>
           </div>
           
           {!isProUser && (
-            <div className="space-y-2">
-              <Progress 
-                value={usagePercentage} 
-                className="h-2 bg-gray-700"
-                style={{
-                  '--progress-foreground': getProgressColor()
-                } as React.CSSProperties}
-              />
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Free Tier Limit</span>
-                <span>{Math.round(usagePercentage)}% used</span>
-              </div>
-            </div>
+            <Progress 
+              value={usagePercentage} 
+              className="h-2"
+              style={{
+                '--progress-background': getProgressColor()
+              } as React.CSSProperties}
+            />
           )}
           
           {isProUser && (
-            <div className="text-center py-2">
-              <span className="text-sm text-yellow-400 font-medium">
-                ✨ Unlimited banters with Pro
-              </span>
+            <div className="flex items-center space-x-2 text-yellow-400">
+              <Infinity className="w-4 h-4" />
+              <span className="text-sm font-medium">Unlimited</span>
             </div>
           )}
         </div>
 
-        {/* Daily Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
-            <div className="flex items-center gap-2 mb-1">
-              <Target className="w-4 h-4 text-blue-400" />
-              <span className="text-xs font-medium text-gray-400">Played</span>
-            </div>
-            <span className="text-lg font-bold text-blue-400">
-              {stats?.bantersPlayed || 0}
-            </span>
+        {/* Usage Stats */}
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-white">{currentUsage}</div>
+            <div className="text-xs text-gray-400">Generated Today</div>
           </div>
-          
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-purple-400" />
-              <span className="text-xs font-medium text-gray-400">Peak Hour</span>
-            </div>
-            <span className="text-lg font-bold text-purple-400">
-              {stats?.peakHour ? `${stats.peakHour}:00` : 'N/A'}
-            </span>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-white">{stats?.bantersPlayed || 0}</div>
+            <div className="text-xs text-gray-400">Played Today</div>
           </div>
         </div>
 
-        {/* Upgrade Prompt for Free Users */}
+        {/* Pro Upgrade CTA */}
         {!isProUser && usagePercentage >= 80 && (
-          <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg p-4 border border-primary/30">
-            <div className="text-center space-y-2">
-              <h4 className="font-semibold text-white">
-                {usagePercentage >= 100 ? "Daily limit reached!" : "Almost at your daily limit"}
-              </h4>
-              <p className="text-sm text-gray-300">
-                Upgrade to Pro for unlimited banters and premium voices
-              </p>
-              <Button 
-                size="sm" 
-                className="bg-gradient-to-r from-primary to-secondary hover:opacity-90"
-                onClick={() => window.location.href = '/pro'}
-              >
-                <Crown className="w-4 h-4 mr-2" />
+          <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 rounded-lg p-4 border border-yellow-500/30">
+            <div className="flex items-center space-x-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              <span className="text-sm font-medium text-yellow-400">Approaching Daily Limit</span>
+            </div>
+            <p className="text-xs text-gray-300 mb-3">
+              You've used {usagePercentage.toFixed(0)}% of your daily banter limit. Upgrade to Pro for unlimited generation.
+            </p>
+            <Link href="/pro">
+              <Button size="sm" className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                <Crown className="w-3 h-3 mr-2" />
                 Upgrade to Pro
               </Button>
-            </div>
+            </Link>
           </div>
         )}
 
-        {/* Reset Time Info */}
-        <div className="text-center">
-          <p className="text-xs text-gray-500">
-            Usage resets daily at midnight UTC
-          </p>
-        </div>
+        {/* Pro Benefits */}
+        {isProUser && (
+          <div className="bg-gradient-to-r from-green-500/10 to-green-600/10 rounded-lg p-4 border border-green-500/30">
+            <div className="flex items-center space-x-2 mb-2">
+              <Zap className="w-4 h-4 text-green-400" />
+              <span className="text-sm font-medium text-green-400">Pro Benefits Active</span>
+            </div>
+            <div className="text-xs text-gray-300 space-y-1">
+              <div>• Unlimited daily banter generation</div>
+              <div>• Priority processing speed</div>
+              <div>• Advanced voice options</div>
+              <div>• Premium support</div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

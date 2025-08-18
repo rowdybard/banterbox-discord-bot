@@ -2755,13 +2755,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Use centralized subscription logic
+      const subscriptionTier = user.subscriptionTier || 'free';
+      const subscriptionStatus = user.subscriptionStatus || 'active';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+      const isTrialing = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
+      const isActive = subscriptionStatus === 'active';
+
       const subscription = {
-        tier: user.subscriptionTier || 'free',
-        status: user.subscriptionStatus || 'active',
+        tier: subscriptionTier,
+        status: subscriptionStatus,
+        isPro,
+        isTrialing,
+        isActive,
         trialEndsAt: user.trialEndsAt,
         currentPeriodEnd: user.currentPeriodEnd,
-        isTrialing: user.trialEndsAt && new Date(user.trialEndsAt) > new Date(),
-        isActive: (user.subscriptionStatus || 'active') === 'active'
       };
 
       res.json(subscription);
@@ -3013,6 +3021,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error processing webhook:', error);
       res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
+  // Generate audio with ElevenLabs
+  app.post("/api/elevenlabs/generate", isAuthenticated, async (req: any, res) => {
+    try {
+      const { text, voiceId } = req.body;
+      const userId = req.user.id;
+      
+      const user = await storage.getUser(userId);
+      const subscriptionTier = user?.subscriptionTier || 'free';
+      const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
+      
+      if (!isPro) {
+        return res.status(403).json({ 
+          message: "ElevenLabs voices require Pro subscription",
+          upgrade: "Upgrade to Pro to access premium voices"
+        });
+      }
+
+      if (!text || !voiceId) {
+        return res.status(400).json({ message: "Text and voiceId are required" });
+      }
+
+      const audioUrl = await generateElevenLabsAudio(text, voiceId);
+      res.json({ audioUrl });
+    } catch (error) {
+      console.error('Error generating ElevenLabs audio:', error);
+      res.status(500).json({ message: "Failed to generate audio" });
     }
   });
 

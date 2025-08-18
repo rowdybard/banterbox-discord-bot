@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAudio } from "@/hooks/use-audio";
-import { Volume2, Save, Play, Settings } from "lucide-react";
+import { Volume2, Save, Play, Settings, Crown } from "lucide-react";
 import type { UserSettings, User } from "@shared/schema";
+import { isProUser } from "@shared/subscription";
 
 interface VoiceSettingsProps {
   userId: string;
@@ -44,7 +45,7 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
   // Fetch ElevenLabs voices for Pro users
   const { data: elevenLabsVoices } = useQuery({
     queryKey: ['/api/elevenlabs/voices'],
-    enabled: Boolean(user?.isPro && voiceProvider === 'elevenlabs'),
+    enabled: Boolean(isProUser(user) && voiceProvider === 'elevenlabs'),
     retry: false,
   });
 
@@ -176,11 +177,11 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
             <Settings className="h-5 w-5 text-primary" />
             <CardTitle className="text-white">Voice Settings</CardTitle>
           </div>
-          {user?.isPro && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gradient-to-r from-primary to-secondary text-white">
-              <i className="fas fa-crown text-xs mr-1"></i>
-              Pro
-            </span>
+          {isProUser(user) && (
+            <div className="flex items-center space-x-2 text-yellow-400">
+              <Crown className="w-4 h-4" />
+              <span className="text-sm">Pro Feature</span>
+            </div>
           )}
         </div>
       </CardHeader>
@@ -201,14 +202,14 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
             </SelectTrigger>
             <SelectContent className="bg-gray-800 border-gray-700">
               <SelectItem value="openai">OpenAI TTS (Free)</SelectItem>
-              <SelectItem value="elevenlabs" disabled={!user?.isPro}>
-                ElevenLabs Premium {!user?.isPro && '(Pro Required)'}
+              <SelectItem value="elevenlabs" disabled={!isProUser(user)}>
+                ElevenLabs Premium {!isProUser(user) && '(Pro Required)'}
               </SelectItem>
-              <SelectItem value="custom" disabled={!user?.isPro}>
-                Custom Voice Clone {!user?.isPro && '(Pro Required)'}
+              <SelectItem value="custom" disabled={!isProUser(user)}>
+                Custom Voice Clone {!isProUser(user) && '(Pro Required)'}
               </SelectItem>
-              <SelectItem value="favorite" disabled={!user?.isPro || !favoriteVoices?.voices?.length}>
-                Saved Voices {!user?.isPro && '(Pro Required)'} {(!favoriteVoices?.voices?.length) && '(No saved voices)'}
+              <SelectItem value="favorite" disabled={!isProUser(user) || !favoriteVoices?.voices?.length}>
+                Saved Voices {!isProUser(user) && '(Pro Required)'} {(!favoriteVoices?.voices?.length) && '(No saved voices)'}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -218,7 +219,7 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
         </div>
 
         {/* ElevenLabs Voice Selection */}
-        {voiceProvider === 'elevenlabs' && user?.isPro && (
+        {voiceProvider === 'elevenlabs' && isProUser(user) && (
           <div>
             <Label className="text-sm font-medium text-gray-300 mb-2 block">
               ElevenLabs Voice

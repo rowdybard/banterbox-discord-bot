@@ -17,6 +17,7 @@ import {
   Users,
   Clock
 } from "lucide-react";
+import { isProUser } from "@shared/subscription";
 
 export default function ProPage() {
   const { user } = useAuth();
@@ -91,7 +92,7 @@ export default function ProPage() {
     alert(`Upgrade to ${plan} plan coming soon! We'll notify you when payment processing is ready.`);
   };
 
-  if (user?.isPro) {
+  if (isProUser(user)) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-dark to-dark-lighter">
         <div className="container mx-auto px-4 py-8">
