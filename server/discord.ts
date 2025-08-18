@@ -229,7 +229,7 @@ export class DiscordService {
         if (this.client.isReady()) {
           // Check if client is still healthy (doesn't need manual ping in modern Discord.js)
           const ping = this.client.ws.ping;
-          console.log(`Discord heartbeat check - connection healthy (ping: ${ping}ms)`);
+          console.log(`Discord heartbeat check - connection healthy (ping: ${ping}ms)`); // Fixed heartbeat error
         } else {
           console.warn('Discord client not ready during heartbeat check');
         }

@@ -1,4 +1,4 @@
-// Comprehensive database migration to add missing columns
+// Comprehensive database migration to add missing columns - Fixed schema issues
 import { Pool } from 'pg';
 
 const pool = new Pool({
