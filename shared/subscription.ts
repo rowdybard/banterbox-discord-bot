@@ -1,6 +1,9 @@
 import type { SubscriptionTier, SubscriptionStatus } from './billing';
 import type { User } from './schema';
 
+// Re-export types for convenience
+export type { SubscriptionTier, SubscriptionStatus };
+
 export interface SubscriptionInfo {
   tier: SubscriptionTier;
   status: SubscriptionStatus;

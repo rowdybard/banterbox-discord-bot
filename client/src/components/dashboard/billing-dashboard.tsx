@@ -16,8 +16,8 @@ import {
   Clock
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { BILLING_CONFIG, getTierConfig, formatPrice, type SubscriptionTier } from "@shared/billing";
-import { getSubscriptionTier } from "@shared/subscription";
+import { BILLING_CONFIG, getTierConfig, formatPrice } from "@shared/billing";
+import { getSubscriptionTier, type SubscriptionTier } from "@shared/subscription";
 import { Link } from "wouter";
 
 export default function BillingDashboard() {

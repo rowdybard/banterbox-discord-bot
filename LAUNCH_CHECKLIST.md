@@ -135,6 +135,15 @@ If critical issues are found:
 
 ## 🎉 **RECENT FIXES**
 
+### **Circular Dependency Issue** ✅ **FIXED**
+- **Issue**: "Cannot access 'o' before initialization" error in production
+- **Root Cause**: Circular dependency between `shared/billing.ts` and `shared/subscription.ts`
+- **Solution**: 
+  - Removed duplicate `SubscriptionStatus` type from subscription helper
+  - Re-export types from subscription helper for convenience
+  - Updated component imports to avoid circular dependencies
+- **Impact**: Production build should now work without initialization errors
+
 ### **Pricing Page Subscription Detection** ✅ **FIXED**
 - **Issue**: Pricing page wasn't properly detecting Pro users
 - **Root Cause**: Using inconsistent `user?.subscriptionTier` instead of centralized helper
