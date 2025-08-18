@@ -89,84 +89,60 @@ export class FirebaseContextService {
 
       console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
       
-      // Get recent context (last 8 interactions for better memory)
-      let recentContextQuery = db.collection('context_memory')
+      // Simplified query: Get recent context without complex ordering
+      // We'll do filtering and sorting in memory to avoid complex indexes
+      const recentContextSnapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
         .where('expiresAt', '>', new Date())
-        .orderBy('expiresAt', 'desc')
-        .orderBy('createdAt', 'desc')
-        .limit(8);
+        .limit(20) // Get more items and filter in memory
+        .get();
 
-      if (guildId) {
-        recentContextQuery = recentContextQuery.where('guildId', '==', guildId);
-      }
-
-      const recentContextSnapshot = await recentContextQuery.get();
-      const recentContext = recentContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log(`Found ${recentContext.length} recent context items with guildId ${guildId}`);
+      const allContext = recentContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // If we don't have enough context with guildId, also get context without guildId
-      if (recentContext.length < 4 && guildId) {
-        const globalContextSnapshot = await db.collection('context_memory')
-          .where('userId', '==', userId)
-          .where('expiresAt', '>', new Date())
-          .orderBy('expiresAt', 'desc')
-          .orderBy('createdAt', 'desc')
-          .limit(8)
-          .get();
-        
-        const globalContext = globalContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log(`Found ${globalContext.length} global context items (no guildId)`);
-        
-        // Combine and deduplicate context
-        const allContext = [...recentContext, ...globalContext];
-        const uniqueContext = allContext.filter((ctx, index, self) => 
-          index === self.findIndex(c => c.id === ctx.id)
-        );
-        recentContext.splice(0, recentContext.length, ...uniqueContext.slice(0, 8));
-        console.log(`Combined to ${recentContext.length} total recent context items`);
-      }
+      // Filter by guildId if specified
+      const guildContext = guildId 
+        ? allContext.filter(ctx => ctx.guildId === guildId)
+        : allContext.filter(ctx => !ctx.guildId);
       
-      // Get similar event context (last 5 of same type)
-      let similarContextQuery = db.collection('context_memory')
+      // Get global context (no guildId) if we have guildId specified
+      const globalContext = guildId 
+        ? allContext.filter(ctx => !ctx.guildId)
+        : [];
+      
+      // Combine and sort by creation date
+      const combinedContext = [...guildContext, ...globalContext]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 8); // Take top 8 most recent
+      
+      console.log(`Found ${combinedContext.length} total recent context items`);
+      
+      // Get similar event context (simplified query)
+      const similarContextSnapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
         .where('eventType', '==', currentEventType)
         .where('expiresAt', '>', new Date())
-        .orderBy('expiresAt', 'desc')
-        .orderBy('createdAt', 'desc')
-        .limit(5);
-
-      if (guildId) {
-        similarContextQuery = similarContextQuery.where('guildId', '==', guildId);
-      }
-
-      const similarContextSnapshot = await similarContextQuery.get();
+        .limit(10) // Get more and filter in memory
+        .get();
+      
       let similarContext = similarContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log(`Found ${similarContext.length} similar context items with guildId ${guildId}`);
       
-      if (similarContext.length < 3 && guildId) {
-        const globalSimilarContextSnapshot = await db.collection('context_memory')
-          .where('userId', '==', userId)
-          .where('eventType', '==', currentEventType)
-          .where('expiresAt', '>', new Date())
-          .orderBy('expiresAt', 'desc')
-          .orderBy('createdAt', 'desc')
-          .limit(5)
-          .get();
-        
-        const globalSimilarContext = globalSimilarContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log(`Found ${globalSimilarContext.length} global similar context items (no guildId)`);
-        
-        // Combine and deduplicate similar context
-        const allSimilarContext = [...similarContext, ...globalSimilarContext];
-        const uniqueSimilarContext = allSimilarContext.filter((ctx, index, self) => 
-          index === self.findIndex(c => c.id === ctx.id)
-        );
-        similarContext = uniqueSimilarContext.slice(0, 5);
-        console.log(`Combined to ${similarContext.length} total similar context items`);
+      // Filter by guildId if specified
+      if (guildId) {
+        const guildSimilarContext = similarContext.filter(ctx => ctx.guildId === guildId);
+        const globalSimilarContext = similarContext.filter(ctx => !ctx.guildId);
+        similarContext = [...guildSimilarContext, ...globalSimilarContext]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 5);
+      } else {
+        similarContext = similarContext
+          .filter(ctx => !ctx.guildId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 5);
       }
       
-      if (recentContext.length === 0 && similarContext.length === 0) {
+      console.log(`Found ${similarContext.length} similar context items`);
+      
+      if (combinedContext.length === 0 && similarContext.length === 0) {
         console.log('No context found, returning empty string');
         return '';
       }
@@ -174,9 +150,9 @@ export class FirebaseContextService {
       let contextString = '';
       
       // Add recent conversation context with better formatting
-      if (recentContext.length > 0) {
+      if (combinedContext.length > 0) {
         contextString += 'Recent conversation history:\n';
-        recentContext.reverse().forEach((ctx, index) => {
+        combinedContext.reverse().forEach((ctx, index) => {
           if (ctx.originalMessage) {
             contextString += `${index + 1}. User said: "${ctx.originalMessage}"\n`;
           }
@@ -324,19 +300,27 @@ export class FirebaseContextService {
         return { totalEvents: 0, recentActivity: 'No recent activity', topEventTypes: [] };
       }
 
-      let query = db.collection('context_memory')
+      // Simplified query without complex ordering
+      const snapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
         .where('expiresAt', '>', new Date())
-        .orderBy('expiresAt', 'desc')
-        .orderBy('createdAt', 'desc')
-        .limit(20);
+        .limit(30) // Get more items and filter/sort in memory
+        .get();
 
+      let recentContext = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Filter by guildId if specified
       if (guildId) {
-        query = query.where('guildId', '==', guildId);
+        const guildContext = recentContext.filter(ctx => ctx.guildId === guildId);
+        const globalContext = recentContext.filter(ctx => !ctx.guildId);
+        recentContext = [...guildContext, ...globalContext];
+      } else {
+        recentContext = recentContext.filter(ctx => !ctx.guildId);
       }
 
-      const snapshot = await query.get();
-      const recentContext = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort by creation date in memory
+      recentContext.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      recentContext = recentContext.slice(0, 20); // Take top 20
 
       if (!recentContext.length) {
         return { totalEvents: 0, recentActivity: 'No recent activity', topEventTypes: [] };

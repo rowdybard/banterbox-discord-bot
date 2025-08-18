@@ -233,10 +233,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Record the AI's response for future context
       if (contextId) {
         try {
-          await storage.updateContextResponse(contextId, banterResponse);
+          await ContextService.updateContextResponse(contextId, banterResponse);
         } catch (contextError) {
           console.error('Error updating context response:', contextError);
           // Don't fail banter generation if context update fails
+        }
+      }
+      
+      // Record successful banter for future context learning
+      if (contextualUserId) {
+        try {
+          await ContextService.recordBanterSuccess(contextualUserId, eventType, eventData, banterResponse, guildId);
+        } catch (contextError) {
+          console.error('Error recording banter success:', contextError);
+          // Don't fail banter generation if context recording fails
         }
       }
       
