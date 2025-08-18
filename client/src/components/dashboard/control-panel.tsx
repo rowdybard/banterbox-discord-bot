@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UserSettings, User } from "@shared/schema";
-import { isProUser } from "@shared/subscription";
 import { Crown } from "lucide-react";
 
 
@@ -119,7 +118,7 @@ export default function ControlPanel({ userId, settings, user }: ControlPanelPro
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-2">
             <h2 className="text-xl font-semibold text-white">Control Panel</h2>
-            {isProUser(user) && (
+            {(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (
               <div className="flex items-center space-x-2 text-yellow-400">
                 <Crown className="w-4 h-4" />
                 <span className="text-sm">Pro Feature</span>

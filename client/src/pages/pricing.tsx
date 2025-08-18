@@ -24,8 +24,7 @@ import {
   BarChart3,
   Settings
 } from "lucide-react";
-import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings } from "@shared/billing";
-import { getSubscriptionTier, isProUser, type SubscriptionTier } from "@shared/subscription";
+import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, type SubscriptionTier } from "@shared/billing";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -39,7 +38,7 @@ export default function PricingPage() {
   };
 
   const getCurrentTier = () => {
-    return getSubscriptionTier(user);
+    return user?.subscriptionTier || 'free';
   };
 
   const isCurrentTier = (tier: SubscriptionTier) => {
@@ -55,7 +54,7 @@ export default function PricingPage() {
   };
 
   // Check if user is already Pro or higher
-  const isAlreadyPro = isProUser(user);
+  const isAlreadyPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark via-dark-lighter to-gray-900">

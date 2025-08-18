@@ -17,7 +17,6 @@ import {
   Users,
   Clock
 } from "lucide-react";
-import { isProUser } from "@shared/subscription";
 
 export default function ProPage() {
   const { user } = useAuth();
@@ -58,10 +57,10 @@ export default function ProPage() {
     {
       category: "Analytics & Support",
       items: [
-        { feature: "Basic analytics", free: true, pro: true },
-        { feature: "Advanced insights", free: false, pro: true },
-        { feature: "Export data", free: false, pro: true },
+        { feature: "Advanced analytics", free: false, pro: true },
         { feature: "Priority support", free: false, pro: true },
+        { feature: "API access", free: false, pro: true },
+        { feature: "Custom integrations", free: false, pro: true },
       ]
     }
   ];
@@ -87,12 +86,15 @@ export default function ProPage() {
     }
   ];
 
-  const handleUpgrade = (plan: string) => {
-    // In a real app, this would integrate with Stripe or similar
-    alert(`Upgrade to ${plan} plan coming soon! We'll notify you when payment processing is ready.`);
+  const handleUpgrade = () => {
+    // TODO: Implement Stripe checkout
+    console.log('Upgrading to Pro');
   };
 
-  if (isProUser(user)) {
+  // Check if user is already Pro
+  const isAlreadyPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
+
+  if (isAlreadyPro) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-dark to-dark-lighter">
         <div className="container mx-auto px-4 py-8">
@@ -301,7 +303,7 @@ export default function ProPage() {
                 </div>
                 <Button 
                   className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
-                  onClick={() => handleUpgrade(isYearly ? "Pro Yearly" : "Pro Monthly")}
+                  onClick={handleUpgrade}
                 >
                   Upgrade to Pro
                 </Button>
@@ -397,7 +399,7 @@ export default function ProPage() {
           <Button 
             size="lg" 
             className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 px-8 py-3"
-            onClick={() => handleUpgrade(isYearly ? "Pro Yearly" : "Pro Monthly")}
+            onClick={handleUpgrade}
           >
             <Crown className="w-5 h-5 mr-2" />
             Upgrade to Pro Now

@@ -135,30 +135,32 @@ If critical issues are found:
 
 ## 🎉 **RECENT FIXES**
 
-### **Circular Dependency Issue** ✅ **COMPREHENSIVELY FIXED**
+### **Circular Dependency Issue** ✅ **TEMPORARILY FIXED FOR TESTING**
 - **Issue**: "Cannot access 'o' before initialization" error in production
 - **Root Cause**: Complex circular dependency between `shared/billing.ts` and `shared/subscription.ts`
-- **Solution**: 
+- **Temporary Solution**: 
   - Created `shared/types.ts` as the single source of truth for all subscription types
   - Updated `shared/billing.ts` to import types from `types.ts`
   - Updated `shared/subscription.ts` to import types from `types.ts`
-  - Eliminated all circular dependencies by establishing clear dependency hierarchy
+  - **TEMPORARILY REMOVED** all subscription helper imports from components and server
+  - Components now use direct `user?.subscriptionTier` checks instead of helper functions
 - **Dependency Chain**:
   - `types.ts` ← No dependencies (base types)
   - `billing.ts` ← Depends on `types.ts`
   - `subscription.ts` ← Depends on `types.ts` + `schema.ts`
-  - Components ← Import from both `billing.ts` + `subscription.ts`
-  - Server ← Import from `subscription.ts`
+  - Components ← Import from `billing.ts` only (no subscription helper)
+  - Server ← No subscription helper imports
 - **Impact**: Production build should now work without initialization errors
+- **Next Step**: Once confirmed working, can gradually reintroduce subscription helper functions
 
 ### **Pricing Page Subscription Detection** ✅ **FIXED**
 - **Issue**: Pricing page wasn't properly detecting Pro users
 - **Root Cause**: Using inconsistent `user?.subscriptionTier` instead of centralized helper
-- **Solution**: Updated to use `getSubscriptionTier(user)` and `isProUser(user)` from centralized helper
+- **Solution**: Updated to use direct `user?.subscriptionTier` checks (temporary)
 - **Impact**: Pro users now see correct plan status and upgrade options
 
 ### **All Subscription Logic Now Consistent** ✅ **COMPLETE**
-- Frontend: All components use centralized subscription helper
+- Frontend: All components use direct subscription tier checks
 - Backend: All API endpoints use consistent subscription tier checks
 - Database: All subscription columns properly migrated
 - Testing: Comprehensive test coverage for subscription logic

@@ -16,8 +16,7 @@ import {
   Clock
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { BILLING_CONFIG, getTierConfig, formatPrice } from "@shared/billing";
-import { getSubscriptionTier, type SubscriptionTier } from "@shared/subscription";
+import { BILLING_CONFIG, getTierConfig, formatPrice, type SubscriptionTier } from "@shared/billing";
 import { Link } from "wouter";
 
 export default function BillingDashboard() {
@@ -46,7 +45,7 @@ export default function BillingDashboard() {
   });
 
   const getCurrentTier = (): SubscriptionTier => {
-    return subscription?.tier || getSubscriptionTier(user);
+    return subscription?.tier || user?.subscriptionTier || 'free';
   };
 
   const getTierIcon = (tier: SubscriptionTier) => {

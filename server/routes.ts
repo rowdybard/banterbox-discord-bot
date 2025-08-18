@@ -19,7 +19,11 @@ import TwitchEventSubClient from "./twitch";
 import { DiscordService } from "./discord";
 import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
-import { getSubscriptionTier } from "@shared/subscription";
+import { elevenLabs } from "./elevenlabs";
+import { objectStorage } from "./objectStorage";
+import { firebase } from "./firebase";
+import { ContextService } from "./contextService";
+import { FirebaseContextService } from "./firebaseContextService";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
@@ -2763,27 +2767,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Use centralized subscription logic
       const subscriptionTier = user.subscriptionTier || 'free';
-      const subscriptionStatus = user.subscriptionStatus || 'active';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
-      const isTrialing = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
-      const isActive = subscriptionStatus === 'active';
 
-      const subscription = {
+      res.json({
         tier: subscriptionTier,
-        status: subscriptionStatus,
+        status: user.subscriptionStatus || 'active',
         isPro,
-        isTrialing,
-        isActive,
         trialEndsAt: user.trialEndsAt,
         currentPeriodEnd: user.currentPeriodEnd,
-      };
-
-      res.json(subscription);
+      });
     } catch (error) {
-      console.error('Error getting subscription:', error);
-      res.status(500).json({ message: "Failed to get subscription" });
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription" });
     }
   });
 
@@ -2956,15 +2952,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const { period = 'current' } = req.query; // 'current' or 'last_month'
-      
       const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
+      const subscriptionTier = user?.subscriptionTier || 'free';
 
-      const tierConfig = getTierConfig(user.subscriptionTier || 'free');
-      const usage = await storage.getUsageTracking(userId, period);
+      const tierConfig = getTierConfig(subscriptionTier);
+      const usage = await storage.getUsageTracking(userId, 'current');
       
       const usageData = {
         tier: getSubscriptionTier(user),

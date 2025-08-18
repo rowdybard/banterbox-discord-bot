@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import type { DailyStats, User } from "@shared/schema";
-import { isProUser } from "@shared/subscription";
 
 interface UsageDashboardProps {
   userId: string;
@@ -30,7 +29,7 @@ export function UsageDashboard({ userId, user }: UsageDashboardProps) {
     retry: 2,
   }) as { data: DailyStats | undefined, isLoading: boolean, error: any };
 
-  const isProUser = isProUser(user);
+  const isProUser = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
   const dailyLimit = isProUser ? Infinity : 50;
   const currentUsage = stats?.bantersGenerated || 0;
   const usagePercentage = isProUser ? 0 : Math.min((currentUsage / dailyLimit) * 100, 100);

@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAudio } from "@/hooks/use-audio";
 import { Volume2, Save, Play, Settings, Brain, Mic, Plus, Star, Crown } from "lucide-react";
 import type { UserSettings, User } from "@shared/schema";
-import { isProUser } from "@shared/subscription";
 
 const personalityPresets = {
   witty: {
@@ -92,7 +91,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
   // Fetch ElevenLabs voices for Pro users
   const { data: elevenLabsVoices } = useQuery({
     queryKey: ['/api/elevenlabs/voices'],
-    enabled: Boolean(isProUser(user) && voiceProvider === 'elevenlabs'),
+    enabled: Boolean((user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && voiceProvider === 'elevenlabs'),
     retry: false,
   });
 
@@ -352,7 +351,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
               <Mic className="h-5 w-5 text-primary" />
               <CardTitle className="text-white">Voice Settings</CardTitle>
             </div>
-            {isProUser(user) && (
+            {(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (
               <div className="flex items-center space-x-2 text-yellow-400">
                 <Crown className="w-4 h-4" />
                 <span className="text-sm">Pro Feature</span>
@@ -377,14 +376,14 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-gray-700">
                 <SelectItem value="openai">OpenAI TTS (Free)</SelectItem>
-                <SelectItem value="elevenlabs" disabled={!isProUser(user)}>
-                  ElevenLabs Premium {!isProUser(user) && '(Pro Required)'}
+                <SelectItem value="elevenlabs" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise')}>
+                  ElevenLabs Premium {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'}
                 </SelectItem>
-                <SelectItem value="custom" disabled={!isProUser(user)}>
-                  Custom Voice Clone {!isProUser(user) && '(Pro Required)'}
+                <SelectItem value="custom" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise')}>
+                  Custom Voice Clone {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'}
                 </SelectItem>
-                <SelectItem value="favorite" disabled={!isProUser(user) || !favoriteVoices?.voices?.length}>
-                  Saved Voices {!isProUser(user) && '(Pro Required)'} {(!favoriteVoices?.voices?.length) && '(No saved voices)'}
+                <SelectItem value="favorite" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') || !(favoriteVoices as any)?.voices?.length}>
+                  Saved Voices {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'} {(!(favoriteVoices as any)?.voices?.length) && '(No saved voices)'}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -394,7 +393,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
           </div>
 
           {/* ElevenLabs Voice Selection */}
-          {voiceProvider === 'elevenlabs' && isProUser(user) && (
+          {voiceProvider === 'elevenlabs' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (
             <div>
               <Label className="text-sm font-medium text-gray-300 mb-2 block">
                 ElevenLabs Voice
