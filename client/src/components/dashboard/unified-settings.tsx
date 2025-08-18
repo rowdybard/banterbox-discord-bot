@@ -88,6 +88,16 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     }
   }, [settings]);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Voice settings debug:', {
+      voiceProvider,
+      voiceId,
+      favoriteVoices: favoriteVoices?.voices,
+      settings: settings
+    });
+  }, [voiceProvider, voiceId, favoriteVoices, settings]);
+
   // Fetch ElevenLabs voices for Pro users
   const { data: elevenLabsVoices } = useQuery({
     queryKey: ['/api/elevenlabs/voices'],
@@ -213,8 +223,16 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
     } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
-      // Use baseVoiceId for downloaded voices
-      setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
+      // Check if current voiceId is already a valid favorite voice
+      const currentVoiceIsFavorite = favoriteVoices.voices.some((voice: any) => 
+        voice.baseVoiceId === voiceId || voice.voiceId === voiceId
+      );
+      
+      if (!currentVoiceIsFavorite) {
+        // Set to first favorite voice if current voice is not a favorite
+        setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
+      }
+      // If current voice is already a favorite, keep it
     }
   };
 
@@ -287,10 +305,17 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
   const handleSaveVoiceSettings = () => {
     const updates: Partial<UserSettings> = {
       voiceProvider,
-      voiceId: voiceProvider === 'elevenlabs' ? voiceId : undefined,
+      voiceId: (voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') ? voiceId : undefined,
       volume,
       autoPlay,
     };
+    
+    console.log('Saving voice settings:', {
+      voiceProvider,
+      voiceId,
+      updates,
+      favoriteVoices: favoriteVoices?.voices
+    });
     
     updateSettingsMutation.mutate(updates);
   };

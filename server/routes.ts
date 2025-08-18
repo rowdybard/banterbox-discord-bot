@@ -305,14 +305,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const favoriteVoices = userSettings?.favoriteVoices || [];
           const selectedVoiceId = userSettings?.voiceId;
           
+          console.log('Favorite voice generation debug:', {
+            voiceProvider,
+            selectedVoiceId,
+            favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+            settings: userSettings
+          });
+          
           if (selectedVoiceId && favoriteVoices.length > 0) {
             // Find the selected voice in favorites
             const selectedVoice = favoriteVoices.find((voice: any) => 
               voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
             );
             
+            console.log('Selected voice found:', selectedVoice);
+            
             if (selectedVoice) {
               const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+              console.log('Using voice ID for generation:', voiceId);
               const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
               if (audioBuffer) {
                 // Try Firebase first, fallback to object storage
@@ -323,6 +333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Fallback to default voice if no favorite voice found
           if (!audioUrl) {
+            console.log('No favorite voice found, using default voice');
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
             if (audioBuffer) {
               audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
@@ -409,19 +420,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const favoriteVoices = settings?.favoriteVoices || [];
         const selectedVoiceId = settings?.voiceId;
         
+        console.log('Favorite voice generation debug:', {
+          voiceProvider,
+          selectedVoiceId,
+          favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+          settings: settings
+        });
+        
         if (selectedVoiceId && favoriteVoices.length > 0) {
           // Find the selected voice in favorites
           const selectedVoice = favoriteVoices.find((voice: any) => 
             voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
           );
           
+          console.log('Selected voice found:', selectedVoice);
+          
           if (selectedVoice) {
             const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+            console.log('Using voice ID for generation:', voiceId);
             return await elevenLabsService.generateSpeech(enhancedText, voiceId);
           }
         }
         
         // Fallback to default voice if no favorite voice found
+        console.log('No favorite voice found, using default voice');
         return await elevenLabsService.generateSpeech(enhancedText, elevenLabsService.getDefaultVoice());
       } else {
         // Use OpenAI TTS (default)
@@ -517,14 +539,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const favoriteVoices = userSettings?.favoriteVoices || [];
           const selectedVoiceId = userSettings?.voiceId;
           
+          console.log('Favorite voice generation debug:', {
+            voiceProvider,
+            selectedVoiceId,
+            favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+            settings: userSettings
+          });
+          
           if (selectedVoiceId && favoriteVoices.length > 0) {
             // Find the selected voice in favorites
             const selectedVoice = favoriteVoices.find((voice: any) => 
               voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
             );
             
+            console.log('Selected voice found:', selectedVoice);
+            
             if (selectedVoice) {
               const voiceId = selectedVoice.baseVoiceId || selectedVoice.voiceId;
+              console.log('Using voice ID for generation:', voiceId);
               const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
               if (audioBuffer) {
                 // Try Firebase first, fallback to object storage
@@ -535,6 +567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Fallback to default voice if no favorite voice found
           if (!audioUrl) {
+            console.log('No favorite voice found, using default voice');
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
             if (audioBuffer) {
               audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
