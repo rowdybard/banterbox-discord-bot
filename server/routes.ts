@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { ObjectStorageService } from "./objectStorage";
 import { firebaseStorage } from "./firebase";
-import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings } from "@shared/schema";
+import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "node:crypto";
@@ -2780,6 +2780,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching subscription:", error);
       res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  // Update user's subscription tier (for testing/admin purposes)
+  app.put("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { tier, status = 'active' } = req.body;
+      
+      if (!tier || !['free', 'pro', 'byok', 'enterprise'].includes(tier)) {
+        return res.status(400).json({ message: "Invalid subscription tier" });
+      }
+
+      // Update user's subscription tier in database
+      const [updatedUser] = await db
+        .update(users)
+        .set({ 
+          subscriptionTier: tier,
+          subscriptionStatus: status,
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const isPro = tier === 'pro' || tier === 'byok' || tier === 'enterprise';
+
+      res.json({
+        tier: updatedUser.subscriptionTier,
+        status: updatedUser.subscriptionStatus,
+        isPro,
+        trialEndsAt: updatedUser.trialEndsAt,
+        currentPeriodEnd: updatedUser.currentPeriodEnd,
+        message: `Subscription updated to ${tier} tier`
+      });
+    } catch (error) {
+      console.error("Error updating subscription:", error);
+      res.status(500).json({ message: "Failed to update subscription" });
     }
   });
 

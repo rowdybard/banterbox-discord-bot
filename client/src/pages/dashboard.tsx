@@ -6,6 +6,7 @@ import BanterQueue from "@/components/dashboard/banter-queue";
 import StatsUpgrade from "@/components/dashboard/stats-upgrade";
 import { UsageDashboard } from "@/components/dashboard/usage-dashboard";
 import BillingDashboard from "@/components/dashboard/billing-dashboard";
+import SubscriptionUpdater from "@/components/dashboard/subscription-updater";
 import { LoadingState } from "@/components/ui/loading-state";
 
 export default function Dashboard() {
@@ -31,13 +32,13 @@ export default function Dashboard() {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
-                  <i className="fas fa-tachometer-alt text-white text-lg"></i>
+                  <i className="fas fa-chart-line text-white text-lg"></i>
                 </div>
                 <div>
                   <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                     Dashboard
                   </h1>
-                  <p className="text-xs text-gray-400">Welcome back, {user?.firstName || 'User'}! 🎉</p>
+                  <p className="text-xs text-gray-400">Monitor and control your BanterBox</p>
                 </div>
               </div>
             </div>
@@ -47,23 +48,40 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {/* Control Panel */}
-          <ControlPanel userId={userId} />
-          
-          {/* Stats and Usage */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <StatsUpgrade userId={userId} />
-            <UsageDashboard userId={userId} />
+          <div className="lg:col-span-2 xl:col-span-1">
+            <ControlPanel userId={userId} user={user} />
           </div>
-          
-          {/* Billing Dashboard */}
-          <BillingDashboard />
-          
-          {/* Banter History and Queue */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <BanterHistory userId={userId} />
+
+          {/* Subscription Updater (for testing) */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <SubscriptionUpdater />
+          </div>
+
+          {/* Banter Queue */}
+          <div className="lg:col-span-2 xl:col-span-1">
             <BanterQueue userId={userId} />
+          </div>
+
+          {/* Usage Dashboard */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <UsageDashboard userId={userId} user={user} />
+          </div>
+
+          {/* Stats & Upgrade */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <StatsUpgrade />
+          </div>
+
+          {/* Billing Dashboard */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <BillingDashboard />
+          </div>
+
+          {/* Banter History */}
+          <div className="lg:col-span-2 xl:col-span-3">
+            <BanterHistory userId={userId} />
           </div>
         </div>
       </main>

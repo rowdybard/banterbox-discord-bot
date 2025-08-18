@@ -135,6 +135,24 @@ If critical issues are found:
 
 ## 🎉 **RECENT FIXES**
 
+### **Subscription Tier Database Sync** ✅ **COMPLETE**
+- **Issue**: Frontend not syncing with database subscription tier, showing free plan instead of Pro
+- **Root Cause**: No API endpoint to update subscription tier in database
+- **Solution**: 
+  - Added `PUT /api/billing/subscription` endpoint to update user's subscription tier
+  - Created `SubscriptionUpdater` component for testing subscription updates
+  - Added validation for valid subscription tiers (`free`, `pro`, `byok`, `enterprise`)
+  - Real-time UI updates with toast notifications and query invalidation
+- **Impact**: Users can now update their subscription tier and immediately access Pro features
+
+### **Control Panel Voice & Personality Settings** ✅ **RESTORED**
+- **Issue**: Voice and personality settings were removed from control panel
+- **Solution**: 
+  - Restored `VoiceSettings` and `UnifiedSettings` components to control panel
+  - Added tabbed interface for better organization
+  - Integrated with existing subscription tier checks
+- **Impact**: Users can now manage voice and personality settings directly from control panel
+
 ### **Circular Dependency Issue** ✅ **TEMPORARILY FIXED FOR TESTING**
 - **Issue**: "Cannot access 'o' before initialization" error in production
 - **Root Cause**: Complex circular dependency between `shared/billing.ts` and `shared/subscription.ts`
