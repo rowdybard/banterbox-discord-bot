@@ -877,6 +877,33 @@ export class DiscordService {
     console.log(`Manually triggering auto-reconnect for guild ${guildId}`);
     return await this.attemptAutoReconnect(guildId);
   }
+
+  /**
+   * Clean up all voice connections and memory
+   */
+  public cleanupVoiceConnections() {
+    console.log(`Cleaning up ${this.voiceConnections.size} voice connections`);
+    
+    this.voiceConnections.forEach((connection, guildId) => {
+      try {
+        connection.destroy();
+        console.log(`Destroyed voice connection for guild ${guildId}`);
+      } catch (error) {
+        console.error(`Error destroying voice connection for guild ${guildId}:`, error);
+      }
+    });
+    
+    this.voiceConnections.clear();
+    this.voiceChannelMemory.clear();
+    this.autoReconnectAttempts.clear();
+    this.recentMessages.clear();
+    
+    // Stop auto-reconnect intervals
+    this.stopAutoReconnect();
+    this.stopHeartbeat();
+    
+    console.log('Voice connection cleanup completed');
+  }
 }
 
 export default DiscordService;

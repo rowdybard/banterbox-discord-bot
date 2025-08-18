@@ -102,6 +102,13 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     retry: false,
   });
 
+  // Fetch favorite voices
+  const { data: favoriteVoices } = useQuery({
+    queryKey: ['/api/favorites/voices'],
+    enabled: true,
+    retry: false,
+  });
+
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<UserSettings>) => {
@@ -205,6 +212,8 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       setVoiceId('');
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
+    } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
+      setVoiceId(favoriteVoices.voices[0].voiceId); // Set to first favorite voice
     }
   };
 
@@ -296,12 +305,12 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
 
   // Test current voice
   const handleTestVoice = () => {
-    if (voiceProvider === 'elevenlabs' && voiceId) {
+    if ((voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') && voiceId) {
       testVoiceMutation.mutate({ voiceId });
     } else {
       toast({
         title: "No voice to test",
-        description: "Please select an ElevenLabs voice first.",
+        description: "Please select a voice first.",
       });
     }
   };
@@ -347,6 +356,9 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                 <SelectItem value="custom" disabled={!user?.isPro}>
                   Custom Voice Clone {!user?.isPro && '(Pro Required)'}
                 </SelectItem>
+                <SelectItem value="favorite" disabled={!user?.isPro || !favoriteVoices?.voices?.length}>
+                  Saved Voices {!user?.isPro && '(Pro Required)'} {(!favoriteVoices?.voices?.length) && '(No saved voices)'}
+                </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-400 mt-1">
@@ -369,15 +381,70 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                   <SelectValue placeholder="Select a voice..." />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
+                  {/* Available ElevenLabs Voices */}
                   {(Array.isArray(elevenLabsVoices) ? elevenLabsVoices : [])?.map((voice: any) => (
                     <SelectItem key={voice.id} value={voice.id}>
                       {voice.name} - {voice.description}
                     </SelectItem>
                   ))}
+                  
+                  {/* Favorite Voices */}
+                  {favoriteVoices?.voices?.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-medium text-gray-400 border-b border-gray-600 mt-2">
+                        Saved Voices
+                      </div>
+                      {favoriteVoices.voices.map((voice: any) => (
+                        <SelectItem key={voice.id} value={voice.voiceId} className="text-white hover:bg-gray-700">
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-2">
+                              <Star className="h-3 w-3 text-yellow-400" />
+                              <span className="font-medium">{voice.name}</span>
+                            </div>
+                            <span className="text-xs text-gray-400">{voice.description || 'Custom voice'}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-400 mt-1">
                 Select your preferred ElevenLabs voice
+              </p>
+            </div>
+          )}
+
+          {/* Favorite Voice Selection */}
+          {voiceProvider === 'favorite' && user?.isPro && favoriteVoices?.voices?.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium text-gray-300 mb-2 block">
+                Saved Voice
+              </Label>
+              <Select 
+                value={voiceId}
+                onValueChange={handleVoiceIdChange}
+                data-testid="select-favorite-voice"
+              >
+                <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="Select a saved voice..." />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  {favoriteVoices.voices.map((voice: any) => (
+                    <SelectItem key={voice.id} value={voice.voiceId} className="text-white hover:bg-gray-700">
+                      <div className="flex flex-col">
+                        <div className="flex items-center space-x-2">
+                          <Star className="h-3 w-3 text-yellow-400" />
+                          <span className="font-medium">{voice.name}</span>
+                        </div>
+                        <span className="text-xs text-gray-400">{voice.description || 'Custom voice'}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                Select one of your saved voices
               </p>
             </div>
           )}
@@ -430,7 +497,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
               {updateSettingsMutation.isPending ? "Saving..." : "Save Voice Settings"}
             </Button>
             
-            {voiceProvider === 'elevenlabs' && voiceId && (
+            {(voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') && voiceId && (
               <Button
                 variant="outline"
                 onClick={handleTestVoice}

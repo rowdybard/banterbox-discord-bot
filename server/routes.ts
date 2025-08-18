@@ -21,7 +21,7 @@ import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
 
 const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "demo_key"
+  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -77,14 +77,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function broadcast(data: any) {
     const message = JSON.stringify(data);
     console.log(`Broadcasting to ${clients.size} clients:`, data);
-    clients.forEach(client => {
+    
+    // Use Array.from() to avoid modifying Set during iteration
+    const clientsToRemove: WebSocket[] = [];
+    Array.from(clients).forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);
         console.log('Message sent to client');
       } else {
-        console.log('Client not ready, removing from set');
-        clients.delete(client);
+        console.log('Client not ready, marking for removal');
+        clientsToRemove.push(client);
       }
+    });
+    
+    // Remove closed clients after iteration
+    clientsToRemove.forEach(client => {
+      clients.delete(client);
     });
   }
 

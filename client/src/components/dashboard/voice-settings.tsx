@@ -48,6 +48,13 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
     retry: false,
   });
 
+  // Fetch favorite voices
+  const { data: favoriteVoices } = useQuery({
+    queryKey: ['/api/favorites/voices'],
+    enabled: true,
+    retry: false,
+  });
+
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<UserSettings>) => {
@@ -110,6 +117,8 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
       setVoiceId('');
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
+    } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
+      setVoiceId(favoriteVoices.voices[0].voiceId); // Set to first favorite voice
     }
   };
 
@@ -197,6 +206,9 @@ export default function VoiceSettings({ userId, settings, user }: VoiceSettingsP
               </SelectItem>
               <SelectItem value="custom" disabled={!user?.isPro}>
                 Custom Voice Clone {!user?.isPro && '(Pro Required)'}
+              </SelectItem>
+              <SelectItem value="favorite" disabled={!user?.isPro || !favoriteVoices?.voices?.length}>
+                Saved Voices {!user?.isPro && '(Pro Required)'} {(!favoriteVoices?.voices?.length) && '(No saved voices)'}
               </SelectItem>
             </SelectContent>
           </Select>
