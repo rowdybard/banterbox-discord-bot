@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Zap, Key, Building, RefreshCw } from "lucide-react";
+import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle } from "lucide-react";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
@@ -75,6 +75,33 @@ export default function SubscriptionUpdater() {
     }
   };
 
+  const getTierOrder = (tier: string) => {
+    switch (tier) {
+      case 'free': return 0;
+      case 'pro': return 1;
+      case 'byok': return 2;
+      case 'enterprise': return 3;
+      default: return 0;
+    }
+  };
+
+  const canUpgradeTo = (targetTier: string) => {
+    const currentTier = user?.subscriptionTier || 'free';
+    const currentOrder = getTierOrder(currentTier);
+    const targetOrder = getTierOrder(targetTier);
+    
+    // Can only upgrade to higher tiers
+    return targetOrder > currentOrder;
+  };
+
+  const isDowngrade = (targetTier: string) => {
+    const currentTier = user?.subscriptionTier || 'free';
+    const currentOrder = getTierOrder(currentTier);
+    const targetOrder = getTierOrder(targetTier);
+    
+    return targetOrder < currentOrder;
+  };
+
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
       <CardHeader>
@@ -111,27 +138,43 @@ export default function SubscriptionUpdater() {
                   <span>Free</span>
                 </div>
               </SelectItem>
-              <SelectItem value="pro">
+              <SelectItem value="pro" disabled={!canUpgradeTo('pro')}>
                 <div className="flex items-center space-x-2">
                   <Crown className="w-4 h-4 text-yellow-400" />
                   <span>Pro</span>
+                  {!canUpgradeTo('pro') && <span className="text-xs text-gray-500">(Payment Required)</span>}
                 </div>
               </SelectItem>
-              <SelectItem value="byok">
+              <SelectItem value="byok" disabled={!canUpgradeTo('byok')}>
                 <div className="flex items-center space-x-2">
                   <Key className="w-4 h-4 text-green-400" />
                   <span>Bring Your Own Key</span>
+                  {!canUpgradeTo('byok') && <span className="text-xs text-gray-500">(Payment Required)</span>}
                 </div>
               </SelectItem>
-              <SelectItem value="enterprise">
+              <SelectItem value="enterprise" disabled={!canUpgradeTo('enterprise')}>
                 <div className="flex items-center space-x-2">
                   <Building className="w-4 h-4 text-purple-400" />
                   <span>Enterprise</span>
+                  {!canUpgradeTo('enterprise') && <span className="text-xs text-gray-500">(Payment Required)</span>}
                 </div>
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
+
+        {/* Warning for downgrades */}
+        {isDowngrade(selectedTier) && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+              <span className="text-sm text-yellow-400 font-medium">Downgrade Warning</span>
+            </div>
+            <p className="text-xs text-yellow-300 mt-1">
+              You're downgrading from {user?.subscriptionTier} to {selectedTier}. This will remove access to premium features.
+            </p>
+          </div>
+        )}
 
         <Button
           onClick={() => updateSubscriptionMutation.mutate(selectedTier)}
@@ -142,7 +185,7 @@ export default function SubscriptionUpdater() {
         </Button>
 
         <div className="text-xs text-gray-500">
-          This is for testing purposes. In production, this would be handled by Stripe.
+          This is for testing purposes. In production, upgrades would require payment through Stripe.
         </div>
       </CardContent>
     </Card>

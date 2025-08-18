@@ -135,6 +135,25 @@ If critical issues are found:
 
 ## 🎉 **RECENT FIXES**
 
+### **Subscription Tier Logic Fixed** ✅ **COMPLETE**
+- **Issue**: BYOK tier was incorrectly treated as a downgrade from Pro, and users could upgrade without payment
+- **Root Cause**: Incorrect tier ordering and missing upgrade validation
+- **Solution**: 
+  - Fixed tier hierarchy: `free < pro < byok < enterprise`
+  - Added upgrade validation to prevent unauthorized upgrades
+  - Added downgrade warnings for tier reductions
+  - Updated all components to use correct tier order
+  - Created helper functions for tier comparison
+- **Impact**: Proper subscription tier management with payment requirements
+
+### **User Account Set to Pro** ✅ **COMPLETE**
+- **Issue**: User account needed to be upgraded to Pro tier
+- **Solution**: 
+  - Created `set-user-to-pro.js` script to upgrade account
+  - Updated subscription tier to 'pro' with 'active' status
+  - All Pro features now unlocked
+- **Impact**: Full access to Pro features including ElevenLabs, custom voices, unlimited banters
+
 ### **Subscription Tier Database Sync** ✅ **COMPLETE**
 - **Issue**: Frontend not syncing with database subscription tier, showing free plan instead of Pro
 - **Root Cause**: No API endpoint to update subscription tier in database

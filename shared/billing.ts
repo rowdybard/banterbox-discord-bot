@@ -228,3 +228,25 @@ export function canUseMultipleDiscordServers(tier: SubscriptionTier): boolean {
 export function hasPrioritySupport(tier: SubscriptionTier): boolean {
   return isProOrHigher(tier);
 }
+
+export function getTierOrder(tier: SubscriptionTier): number {
+  switch (tier) {
+    case 'free': return 0;
+    case 'pro': return 1;
+    case 'byok': return 2;
+    case 'enterprise': return 3;
+    default: return 0;
+  }
+}
+
+export function canUpgradeTo(currentTier: SubscriptionTier, targetTier: SubscriptionTier): boolean {
+  const currentOrder = getTierOrder(currentTier);
+  const targetOrder = getTierOrder(targetTier);
+  return targetOrder > currentOrder;
+}
+
+export function isDowngrade(currentTier: SubscriptionTier, targetTier: SubscriptionTier): boolean {
+  const currentOrder = getTierOrder(currentTier);
+  const targetOrder = getTierOrder(targetTier);
+  return targetOrder < currentOrder;
+}

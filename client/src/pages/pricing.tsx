@@ -24,7 +24,8 @@ import {
   BarChart3,
   Settings
 } from "lucide-react";
-import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, type SubscriptionTier } from "@shared/billing";
+import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -47,7 +48,7 @@ export default function PricingPage() {
 
   const canUpgrade = (tier: SubscriptionTier) => {
     const currentTier = getCurrentTier();
-    const tierOrder = ['free', 'byok', 'pro', 'enterprise'];
+    const tierOrder = ['free', 'pro', 'byok', 'enterprise'];
     const currentIndex = tierOrder.indexOf(currentTier);
     const targetIndex = tierOrder.indexOf(tier);
     return targetIndex > currentIndex;

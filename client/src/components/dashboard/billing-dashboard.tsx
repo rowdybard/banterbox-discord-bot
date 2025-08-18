@@ -16,7 +16,8 @@ import {
   Clock
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { BILLING_CONFIG, getTierConfig, formatPrice, type SubscriptionTier } from "@shared/billing";
+import { BILLING_CONFIG, getTierConfig, formatPrice } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 import { Link } from "wouter";
 
 export default function BillingDashboard() {
@@ -61,11 +62,28 @@ export default function BillingDashboard() {
   const getTierColor = (tier: SubscriptionTier) => {
     switch (tier) {
       case 'free': return 'text-gray-400';
-      case 'pro': return 'text-primary';
+      case 'pro': return 'text-yellow-400';
       case 'byok': return 'text-green-400';
       case 'enterprise': return 'text-purple-400';
       default: return 'text-gray-400';
     }
+  };
+
+  const getTierOrder = (tier: SubscriptionTier) => {
+    switch (tier) {
+      case 'free': return 0;
+      case 'pro': return 1;
+      case 'byok': return 2;
+      case 'enterprise': return 3;
+      default: return 0;
+    }
+  };
+
+  const canUpgradeTo = (targetTier: SubscriptionTier) => {
+    const currentTier = getCurrentTier();
+    const currentOrder = getTierOrder(currentTier);
+    const targetOrder = getTierOrder(targetTier);
+    return targetOrder > currentOrder;
   };
 
   const getStatusBadge = () => {
