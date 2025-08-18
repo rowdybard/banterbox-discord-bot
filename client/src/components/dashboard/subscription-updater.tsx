@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle } from "lucide-react";
+import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock } from "lucide-react";
+import { Link } from "wouter";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
@@ -85,13 +86,13 @@ export default function SubscriptionUpdater() {
     }
   };
 
-  const canUpgradeTo = (targetTier: string) => {
+  const canDowngradeTo = (targetTier: string) => {
     const currentTier = user?.subscriptionTier || 'free';
     const currentOrder = getTierOrder(currentTier);
     const targetOrder = getTierOrder(targetTier);
     
-    // Can only upgrade to higher tiers
-    return targetOrder > currentOrder;
+    // Can only downgrade to lower tiers
+    return targetOrder < currentOrder;
   };
 
   const isDowngrade = (targetTier: string) => {
@@ -102,12 +103,26 @@ export default function SubscriptionUpdater() {
     return targetOrder < currentOrder;
   };
 
+  const isRestrictedTier = (tier: string) => {
+    return tier === 'enterprise' || tier === 'byok';
+  };
+
+  const getTierDescription = (tier: string) => {
+    switch (tier) {
+      case 'free': return 'Basic features, 50 daily banters';
+      case 'pro': return 'Premium features, unlimited banters';
+      case 'byok': return 'Bring your own API keys (contact support)';
+      case 'enterprise': return 'Custom enterprise solution (contact sales)';
+      default: return '';
+    }
+  };
+
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-white">Update Subscription Tier</CardTitle>
+            <CardTitle className="text-white">Subscription Management</CardTitle>
             <p className="text-gray-400 text-sm">
               Current tier: <span className={`${getTierColor(user?.subscriptionTier || 'free')} font-medium`}>
                 {getTierIcon(user?.subscriptionTier || 'free')} {user?.subscriptionTier || 'free'}
@@ -125,42 +140,63 @@ export default function SubscriptionUpdater() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">Select New Tier</label>
-          <Select value={selectedTier} onValueChange={setSelectedTier}>
-            <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-800 border-gray-700">
-              <SelectItem value="free">
-                <div className="flex items-center space-x-2">
-                  <Zap className="w-4 h-4 text-gray-400" />
-                  <span>Free</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="pro" disabled={!canUpgradeTo('pro')}>
-                <div className="flex items-center space-x-2">
-                  <Crown className="w-4 h-4 text-yellow-400" />
-                  <span>Pro</span>
-                  {!canUpgradeTo('pro') && <span className="text-xs text-gray-500">(Payment Required)</span>}
-                </div>
-              </SelectItem>
-              <SelectItem value="byok" disabled={!canUpgradeTo('byok')}>
-                <div className="flex items-center space-x-2">
-                  <Key className="w-4 h-4 text-green-400" />
-                  <span>Bring Your Own Key</span>
-                  {!canUpgradeTo('byok') && <span className="text-xs text-gray-500">(Payment Required)</span>}
-                </div>
-              </SelectItem>
-              <SelectItem value="enterprise" disabled={!canUpgradeTo('enterprise')}>
-                <div className="flex items-center space-x-2">
-                  <Building className="w-4 h-4 text-purple-400" />
-                  <span>Enterprise</span>
-                  {!canUpgradeTo('enterprise') && <span className="text-xs text-gray-500">(Payment Required)</span>}
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Upgrade Section */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-gray-300">Upgrade Options</h3>
+          <div className="space-y-2">
+            <Link href="/pricing">
+              <Button className="w-full bg-primary hover:bg-primary/90 text-white">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View Pricing & Upgrade
+              </Button>
+            </Link>
+            <p className="text-xs text-gray-500 text-center">
+              All upgrades require payment and are handled through our secure billing system
+            </p>
+          </div>
+        </div>
+
+        {/* Downgrade Section */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-gray-300">Downgrade Options</h3>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-300">Select New Tier</label>
+            <Select value={selectedTier} onValueChange={setSelectedTier}>
+              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="free" disabled={!canDowngradeTo('free')}>
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-4 h-4 text-gray-400" />
+                    <span>Free</span>
+                    {!canDowngradeTo('free') && <span className="text-xs text-gray-500">(Current or Higher)</span>}
+                  </div>
+                </SelectItem>
+                <SelectItem value="pro" disabled={!canDowngradeTo('pro')}>
+                  <div className="flex items-center space-x-2">
+                    <Crown className="w-4 h-4 text-yellow-400" />
+                    <span>Pro</span>
+                    {!canDowngradeTo('pro') && <span className="text-xs text-gray-500">(Current or Higher)</span>}
+                  </div>
+                </SelectItem>
+                <SelectItem value="byok" disabled={true}>
+                  <div className="flex items-center space-x-2">
+                    <Lock className="w-4 h-4 text-gray-500" />
+                    <span>Bring Your Own Key</span>
+                    <span className="text-xs text-gray-500">(Contact Support)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="enterprise" disabled={true}>
+                  <div className="flex items-center space-x-2">
+                    <Lock className="w-4 h-4 text-gray-500" />
+                    <span>Enterprise</span>
+                    <span className="text-xs text-gray-500">(Contact Sales)</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Warning for downgrades */}
@@ -176,16 +212,19 @@ export default function SubscriptionUpdater() {
           </div>
         )}
 
+        {/* Action Button */}
         <Button
           onClick={() => updateSubscriptionMutation.mutate(selectedTier)}
-          disabled={updateSubscriptionMutation.isPending || selectedTier === user?.subscriptionTier}
-          className="w-full bg-primary hover:bg-primary/90 text-white"
+          disabled={updateSubscriptionMutation.isPending || selectedTier === user?.subscriptionTier || isRestrictedTier(selectedTier)}
+          className="w-full bg-gray-600 hover:bg-gray-500 text-white"
         >
-          {updateSubscriptionMutation.isPending ? "Updating..." : "Update Subscription"}
+          {updateSubscriptionMutation.isPending ? "Updating..." : "Downgrade Subscription"}
         </Button>
 
         <div className="text-xs text-gray-500">
-          This is for testing purposes. In production, upgrades would require payment through Stripe.
+          <p>• Upgrades must be done through the pricing page</p>
+          <p>• BYOK and Enterprise tiers require manual setup</p>
+          <p>• Downgrades take effect immediately</p>
         </div>
       </CardContent>
     </Card>

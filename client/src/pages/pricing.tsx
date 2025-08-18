@@ -34,7 +34,42 @@ export default function PricingPage() {
 
   const handleUpgrade = (tier: SubscriptionTier) => {
     setSelectedTier(tier);
-    // TODO: Implement Stripe checkout
+    
+    if (tier === 'enterprise') {
+      // Enterprise requires contact sales
+      window.open('mailto:sales@banterbox.ai?subject=Enterprise%20Inquiry', '_blank');
+      return;
+    }
+    
+    if (tier === 'byok') {
+      // BYOK requires API key setup
+      const hasKeys = confirm(
+        'BYOK (Bring Your Own Key) requires you to provide your own API keys.\n\n' +
+        'You will need:\n' +
+        '• OpenAI API Key\n' +
+        '• ElevenLabs API Key\n\n' +
+        'Would you like to proceed with BYOK setup?'
+      );
+      
+      if (hasKeys) {
+        // Redirect to billing with BYOK flag
+        window.location.href = '/billing?tier=byok&setup=keys';
+        return;
+      } else {
+        // Redirect to billing without BYOK flag
+        window.location.href = '/billing?tier=byok&setup=later';
+        return;
+      }
+    }
+    
+    // Regular upgrade flow
+    if (tier === 'pro') {
+      // Redirect to billing page for Pro upgrade
+      window.location.href = '/billing?tier=pro';
+      return;
+    }
+    
+    // TODO: Implement Stripe checkout for other tiers
     console.log(`Upgrading to ${tier} tier`);
   };
 

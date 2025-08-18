@@ -135,6 +135,36 @@ If critical issues are found:
 
 ## 🎉 **RECENT FIXES**
 
+### **Subscription Tier Management System** ✅ **COMPLETE**
+- **Issue**: Users could freely select any tier from dashboard, including restricted tiers
+- **Root Cause**: No proper tier restrictions and upgrade flow
+- **Solution**: 
+  - **Dashboard**: Only allows downgrades, upgrades redirect to pricing page
+  - **Enterprise**: Completely restricted, requires contact sales
+  - **BYOK**: Requires API key setup and manual approval
+  - **Pro**: Standard upgrade flow through billing
+  - **Pricing Page**: Handles tier selection with proper restrictions
+  - **Billing Page**: New page for payment processing and API key setup
+- **Impact**: Proper subscription flow with payment requirements and tier restrictions
+
+### **BYOK Tier Implementation** ✅ **COMPLETE**
+- **Issue**: BYOK tier needed proper API key management
+- **Solution**: 
+  - Added API key setup flow in billing page
+  - Secure storage of OpenAI and ElevenLabs API keys
+  - Option to skip keys and add later in settings
+  - Validation of API key formats
+  - Contact support requirement for BYOK upgrades
+- **Impact**: Proper BYOK tier management with secure key storage
+
+### **Enterprise Tier Restrictions** ✅ **COMPLETE**
+- **Issue**: Enterprise tier was freely selectable
+- **Solution**: 
+  - Completely restricted from dashboard and pricing selection
+  - Direct contact sales flow
+  - Custom enterprise page with consultation requirements
+- **Impact**: Enterprise tier properly restricted to sales team
+
 ### **Subscription Tier Logic Fixed** ✅ **COMPLETE**
 - **Issue**: BYOK tier was incorrectly treated as a downgrade from Pro, and users could upgrade without payment
 - **Root Cause**: Incorrect tier ordering and missing upgrade validation

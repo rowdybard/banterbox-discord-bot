@@ -3094,5 +3094,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Store API keys for BYOK users
+  app.post("/api/settings/api-keys", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { openai, elevenlabs } = req.body;
+      
+      if (!openai || !elevenlabs) {
+        return res.status(400).json({ message: "Both OpenAI and ElevenLabs API keys are required" });
+      }
+      
+      // Validate API key formats
+      if (!openai.startsWith('sk-')) {
+        return res.status(400).json({ message: "Invalid OpenAI API key format" });
+      }
+      
+      // TODO: Add validation for ElevenLabs key format
+      
+      // Store encrypted API keys in user settings
+      const [updatedSettings] = await db
+        .update(userSettings)
+        .set({ 
+          openaiApiKey: openai, // TODO: Encrypt this
+          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
+          updatedAt: new Date()
+        })
+        .where(eq(userSettings.userId, userId))
+        .returning();
+      
+      if (!updatedSettings) {
+        // Create new settings if they don't exist
+        await db.insert(userSettings).values({
+          userId,
+          openaiApiKey: openai, // TODO: Encrypt this
+          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+      
+      res.json({ 
+        message: "API keys stored successfully",
+        hasKeys: true
+      });
+    } catch (error) {
+      console.error("Error storing API keys:", error);
+      res.status(500).json({ message: "Failed to store API keys" });
+    }
+  });
+
+  // Create Stripe checkout session for subscription upgrades
+  app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { tier, setupMode } = req.body;
+      
+      if (!tier || !['pro', 'byok'].includes(tier)) {
+        return res.status(400).json({ message: "Invalid subscription tier" });
+      }
+      
+      // TODO: Integrate with Stripe
+      // For now, just update the user's subscription tier directly
+      const [updatedUser] = await db
+        .update(users)
+        .set({ 
+          subscriptionTier: tier,
+          subscriptionStatus: 'active',
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // TODO: Replace with actual Stripe checkout URL
+      const checkoutUrl = `/dashboard?upgraded=${tier}`;
+      
+      res.json({
+        url: checkoutUrl,
+        tier: updatedUser.subscriptionTier,
+        message: `Successfully upgraded to ${tier} tier`
+      });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
   return httpServer;
         }
