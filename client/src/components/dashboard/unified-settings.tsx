@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAudio } from "@/hooks/use-audio";
 import { Volume2, Save, Play, Settings, Brain, Mic, Plus, Star, Crown } from "lucide-react";
 import type { UserSettings, User } from "@shared/schema";
+import { isProUser } from "@shared/subscription";
 
 const personalityPresets = {
   witty: {

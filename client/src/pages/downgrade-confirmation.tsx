@@ -45,7 +45,6 @@ export default function DowngradeConfirmationPage() {
   const targetTier: SubscriptionTier = (targetTierParam as SubscriptionTier) || 'free';
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showHiddenCosts, setShowHiddenCosts] = useState(false);
   const [confirmationStep, setConfirmationStep] = useState(1);
   
   const currentTier: SubscriptionTier = (user?.subscriptionTier as SubscriptionTier) || 'free';
@@ -87,7 +86,7 @@ export default function DowngradeConfirmationPage() {
   });
 
   const handleDowngrade = async () => {
-    if (confirmationStep < 3) {
+    if (confirmationStep < 2) {
       setConfirmationStep(confirmationStep + 1);
       return;
     }
@@ -134,7 +133,7 @@ export default function DowngradeConfirmationPage() {
             <CardHeader className="text-center">
               <div className="flex items-center justify-center space-x-2 mb-4">
                 <AlertTriangle className="w-8 h-8 text-red-400" />
-                <h1 className="text-2xl font-bold text-red-400">⚠️ Downgrade Confirmation Required</h1>
+                <h1 className="text-2xl font-bold text-red-400">⚠️ Downgrade Confirmation</h1>
               </div>
               <p className="text-red-300">
                 You're about to downgrade from {currentTierConfig.name} to {targetTierConfig.name}
@@ -143,7 +142,7 @@ export default function DowngradeConfirmationPage() {
           </Card>
 
           {/* Confirmation Steps */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className={`p-4 rounded-lg border-2 ${confirmationStep >= 1 ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-gray-800/50'}`}>
               <div className="text-center">
                 <div className={`w-8 h-8 rounded-full mx-auto mb-2 flex items-center justify-center ${confirmationStep >= 1 ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
@@ -157,15 +156,7 @@ export default function DowngradeConfirmationPage() {
                 <div className={`w-8 h-8 rounded-full mx-auto mb-2 flex items-center justify-center ${confirmationStep >= 2 ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
                   {confirmationStep >= 2 ? <Check className="w-4 h-4" /> : '2'}
                 </div>
-                <p className="text-sm font-medium">Step 2: Acknowledge Risks</p>
-              </div>
-            </div>
-            <div className={`p-4 rounded-lg border-2 ${confirmationStep >= 3 ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-gray-800/50'}`}>
-              <div className="text-center">
-                <div className={`w-8 h-8 rounded-full mx-auto mb-2 flex items-center justify-center ${confirmationStep >= 3 ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
-                  {confirmationStep >= 3 ? <Check className="w-4 h-4" /> : '3'}
-                </div>
-                <p className="text-sm font-medium">Step 3: Final Confirmation</p>
+                <p className="text-sm font-medium">Step 2: Confirm Downgrade</p>
               </div>
             </div>
           </div>
@@ -176,7 +167,7 @@ export default function DowngradeConfirmationPage() {
               <CardHeader>
                 <CardTitle className="text-white flex items-center space-x-2">
                   <TrendingDown className="w-5 h-5 text-red-400" />
-                  <span>What You'll Lose</span>
+                  <span>What's Changing</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -217,10 +208,10 @@ export default function DowngradeConfirmationPage() {
                       <h3 className="text-lg font-semibold text-white">Downgrading to: {targetTierConfig.name}</h3>
                     </div>
                     <div className="space-y-2 text-sm">
-                                             <div className="flex items-center space-x-2 text-red-400">
-                         <X className="w-4 h-4" />
-                         <span>Only {targetTierConfig.limits.dailyBanters || 50} daily banters</span>
-                       </div>
+                      <div className="flex items-center space-x-2 text-red-400">
+                        <X className="w-4 h-4" />
+                        <span>Only {targetTierConfig.limits.dailyBanters || 50} daily banters</span>
+                      </div>
                       <div className="flex items-center space-x-2 text-red-400">
                         <X className="w-4 h-4" />
                         <span>Basic voices only</span>
@@ -241,85 +232,20 @@ export default function DowngradeConfirmationPage() {
                   </div>
                 </div>
 
-                {/* Hidden Costs Warning */}
-                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <DollarSign className="w-4 h-4 text-yellow-400" />
-                    <span className="text-yellow-400 font-medium">Hidden Costs You May Not Have Considered</span>
-                  </div>
-                  <p className="text-sm text-yellow-300">
-                    Downgrading may result in additional charges for exceeding limits, 
-                    reduced productivity, and potential data loss. Are you sure this is what you want?
-                  </p>
-                </div>
-
                 <div className="flex space-x-4">
                   <Button onClick={handleCancel} variant="outline" className="flex-1 border-gray-600 text-gray-300">
                     Cancel Downgrade
                   </Button>
                   <Button onClick={handleDowngrade} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                    Continue to Step 2
+                    Continue to Confirmation
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Step 2: Acknowledge Risks */}
+          {/* Step 2: Final Confirmation */}
           {confirmationStep === 2 && (
-            <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center space-x-2">
-                  <AlertTriangle className="w-5 h-5 text-red-400" />
-                  <span>Risk Acknowledgment</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                    <h4 className="text-red-400 font-medium mb-2">⚠️ Critical Warnings</h4>
-                    <ul className="text-sm text-red-300 space-y-1">
-                      <li>• Your current settings and customizations may be lost</li>
-                      <li>• Any ongoing processes will be interrupted</li>
-                      <li>• You may lose access to premium features immediately</li>
-                      <li>• Re-upgrading later may require additional setup</li>
-                    </ul>
-                  </div>
-
-                  <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-                    <h4 className="text-orange-400 font-medium mb-2">📊 Impact on Your Workflow</h4>
-                    <ul className="text-sm text-orange-300 space-y-1">
-                      <li>• Reduced daily banter limit: {currentTierConfig.limits.dailyBanters === 999999 ? 'Unlimited' : currentTierConfig.limits.dailyBanters} → {targetTierConfig.limits.dailyBanters}</li>
-                      <li>• Loss of premium voice options</li>
-                      <li>• Limited personality customization</li>
-                      <li>• Standard support response times</li>
-                    </ul>
-                  </div>
-
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                    <h4 className="text-blue-400 font-medium mb-2">💡 Consider This Instead</h4>
-                    <p className="text-sm text-blue-300">
-                      Many users find that staying on their current plan provides better value 
-                      and avoids the hassle of re-upgrading later. Your current plan includes 
-                      premium features that enhance your experience significantly.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex space-x-4">
-                  <Button onClick={handleCancel} variant="outline" className="flex-1 border-gray-600 text-gray-300">
-                    Keep Current Plan
-                  </Button>
-                  <Button onClick={handleDowngrade} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                    I Understand, Continue
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 3: Final Confirmation */}
-          {confirmationStep === 3 && (
             <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
               <CardHeader>
                 <CardTitle className="text-white flex items-center space-x-2">
@@ -332,19 +258,13 @@ export default function DowngradeConfirmationPage() {
                   <div className="w-16 h-16 bg-red-500/20 rounded-full mx-auto flex items-center justify-center">
                     <AlertTriangle className="w-8 h-8 text-red-400" />
                   </div>
-                  <h3 className="text-xl font-semibold text-white">Last Chance to Reconsider</h3>
+                  <h3 className="text-xl font-semibold text-white">Are you sure?</h3>
                   <p className="text-gray-300">
-                    You're about to permanently downgrade from <span className="text-yellow-400 font-medium">{currentTierConfig.name}</span> to <span className="text-gray-400 font-medium">{targetTierConfig.name}</span>.
+                    You're about to downgrade from <span className="text-yellow-400 font-medium">{currentTierConfig.name}</span> to <span className="text-gray-400 font-medium">{targetTierConfig.name}</span>.
                   </p>
-                </div>
-
-                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-red-400 font-medium mb-2">This action cannot be easily undone</p>
-                    <p className="text-sm text-red-300">
-                      You'll need to go through the full upgrade process again if you change your mind later.
-                    </p>
-                  </div>
+                  <p className="text-sm text-gray-400">
+                    This will reduce your daily banter limit from {currentTierConfig.limits.dailyBanters === 999999 ? 'Unlimited' : currentTierConfig.limits.dailyBanters} to {targetTierConfig.limits.dailyBanters} and remove premium features.
+                  </p>
                 </div>
 
                 <div className="space-y-3">
@@ -355,15 +275,9 @@ export default function DowngradeConfirmationPage() {
                     </label>
                   </div>
                   <div className="flex items-center space-x-2 text-sm text-gray-400">
-                    <input type="checkbox" id="confirm-loss" className="rounded" />
-                    <label htmlFor="confirm-loss">
-                      I acknowledge that some settings and customizations may be lost
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-400">
                     <input type="checkbox" id="confirm-final" className="rounded" />
                     <label htmlFor="confirm-final">
-                      I want to proceed with the downgrade despite the warnings
+                      I want to proceed with the downgrade
                     </label>
                   </div>
                 </div>

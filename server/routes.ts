@@ -7,6 +7,7 @@ import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
+import { getTierConfig, getSubscriptionTier } from "@shared/billing";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
 import { setupGoogleAuth } from "./googleAuth";
