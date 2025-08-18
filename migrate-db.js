@@ -1,5 +1,6 @@
 // Comprehensive database migration to add missing columns - Fixed schema issues
-import { Pool } from 'pg';
+import pkg from 'pg';
+const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
