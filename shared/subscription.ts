@@ -1,7 +1,5 @@
-import type { SubscriptionTier } from './billing';
+import type { SubscriptionTier, SubscriptionStatus } from './billing';
 import type { User } from './schema';
-
-export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing';
 
 export interface SubscriptionInfo {
   tier: SubscriptionTier;
