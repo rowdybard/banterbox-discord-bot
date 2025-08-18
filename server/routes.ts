@@ -105,12 +105,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words.",
-              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively.",
-              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks.",
-              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP!",
-              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing.",
-              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful."
+              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words. Use plain text only.",
+              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only.",
+              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only.",
+              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only.",
+              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only.",
+              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
@@ -167,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested."
+            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. Use plain text only - no markdown formatting, asterisks, or special characters. Write naturally as if speaking."
           },
           {
             role: "user",
