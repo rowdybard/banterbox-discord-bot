@@ -89,56 +89,58 @@ export class FirebaseContextService {
 
       console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
       
-      // Simplified query: Get recent context without complex ordering
-      // We'll do filtering and sorting in memory to avoid complex indexes
+      // Ultra-simplified query: Get all context for user and filter in memory
+      // This avoids any composite index requirements
       const recentContextSnapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
-        .where('expiresAt', '>', new Date())
-        .limit(20) // Get more items and filter in memory
+        .limit(50) // Get more items and filter in memory
         .get();
 
       const allContext = recentContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
+      // Filter by expiration date in memory
+      const validContext = allContext.filter(ctx => {
+        const expiresAt = ctx.expiresAt?.toDate ? ctx.expiresAt.toDate() : new Date(ctx.expiresAt);
+        return expiresAt > new Date();
+      });
+      
       // Filter by guildId if specified
       const guildContext = guildId 
-        ? allContext.filter(ctx => ctx.guildId === guildId)
-        : allContext.filter(ctx => !ctx.guildId);
+        ? validContext.filter(ctx => ctx.guildId === guildId)
+        : validContext.filter(ctx => !ctx.guildId);
       
       // Get global context (no guildId) if we have guildId specified
       const globalContext = guildId 
-        ? allContext.filter(ctx => !ctx.guildId)
+        ? validContext.filter(ctx => !ctx.guildId)
         : [];
       
       // Combine and sort by creation date
       const combinedContext = [...guildContext, ...globalContext]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        })
         .slice(0, 8); // Take top 8 most recent
       
       console.log(`Found ${combinedContext.length} total recent context items`);
       
-      // Get similar event context (simplified query)
-      const similarContextSnapshot = await db.collection('context_memory')
-        .where('userId', '==', userId)
-        .where('eventType', '==', currentEventType)
-        .where('expiresAt', '>', new Date())
-        .limit(10) // Get more and filter in memory
-        .get();
-      
-      let similarContext = similarContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Filter by guildId if specified
-      if (guildId) {
-        const guildSimilarContext = similarContext.filter(ctx => ctx.guildId === guildId);
-        const globalSimilarContext = similarContext.filter(ctx => !ctx.guildId);
-        similarContext = [...guildSimilarContext, ...globalSimilarContext]
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 5);
-      } else {
-        similarContext = similarContext
-          .filter(ctx => !ctx.guildId)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 5);
-      }
+      // Get similar event context (filter in memory instead of query)
+      const similarContext = validContext
+        .filter(ctx => ctx.eventType === currentEventType)
+        .filter(ctx => {
+          if (guildId) {
+            return ctx.guildId === guildId || !ctx.guildId;
+          } else {
+            return !ctx.guildId;
+          }
+        })
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 5);
       
       console.log(`Found ${similarContext.length} similar context items`);
       
@@ -300,14 +302,19 @@ export class FirebaseContextService {
         return { totalEvents: 0, recentActivity: 'No recent activity', topEventTypes: [] };
       }
 
-      // Simplified query without complex ordering
+      // Ultra-simplified query: Get all context for user and filter in memory
       const snapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
-        .where('expiresAt', '>', new Date())
-        .limit(30) // Get more items and filter/sort in memory
+        .limit(50) // Get more items and filter/sort in memory
         .get();
 
       let recentContext = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Filter by expiration date in memory
+      recentContext = recentContext.filter(ctx => {
+        const expiresAt = ctx.expiresAt?.toDate ? ctx.expiresAt.toDate() : new Date(ctx.expiresAt);
+        return expiresAt > new Date();
+      });
 
       // Filter by guildId if specified
       if (guildId) {
@@ -319,7 +326,11 @@ export class FirebaseContextService {
       }
 
       // Sort by creation date in memory
-      recentContext.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      recentContext.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      });
       recentContext = recentContext.slice(0, 20); // Take top 20
 
       if (!recentContext.length) {
