@@ -7,7 +7,7 @@ import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { getTierConfig, getSubscriptionTier } from "@shared/billing";
+import { getTierConfig } from "@shared/billing";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
 import { setupGoogleAuth } from "./googleAuth";
@@ -20,10 +20,6 @@ import TwitchEventSubClient from "./twitch";
 import { DiscordService } from "./discord";
 import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
-import { elevenLabs } from "./elevenlabs";
-import { objectStorage } from "./objectStorage";
-import { firebase } from "./firebase";
-import { ContextService } from "./contextService";
 import { FirebaseContextService } from "./firebaseContextService";
 
 const openai = new OpenAI({ 
@@ -3044,7 +3040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const usage = await storage.getUsageTracking(userId, 'current');
       
       const usageData = {
-        tier: getSubscriptionTier(user),
+        tier: subscriptionTier,
         limits: tierConfig.limits,
         current: {
           bantersGenerated: usage?.bantersGenerated || 0,
