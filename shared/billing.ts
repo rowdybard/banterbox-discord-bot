@@ -1,5 +1,4 @@
-export type SubscriptionTier = 'free' | 'pro' | 'byok' | 'enterprise';
-export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing';
+import type { SubscriptionTier, SubscriptionStatus } from './types';
 
 export interface PricingTier {
   id: SubscriptionTier;

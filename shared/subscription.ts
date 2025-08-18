@@ -1,18 +1,8 @@
-import type { SubscriptionTier, SubscriptionStatus } from './billing';
+import type { SubscriptionTier, SubscriptionStatus, SubscriptionInfo } from './types';
 import type { User } from './schema';
 
 // Re-export types for convenience
-export type { SubscriptionTier, SubscriptionStatus };
-
-export interface SubscriptionInfo {
-  tier: SubscriptionTier;
-  status: SubscriptionStatus;
-  isPro: boolean;
-  isTrialing: boolean;
-  isActive: boolean;
-  trialEndsAt?: Date;
-  currentPeriodEnd?: Date;
-}
+export type { SubscriptionTier, SubscriptionStatus, SubscriptionInfo };
 
 /**
  * Centralized subscription helper - SINGLE SOURCE OF TRUTH
