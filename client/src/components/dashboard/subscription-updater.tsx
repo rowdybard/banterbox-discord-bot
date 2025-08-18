@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Zap, Key, Building } from "lucide-react";
+import { Crown, Zap, Key, Building, RefreshCw } from "lucide-react";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
@@ -35,7 +35,7 @@ export default function SubscriptionUpdater() {
         description: `Successfully updated to ${data.tier} tier`,
       });
       // Invalidate user data to refresh the UI
-      queryClient.invalidateQueries({ queryKey: ['user'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
     },
     onError: () => {
@@ -46,6 +46,14 @@ export default function SubscriptionUpdater() {
       });
     },
   });
+
+  const refreshUserData = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    toast({
+      title: "Refreshed",
+      description: "User data refreshed from server",
+    });
+  };
 
   const getTierIcon = (tier: string) => {
     switch (tier) {
@@ -70,12 +78,24 @@ export default function SubscriptionUpdater() {
   return (
     <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
       <CardHeader>
-        <CardTitle className="text-white">Update Subscription Tier</CardTitle>
-        <p className="text-gray-400 text-sm">
-          Current tier: <span className={`${getTierColor(user?.subscriptionTier || 'free')} font-medium`}>
-            {getTierIcon(user?.subscriptionTier || 'free')} {user?.subscriptionTier || 'free'}
-          </span>
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-white">Update Subscription Tier</CardTitle>
+            <p className="text-gray-400 text-sm">
+              Current tier: <span className={`${getTierColor(user?.subscriptionTier || 'free')} font-medium`}>
+                {getTierIcon(user?.subscriptionTier || 'free')} {user?.subscriptionTier || 'free'}
+              </span>
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshUserData}
+            className="bg-gray-800 hover:bg-gray-700 text-white border-gray-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

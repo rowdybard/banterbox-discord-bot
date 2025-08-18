@@ -7,6 +7,7 @@ import StatsUpgrade from "@/components/dashboard/stats-upgrade";
 import { UsageDashboard } from "@/components/dashboard/usage-dashboard";
 import BillingDashboard from "@/components/dashboard/billing-dashboard";
 import SubscriptionUpdater from "@/components/dashboard/subscription-updater";
+import UserDebug from "@/components/dashboard/user-debug";
 import { LoadingState } from "@/components/ui/loading-state";
 
 export default function Dashboard() {
@@ -52,6 +53,11 @@ export default function Dashboard() {
           {/* Control Panel */}
           <div className="lg:col-span-2 xl:col-span-1">
             <ControlPanel userId={userId} user={user} />
+          </div>
+
+          {/* User Debug (for testing) */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <UserDebug />
           </div>
 
           {/* Subscription Updater (for testing) */}
