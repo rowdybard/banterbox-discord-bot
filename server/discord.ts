@@ -29,6 +29,11 @@ export class DiscordService {
   private recentMessages: Map<string, number> = new Map(); // messageId -> timestamp
   private messageCooldown: number = 5000; // 5 seconds cooldown between responses to same message
 
+  // Multi-server connection limits and validation
+  private readonly MAX_VOICE_CONNECTIONS = 10; // Discord's limit is higher, but we set a reasonable limit
+  private readonly GUILD_VALIDATION_INTERVAL = 300000; // 5 minutes
+  private guildValidationInterval?: NodeJS.Timeout;
+  
   constructor(config: DiscordConfig) {
     this.config = config;
     this.client = new Client({
@@ -299,21 +304,32 @@ export class DiscordService {
 
     // Monitor connection health every 30 seconds
     this.heartbeatInterval = setInterval(() => {
-      try {
-        if (this.client.isReady()) {
-          // Check if client is still healthy (doesn't need manual ping in modern Discord.js)
-          const ping = this.client.ws.ping;
-          console.log(`Discord heartbeat check - connection healthy (ping: ${ping}ms)`); // Fixed heartbeat error
-          
-          // Check for orphaned voice connections (connection exists but bot not in channel)
-          this.checkOrphanedVoiceConnections();
-        } else {
-          console.warn('Discord client not ready during heartbeat check');
-        }
-      } catch (error) {
-        console.error('Error during Discord heartbeat check:', error);
+      if (!this.client.isReady()) {
+        console.log('Discord client not ready - skipping heartbeat');
+        return;
       }
+
+      // Check for orphaned voice connections
+      this.checkOrphanedVoiceConnections();
+      
+      // Log connection status
+      const status = this.getConnectionStatus();
+      console.log('Discord heartbeat - Status:', status);
     }, 30000);
+
+    // Start guild validation interval
+    if (this.guildValidationInterval) {
+      clearInterval(this.guildValidationInterval);
+    }
+
+    // Validate guild connections every 5 minutes
+    this.guildValidationInterval = setInterval(() => {
+      if (this.client.isReady()) {
+        this.validateGuildConnections();
+      }
+    }, this.GUILD_VALIDATION_INTERVAL);
+
+    console.log('Discord heartbeat and guild validation started');
   }
 
   private stopHeartbeat() {
@@ -321,6 +337,13 @@ export class DiscordService {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = undefined;
     }
+    
+    if (this.guildValidationInterval) {
+      clearInterval(this.guildValidationInterval);
+      this.guildValidationInterval = undefined;
+    }
+    
+    console.log('Discord heartbeat and guild validation stopped');
   }
 
   private stopAutoReconnect() {
@@ -387,9 +410,21 @@ export class DiscordService {
     this.banterCallback = callback;
   }
 
-  // Join a voice channel for streaming
+  // Join voice channel with connection limit checking
   async joinVoiceChannel(guildId: string, channelId: string): Promise<boolean> {
     try {
+      // Check connection limits
+      if (this.voiceConnections.size >= this.MAX_VOICE_CONNECTIONS) {
+        console.warn(`Cannot join voice channel: Maximum connections (${this.MAX_VOICE_CONNECTIONS}) reached`);
+        return false;
+      }
+
+      // Check if already connected to this guild
+      if (this.voiceConnections.has(guildId)) {
+        console.log(`Already connected to voice channel in guild ${guildId}`);
+        return true;
+      }
+
       const guild = this.client.guilds.cache.get(guildId);
       if (!guild) {
         console.error(`Guild ${guildId} not found`);
@@ -454,7 +489,7 @@ export class DiscordService {
 
       this.voiceConnections.set(guildId, connection);
       console.log(`Bot joined voice channel ${voiceChannel.name} in guild ${guild.name} - streaming mode activated`);
-      console.log(`Voice connections map now contains ${this.voiceConnections.size} entries for guilds: ${Array.from(this.voiceConnections.keys())}`);
+      console.log(`Voice connections map now contains ${this.voiceConnections.size}/${this.MAX_VOICE_CONNECTIONS} entries for guilds: ${Array.from(this.voiceConnections.keys())}`);
       return true;
     } catch (error) {
       console.error('Error joining voice channel:', error);
@@ -903,6 +938,62 @@ export class DiscordService {
     this.stopHeartbeat();
     
     console.log('Voice connection cleanup completed');
+  }
+
+  // Validate guild connections and clean up stale links
+  async validateGuildConnections() {
+    try {
+      console.log('🔍 Validating guild connections...');
+      const { storage } = await import('./storage');
+      
+      // Get all active guild links from database
+      const allGuildLinks = await storage.getAllActiveGuildLinks();
+      const currentGuildIds = new Set(this.client.guilds.cache.keys());
+      
+      let staleLinks = 0;
+      let validLinks = 0;
+      
+      for (const guildLink of allGuildLinks) {
+        if (currentGuildIds.has(guildLink.guildId)) {
+          validLinks++;
+          console.log(`✅ Guild ${guildLink.guildId} is valid and connected`);
+        } else {
+          staleLinks++;
+          console.log(`❌ Guild ${guildLink.guildId} is stale - bot not in guild`);
+          
+          // Clean up stale guild link
+          try {
+            await storage.deactivateGuildLink(guildLink.guildId);
+            await storage.clearCurrentStreamer(guildLink.guildId);
+            console.log(`🧹 Cleaned up stale guild link: ${guildLink.guildId}`);
+          } catch (error) {
+            console.error(`Error cleaning up stale guild link ${guildLink.guildId}:`, error);
+          }
+        }
+      }
+      
+      console.log(`📊 Guild validation complete: ${validLinks} valid, ${staleLinks} stale links cleaned up`);
+      
+      // Log current guild status
+      console.log(`🤖 Bot is currently in ${currentGuildIds.size} guilds:`, Array.from(currentGuildIds));
+      
+    } catch (error) {
+      console.error('Error validating guild connections:', error);
+    }
+  }
+
+  // Get connection statistics for monitoring
+  getConnectionStats() {
+    return {
+      totalGuilds: this.client.guilds.cache.size,
+      voiceConnections: this.voiceConnections.size,
+      maxVoiceConnections: this.MAX_VOICE_CONNECTIONS,
+      autoReconnectEnabled: this.autoReconnectEnabled,
+      voiceChannelMemory: this.voiceChannelMemory.size,
+      autoReconnectAttempts: this.autoReconnectAttempts.size,
+      isHealthy: this.isHealthy(),
+      isReconnecting: this.isReconnecting
+    };
   }
 }
 

@@ -50,6 +50,7 @@ export interface IStorage {
   getGuildLink(guildId: string): Promise<GuildLink | undefined>;
   createGuildLink(guildLink: InsertGuildLink): Promise<GuildLink>;
   deactivateGuildLink(guildId: string): Promise<void>;
+  getAllActiveGuildLinks(): Promise<GuildLink[]>;
   getGuildSettings(guildId: string): Promise<GuildSettings | undefined>;
   upsertGuildSettings(settings: InsertGuildSettings): Promise<GuildSettings>;
   
@@ -492,6 +493,10 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async getAllActiveGuildLinks(): Promise<GuildLink[]> {
+    return Array.from(this.guildLinks.values()).filter(link => link.active);
+  }
+
   async getGuildSettings(guildId: string): Promise<GuildSettings | undefined> {
     return this.guildSettings.get(guildId);
   }
@@ -859,6 +864,11 @@ export class DatabaseStorage implements IStorage {
       .update(guildLinks)
       .set({ active: false })
       .where(eq(guildLinks.guildId, guildId));
+  }
+
+  async getAllActiveGuildLinks(): Promise<GuildLink[]> {
+    const guildLinks = await db.select().from(guildLinks).where(eq(guildLinks.active, true));
+    return guildLinks;
   }
 
   async getGuildSettings(guildId: string): Promise<GuildSettings | undefined> {

@@ -151,34 +151,34 @@ export class FirebaseContextService {
       
       let contextString = '';
       
-      // Add recent conversation context with better formatting
+      // Add recent conversation context with natural, conversational formatting
       if (combinedContext.length > 0) {
-        contextString += 'Recent conversation history:\n';
+        contextString += 'Recent conversation:\n';
         combinedContext.reverse().forEach((ctx, index) => {
           if (ctx.originalMessage) {
-            contextString += `${index + 1}. User said: "${ctx.originalMessage}"\n`;
+            contextString += `- Someone said: "${ctx.originalMessage}"\n`;
           }
           if (ctx.banterResponse) {
-            contextString += `   You responded: "${ctx.banterResponse}"\n`;
+            contextString += `- You replied: "${ctx.banterResponse}"\n`;
           }
         });
         contextString += '\n';
       }
       
-      // Add similar event context for variety
-      if (similarContext.length > 0) {
-        contextString += `Previous responses to similar ${currentEventType} events:\n`;
-        similarContext.forEach((ctx, index) => {
+      // Add similar event context for variety (only if we have recent context)
+      if (similarContext.length > 0 && combinedContext.length > 0) {
+        contextString += `You\'ve responded to similar things before:\n`;
+        similarContext.slice(0, 3).forEach((ctx, index) => {
           if (ctx.banterResponse) {
-            contextString += `${index + 1}. "${ctx.banterResponse}"\n`;
+            contextString += `- "${ctx.banterResponse}"\n`;
           }
         });
         contextString += '\n';
       }
       
-      // Add improved context instruction with specific guidance for car mentions
+      // Add natural context instruction - less robotic, more conversational
       if (contextString) {
-        contextString += 'IMPORTANT: Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. If someone mentioned something specific (like a car model, hobby, etc.), reference it naturally in your response. For example, if someone mentioned they drive an Altima, remember that and refer to it in future responses. Be creative and varied while staying connected to the conversation.';
+        contextString += 'Keep the conversation flowing naturally. If someone mentioned something specific earlier (like what car they drive, their job, etc.), feel free to reference it. But don\'t force it - only bring it up if it fits naturally. Keep your responses fresh and varied.';
       }
       
       return contextString;

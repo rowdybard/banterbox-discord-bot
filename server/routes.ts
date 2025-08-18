@@ -100,7 +100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string, guildId?: string): Promise<string> {
     try {
       // Get personality settings from web dashboard (source of truth)
-      let personalityContext = "Be a human-like personality. Make responses under 25 words with natural conversation. Avoid AI cliches and excessive metaphors. Be creative and varied in your responses.";
+      let personalityContext = "Be conversational and natural. Keep responses under 25 words. Be creative and varied in your responses.";
       
       // Always use user settings from web dashboard for personality
       if (userId) {
@@ -113,13 +113,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Use plain text only. Be creative and avoid repetition.",
-              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only. Show genuine interest and vary your responses.",
-              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only. Mix up your sarcastic style.",
-              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only. Vary your hype energy levels.",
-              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only. Mix up your chill vibes.",
-              context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Use plain text only. Make connections to past events when appropriate.",
-              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
+              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Be creative and avoid repetition.",
+              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Show genuine interest and vary your responses.",
+              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Mix up your sarcastic style.",
+              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Vary your hype energy levels.",
+              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Mix up your chill vibes.",
+              context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Make connections to past events when appropriate.",
+              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Vary your roasting style."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.context;
           }
@@ -159,9 +159,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let prompt = "";
       
-      // Add context to prompt if available
+      // Add context to prompt if available - make it feel more natural
       if (contextString) {
-        prompt = `${personalityContext}\n\nContext:\n${contextString}\n\n`;
+        prompt = `${personalityContext}\n\n${contextString}\n\n`;
       } else {
         prompt = `${personalityContext}\n\n`;
       }
@@ -1137,30 +1137,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Bot not connected, treat all as unverified
         verifiedGuilds = activeGuildLinks.map(link => ({
           guildId: link.guildId,
+          guildName: 'Unknown',
           linkedByUserId: link.linkedByUserId,
           createdAt: link.createdAt,
           verified: false
         }));
       }
-  
-      // Get Discord service status
-      const discordServiceStatus = globalDiscordService ? globalDiscordService.getConnectionStatus() : null;
-      const autoReconnectStatus = globalDiscordService ? globalDiscordService.getAutoReconnectStatus() : null;
-  
+      
       res.json({
-        isConnected: verifiedGuilds.length > 0,
-        connectedGuilds: verifiedGuilds.length,
-        totalGuildLinks: activeGuildLinks.length,
-        staleConnections,
-        botOnline: !!globalDiscordService,
-        botHealthy: globalDiscordService?.isHealthy() || false,
+        success: true,
         guilds: verifiedGuilds,
-        serviceStatus: discordServiceStatus,
-        autoReconnect: autoReconnectStatus
+        totalGuilds: verifiedGuilds.length,
+        staleConnections,
+        botConnected: !!globalDiscordService,
+        botHealthy: globalDiscordService?.isHealthy() || false
       });
     } catch (error) {
       console.error('Error getting Discord status:', error);
       res.status(500).json({ message: "Failed to get Discord status" });
+    }
+  });
+
+  // Get detailed multi-server connectivity statistics
+  app.get("/api/discord/connectivity-stats", isAuthenticated, async (req, res) => {
+    try {
+      if (!globalDiscordService) {
+        return res.json({
+          success: false,
+          message: "Discord bot not connected",
+          stats: null
+        });
+      }
+
+      const connectionStats = globalDiscordService.getConnectionStats();
+      const currentGuilds = globalDiscordService.getCurrentGuilds();
+      
+      // Get all active guild links from database
+      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.active, true));
+      
+      // Calculate connectivity metrics
+      const totalLinkedGuilds = allGuildLinks.length;
+      const actuallyConnectedGuilds = currentGuilds.length;
+      const connectedButNotLinked = currentGuilds.filter(guild => 
+        !allGuildLinks.some(link => link.guildId === guild.id)
+      ).length;
+      const linkedButNotConnected = allGuildLinks.filter(link => 
+        !currentGuilds.some(guild => guild.id === link.guildId)
+      ).length;
+
+      res.json({
+        success: true,
+        stats: {
+          ...connectionStats,
+          currentGuilds: currentGuilds,
+          totalLinkedGuilds,
+          actuallyConnectedGuilds,
+          connectedButNotLinked,
+          linkedButNotConnected,
+          connectivityHealth: {
+            percentage: totalLinkedGuilds > 0 ? (actuallyConnectedGuilds / totalLinkedGuilds) * 100 : 0,
+            status: linkedButNotConnected > 0 ? 'warning' : 'healthy'
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error getting connectivity stats:', error);
+      res.status(500).json({ message: "Failed to get connectivity stats" });
     }
   });
 
@@ -2354,13 +2396,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let personalityPrompt = prompt;
       if (!personalityPrompt && personality && personality !== 'custom') {
         const personalityPrompts = {
-          witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Use plain text only. Be creative and avoid repetition.",
-          friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only. Show genuine interest and vary your responses.",
-          sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only. Mix up your sarcastic style.",
-          hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only. Vary your hype energy levels.",
-          chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only. Mix up your chill vibes.",
-          context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Use plain text only. Make connections to past events when appropriate.",
-          roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
+          witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Be creative and avoid repetition.",
+          friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Show genuine interest and vary your responses.",
+          sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Mix up your sarcastic style.",
+          hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Vary your hype energy levels.",
+          chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Mix up your chill vibes.",
+          context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Make connections to past events when appropriate.",
+          roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Vary your roasting style."
         };
         personalityPrompt = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
       }
