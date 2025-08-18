@@ -107,7 +107,9 @@ export default function SubscriptionUpdater() {
   };
 
   const isRestrictedTier = (tier: string) => {
-    return tier === 'enterprise' || tier === 'byok';
+    // Only Enterprise is restricted from selection
+    // BYOK can be selected for downgrades from Enterprise
+    return tier === 'enterprise';
   };
 
   const getTierDescription = (tier: string) => {
@@ -200,11 +202,11 @@ export default function SubscriptionUpdater() {
                     {!canDowngradeTo('pro') && <span className="text-xs text-gray-500">(Current or Higher)</span>}
                   </div>
                 </SelectItem>
-                <SelectItem value="byok" disabled={true}>
+                <SelectItem value="byok" disabled={!canDowngradeTo('byok')}>
                   <div className="flex items-center space-x-2">
-                    <Lock className="w-4 h-4 text-gray-500" />
+                    <Key className="w-4 h-4 text-green-400" />
                     <span>Bring Your Own Key</span>
-                    <span className="text-xs text-gray-500">(Contact Support)</span>
+                    {!canDowngradeTo('byok') && <span className="text-xs text-gray-500">(Current or Higher)</span>}
                   </div>
                 </SelectItem>
                 <SelectItem value="enterprise" disabled={true}>
@@ -269,7 +271,8 @@ export default function SubscriptionUpdater() {
 
         <div className="text-xs text-gray-500">
           <p>• Upgrades must be done through the pricing page</p>
-          <p>• BYOK and Enterprise tiers require manual setup</p>
+          <p>• Enterprise tier requires contact sales</p>
+          <p>• BYOK users can downgrade to Pro or Free</p>
           <p>• Downgrades take effect immediately</p>
         </div>
       </CardContent>

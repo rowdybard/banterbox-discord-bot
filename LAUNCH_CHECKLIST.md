@@ -193,6 +193,7 @@ If critical issues are found:
   - Updated subscription updater to show plan change limits
   - Added server-side validation for plan change limits
   - Created migration script for new database columns
+  - **FIXED**: Removed BYOK from restricted tiers in subscription updater UI
 - **Impact**: BYOK users can now downgrade, and all users have reasonable plan switching limits
 
 ### **Subscription Tier Logic Fixed** ✅ **COMPLETE**
