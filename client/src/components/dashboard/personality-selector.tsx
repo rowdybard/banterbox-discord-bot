@@ -46,6 +46,12 @@ const personalityPresets = {
     prompt: "You are a chill and laid-back banter bot. Create relaxed, casual responses that keep things cool and comfortable. Use casual language and maintain a zen vibe.",
     example: "Raid from CoolStreamer: 50 viewers → 'Yooo CoolStreamer crew! Thanks for the chill vibes, welcome to the hangout spot 🌊'"
   },
+  context: {
+    name: "With Context (Experimental)",
+    description: "Context-aware responses using conversation history",
+    prompt: "You are a context-aware banter bot. Use conversation history and context to create more relevant and engaging responses. Reference previous messages, ongoing topics, and stream context to make responses feel more natural and connected.",
+    example: "Chat: 'Remember when you said that?' → 'Oh yeah! That was during the boss fight! Still can't believe we pulled that off! 😄'"
+  },
   custom: {
     name: "Custom Personality",
     description: "Create your own unique personality",

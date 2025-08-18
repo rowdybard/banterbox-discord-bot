@@ -110,6 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only. Mix up your sarcastic style.",
               hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only. Vary your hype energy levels.",
               chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only. Mix up your chill vibes.",
+              context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Use plain text only. Make connections to past events when appropriate.",
               roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
@@ -214,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. Use plain text only - no markdown formatting, asterisks, or special characters. Write naturally as if speaking. Be creative and varied - avoid repeating the same phrases or responses. Each response should feel fresh and unique."
+            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. Use plain text only - no markdown formatting, asterisks, or special characters. Write naturally as if speaking. Be creative and varied - avoid repeating the same phrases or responses. Each response should feel fresh and unique. IMPORTANT: If context is provided, use it to remember what was discussed and refer back to it naturally. If someone mentioned something specific (like a car model, hobby, etc.), reference it in your response."
           },
           {
             role: "user",
@@ -320,22 +321,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Generate TTS audio using the user's preferred voice provider
-  async function generateTTS(text: string, userId: string): Promise<Buffer | null> {
+  async function generateTTS(text: string, userId: string, originalMessage?: string): Promise<Buffer | null> {
     try {
       // Get user settings to determine voice provider
       const settings = await storage.getUserSettings(userId);
       const voiceProvider = settings?.voiceProvider || 'openai';
       
+      // Apply pronunciation hints to the text if original message is provided
+      let enhancedText = text;
+      if (originalMessage) {
+        const lowerMessage = originalMessage.toLowerCase();
+        if (lowerMessage.includes('altima')) {
+          enhancedText = text.replace(/altima/gi, 'all-TEE-mah');
+        }
+        if (lowerMessage.includes('camry')) {
+          enhancedText = text.replace(/camry/gi, 'CAM-ree');
+        }
+        if (lowerMessage.includes('civic')) {
+          enhancedText = text.replace(/civic/gi, 'SIV-ik');
+        }
+        if (lowerMessage.includes('accord')) {
+          enhancedText = text.replace(/accord/gi, 'ah-CORD');
+        }
+        if (lowerMessage.includes('corolla')) {
+          enhancedText = text.replace(/corolla/gi, 'kuh-ROLL-ah');
+        }
+        if (lowerMessage.includes('sentra')) {
+          enhancedText = text.replace(/sentra/gi, 'SEN-trah');
+        }
+        if (lowerMessage.includes('maxima')) {
+          enhancedText = text.replace(/maxima/gi, 'MAX-ih-mah');
+        }
+      }
+      
       if (voiceProvider === 'elevenlabs') {
         // Use ElevenLabs for Pro users
         const voiceId = settings?.voiceId || elevenLabsService.getDefaultVoice();
-        return await elevenLabsService.generateSpeech(text, voiceId);
+        return await elevenLabsService.generateSpeech(enhancedText, voiceId);
       } else {
         // Use OpenAI TTS (default)
         const response = await openai.audio.speech.create({
           model: "tts-1",
           voice: "alloy",
-          input: text,
+          input: enhancedText,
         });
         return Buffer.from(await response.arrayBuffer());
       }
@@ -721,7 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate TTS audio
       try {
-        const audioBuffer = await generateTTS(banterText, userId);
+        const audioBuffer = await generateTTS(banterText, userId, originalMessage);
         if (audioBuffer) {
           // Save audio to object storage
           const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
@@ -1546,7 +1574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate TTS audio (async in background)
       try {
-        const audioBuffer = await generateTTS(banterText, userId);
+        const audioBuffer = await generateTTS(banterText, userId, testMessage);
         if (audioBuffer) {
           const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
           await storage.updateBanterItem(banterItem.id, { audioUrl });
@@ -1982,6 +2010,173 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     console.log('Global Discord service initialized for voice channel operations');
   }
+
+  // Marketplace API routes
+  app.get("/api/marketplace/personalities", async (req, res) => {
+    try {
+      // For now, return some sample personalities
+      // In a real implementation, this would fetch from a database
+      const samplePersonalities = [
+        {
+          id: "1",
+          name: "Gaming Guru",
+          description: "Perfect for gaming streams with witty commentary",
+          prompt: "You are a gaming expert with deep knowledge of games. Provide insightful commentary, tips, and reactions to gaming moments. Keep responses engaging and informative.",
+          category: "Gaming",
+          tags: ["gaming", "expert", "commentary"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 1250,
+          upvotes: 89,
+          downvotes: 3,
+          isActive: true,
+          createdAt: "2024-01-15T10:00:00Z",
+          updatedAt: "2024-01-15T10:00:00Z"
+        },
+        {
+          id: "2",
+          name: "Comedy Master",
+          description: "Hilarious responses that keep everyone laughing",
+          prompt: "You are a comedy master who creates hilarious responses. Use clever jokes, puns, and witty observations. Keep the humor clean and entertaining for all ages.",
+          category: "Comedy",
+          tags: ["comedy", "humor", "entertainment"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 2100,
+          upvotes: 156,
+          downvotes: 7,
+          isActive: true,
+          createdAt: "2024-01-10T14:30:00Z",
+          updatedAt: "2024-01-10T14:30:00Z"
+        },
+        {
+          id: "3",
+          name: "Educational Expert",
+          description: "Great for educational content and learning streams",
+          prompt: "You are an educational expert who explains concepts clearly and engagingly. Provide helpful insights, answer questions, and make learning fun and accessible.",
+          category: "Education",
+          tags: ["education", "learning", "helpful"],
+          authorName: "BanterBox Team",
+          isVerified: true,
+          downloads: 890,
+          upvotes: 67,
+          downvotes: 2,
+          isActive: true,
+          createdAt: "2024-01-20T09:15:00Z",
+          updatedAt: "2024-01-20T09:15:00Z"
+        }
+      ];
+      
+      res.json(samplePersonalities);
+    } catch (error) {
+      console.error('Error getting marketplace personalities:', error);
+      res.status(500).json({ message: "Failed to get marketplace personalities" });
+    }
+  });
+
+  app.post("/api/marketplace/personalities", isAuthenticated, async (req, res) => {
+    try {
+      const { name, description, prompt, category, tags, isVerified } = req.body;
+      const userId = req.user.id;
+      
+      if (!name || !prompt) {
+        return res.status(400).json({ message: "Name and prompt are required" });
+      }
+      
+      // In a real implementation, this would save to a marketplace database
+      // For now, we'll just save it to the user's favorites
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoritePersonalities || [];
+      
+      const newPersonality = {
+        id: randomUUID(),
+        name,
+        prompt,
+        description: description || "",
+        category: category || "Custom",
+        tags: tags || ["custom"],
+        authorName: "You",
+        isVerified: isVerified || false,
+        downloads: 0,
+        upvotes: 0,
+        downvotes: 0,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const updatedFavorites = [...currentFavorites, newPersonality];
+      
+      await storage.updateUserSettings(userId, {
+        favoritePersonalities: updatedFavorites
+      });
+      
+      res.json({ success: true, personality: newPersonality });
+    } catch (error) {
+      console.error('Error saving marketplace personality:', error);
+      res.status(500).json({ message: "Failed to save personality" });
+    }
+  });
+
+  app.post("/api/personality/test", isAuthenticated, async (req, res) => {
+    try {
+      const { personality, prompt, message } = req.body;
+      const userId = req.user.id;
+      
+      // Use the provided prompt or get from personality preset
+      let personalityPrompt = prompt;
+      if (!personalityPrompt && personality && personality !== 'custom') {
+        const personalityPrompts = {
+          witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Use plain text only. Be creative and avoid repetition.",
+          friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only. Show genuine interest and vary your responses.",
+          sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only. Mix up your sarcastic style.",
+          hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only. Vary your hype energy levels.",
+          chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only. Mix up your chill vibes.",
+          context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Use plain text only. Make connections to past events when appropriate.",
+          roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
+        };
+        personalityPrompt = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
+      }
+      
+      if (!personalityPrompt) {
+        return res.status(400).json({ message: "Personality prompt is required" });
+      }
+      
+      const testMessage = message || "Hey banterbox, test the personality!";
+      
+      // Generate test response using OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: personalityPrompt
+          },
+          {
+            role: "user",
+            content: `Respond to this message: "${testMessage}"`
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.8
+      });
+      
+      const banterText = completion.choices[0]?.message?.content?.trim() || "Test response generated!";
+      
+      res.json({
+        success: true,
+        banterText,
+        testMessage,
+        personality: personality || 'custom'
+      });
+    } catch (error) {
+      console.error('Error testing personality:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  });
 
   return httpServer;
         }

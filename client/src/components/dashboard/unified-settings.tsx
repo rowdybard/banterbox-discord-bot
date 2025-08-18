@@ -36,6 +36,10 @@ const personalityPresets = {
     name: "Chill & Laid-back",
     description: "Relaxed and casual vibes",
   },
+  context: {
+    name: "With Context (Experimental)",
+    description: "Context-aware responses using conversation history",
+  },
 };
 
 interface UnifiedSettingsProps {

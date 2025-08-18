@@ -64,13 +64,40 @@ export class ContextService {
     try {
       console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
       
-      // Get recent context (last 8 interactions for better memory)
-      const recentContext = await storage.getRecentContext(userId, guildId, 8);
-      console.log(`Found ${recentContext.length} recent context items`);
+      // Get recent context (last 8 interactions for better memory) - try both with and without guildId
+      let recentContext = await storage.getRecentContext(userId, guildId, 8);
+      console.log(`Found ${recentContext.length} recent context items with guildId ${guildId}`);
       
-      // Get similar event context (last 5 of same type)
-      const similarContext = await storage.getContextByType(userId, currentEventType, guildId, 5);
-      console.log(`Found ${similarContext.length} similar context items`);
+      // If we don't have enough context with guildId, also get context without guildId
+      if (recentContext.length < 4 && guildId) {
+        const globalContext = await storage.getRecentContext(userId, undefined, 8);
+        console.log(`Found ${globalContext.length} global context items (no guildId)`);
+        
+        // Combine and deduplicate context
+        const allContext = [...recentContext, ...globalContext];
+        const uniqueContext = allContext.filter((ctx, index, self) => 
+          index === self.findIndex(c => c.id === ctx.id)
+        );
+        recentContext = uniqueContext.slice(0, 8);
+        console.log(`Combined to ${recentContext.length} total recent context items`);
+      }
+      
+      // Get similar event context (last 5 of same type) - also try both with and without guildId
+      let similarContext = await storage.getContextByType(userId, currentEventType, guildId, 5);
+      console.log(`Found ${similarContext.length} similar context items with guildId ${guildId}`);
+      
+      if (similarContext.length < 3 && guildId) {
+        const globalSimilarContext = await storage.getContextByType(userId, currentEventType, undefined, 5);
+        console.log(`Found ${globalSimilarContext.length} global similar context items (no guildId)`);
+        
+        // Combine and deduplicate similar context
+        const allSimilarContext = [...similarContext, ...globalSimilarContext];
+        const uniqueSimilarContext = allSimilarContext.filter((ctx, index, self) => 
+          index === self.findIndex(c => c.id === ctx.id)
+        );
+        similarContext = uniqueSimilarContext.slice(0, 5);
+        console.log(`Combined to ${similarContext.length} total similar context items`);
+      }
       
       if (recentContext.length === 0 && similarContext.length === 0) {
         console.log('No context found, returning empty string');
@@ -104,9 +131,9 @@ export class ContextService {
         contextString += "\n";
       }
       
-      // Add improved context instruction
+      // Add improved context instruction with specific guidance for car mentions
       if (contextString) {
-        contextString += "IMPORTANT: Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. Avoid repeating the same responses - be creative and varied while staying connected to the conversation. If someone mentioned something specific (like a car model, hobby, etc.), reference it naturally in your response.";
+        contextString += "IMPORTANT: Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. If someone mentioned something specific (like a car model, hobby, etc.), reference it naturally in your response. For example, if someone mentioned they drive an Altima, remember that and refer to it in future responses. Be creative and varied while staying connected to the conversation.";
       }
       
       return contextString;

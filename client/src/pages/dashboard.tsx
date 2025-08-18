@@ -171,6 +171,26 @@ export default function Dashboard() {
                         <span>Tools</span>
                       </button>
                     </Link>
+                    <Link href="/marketplace">
+                      <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center space-x-3"
+                        data-testid="menu-marketplace"
+                      >
+                        <i className="fas fa-store w-4"></i>
+                        <span>Marketplace</span>
+                      </button>
+                    </Link>
+                    <Link href="/personality-builder">
+                      <button 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center space-x-3"
+                        data-testid="menu-personality-builder"
+                      >
+                        <i className="fas fa-brain w-4"></i>
+                        <span>AI Builder</span>
+                      </button>
+                    </Link>
                     <Link href="/overlay">
                       <button 
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -248,6 +268,30 @@ export default function Dashboard() {
                     data-testid="button-tools"
                   >
                     Tools
+                  </button>
+                </Link>
+                <Link href="/marketplace">
+                  <button 
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      location === '/marketplace' 
+                        ? 'text-white bg-primary/20' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                    data-testid="button-marketplace"
+                  >
+                    Marketplace
+                  </button>
+                </Link>
+                <Link href="/personality-builder">
+                  <button 
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      location === '/personality-builder' 
+                        ? 'text-white bg-primary/20' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
+                    data-testid="button-personality-builder"
+                  >
+                    AI Builder
                   </button>
                 </Link>
                 <Link href="/overlay">
