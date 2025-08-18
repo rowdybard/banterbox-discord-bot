@@ -162,6 +162,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
       }
 
+      // Record this interaction in context memory BEFORE generating response
+      let contextId: string | null = null;
+      if (contextualUserId) {
+        try {
+          contextId = await ContextService.recordEvent(
+            contextualUserId,
+            eventType,
+            eventData,
+            guildId,
+            eventType === 'discord_message' ? 3 : 2, // Messages are more important for context
+            originalMessage
+          );
+        } catch (contextError) {
+          console.error('Error recording context:', contextError);
+          // Continue without context if recording fails
+        }
+      }
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
@@ -180,23 +198,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const banterResponse = response.choices[0].message.content || "Thanks for the interaction!";
       
-      // Record this interaction in context memory
-      if (contextualUserId) {
+      // Record the AI's response for future context
+      if (contextId) {
         try {
-          const contextId = await ContextService.recordEvent(
-            contextualUserId,
-            eventType,
-            eventData,
-            guildId,
-            eventType === 'discord_message' ? 3 : 2, // Messages are more important for context
-            originalMessage
-          );
-          
-          // Record the AI's response for future context
           await storage.updateContextResponse(contextId, banterResponse);
         } catch (contextError) {
-          console.error('Error recording context:', contextError);
-          // Don't fail banter generation if context recording fails
+          console.error('Error updating context response:', contextError);
+          // Don't fail banter generation if context update fails
         }
       }
       

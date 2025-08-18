@@ -89,7 +89,7 @@ export class ContextService {
       }
       
       // Add similar event context
-      if (similarContext.length > 0 && currentEventType !== 'discord_message') {
+      if (similarContext.length > 0) {
         contextString += `Previous ${currentEventType} responses:\n`;
         similarContext.forEach(ctx => {
           if (ctx.banterResponse) {
@@ -101,7 +101,7 @@ export class ContextService {
       
       // Add context instruction
       if (contextString) {
-        contextString += "Keep your response fresh but contextually aware. Don't repeat previous responses exactly.";
+        contextString += "Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. Keep responses fresh but connected to the conversation.";
       }
       
       return contextString;

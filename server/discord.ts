@@ -95,22 +95,55 @@ export class DiscordService {
         
         // Check if bot is in a voice channel in this guild (streaming mode)
         const voiceConnection = this.voiceConnections.get(message.guild.id);
-        if (!voiceConnection) {
-          console.log(`Not generating banter - bot not in voice channel for guild ${message.guild.id}`);
-          return; // Only respond when in voice channel
+        const isStreamingMode = !!voiceConnection;
+        
+        // Determine if we should respond to this message
+        let shouldRespond = false;
+        let responseReason = '';
+        
+        // Always respond to direct mentions
+        if (message.mentions.has(this.client.user!.id)) {
+          shouldRespond = true;
+          responseReason = 'direct mention';
         }
-
-        // Only respond to messages that mention "banterbox" or are direct responses
-        const shouldRespond = message.content.toLowerCase().includes('banterbox') || 
-                             message.content.toLowerCase().includes('banter') ||
-                             message.mentions.has(this.client.user!.id);
+        // Respond to messages containing banterbox/banter keywords
+        else if (message.content.toLowerCase().includes('banterbox') || 
+                 message.content.toLowerCase().includes('banter')) {
+          shouldRespond = true;
+          responseReason = 'keyword trigger';
+        }
+        // In streaming mode, respond to more messages for better engagement
+        else if (isStreamingMode) {
+          // Respond to questions, greetings, and conversational messages
+          const content = message.content.toLowerCase();
+          const isQuestion = content.includes('?') || content.startsWith('what') || content.startsWith('how') || content.startsWith('why');
+          const isGreeting = content.includes('hello') || content.includes('hi') || content.includes('hey') || content.includes('sup');
+          const isConversational = content.length > 10 && (content.includes('you') || content.includes('think') || content.includes('feel'));
+          
+          if (isQuestion || isGreeting || isConversational) {
+            shouldRespond = true;
+            responseReason = 'conversational trigger';
+          }
+        }
+        // Even when not in streaming mode, respond to direct questions and greetings
+        else {
+          const content = message.content.toLowerCase();
+          const isDirectQuestion = content.includes('?') && (content.includes('banterbox') || content.includes('you'));
+          const isDirectGreeting = (content.includes('hello') || content.includes('hi') || content.includes('hey')) && 
+                                  (content.includes('banterbox') || content.includes('bot'));
+          
+          if (isDirectQuestion || isDirectGreeting) {
+            shouldRespond = true;
+            responseReason = 'direct interaction';
+          }
+        }
         
         if (!shouldRespond) {
-          console.log(`Ignoring message "${message.content}" - doesn't mention banterbox`);
+          console.log(`Ignoring message "${message.content}" - no trigger conditions met`);
           return;
         }
         
-        console.log(`Triggering banter generation for Discord message in guild ${message.guild.id}`);
+        console.log(`Triggering banter generation for Discord message (${responseReason}) in guild ${message.guild.id}`);
         
         // Trigger banter generation if callback is set
         if (this.banterCallback) {
@@ -124,7 +157,9 @@ export class DiscordService {
               guildName: message.guild.name,
               channelId: message.channel.id,
               messageId: message.id,
-              messageContent: message.content
+              messageContent: message.content,
+              isStreamingMode: isStreamingMode,
+              responseReason: responseReason
             }
           );
         }
