@@ -16,6 +16,7 @@ import VoiceMarketplace from "@/pages/voice-marketplace";
 import ProPage from "@/pages/pro";
 import PricingPage from "@/pages/pricing";
 import BillingPage from "@/pages/billing";
+import DowngradeConfirmationPage from "@/pages/downgrade-confirmation";
 import Landing from "@/pages/landing";
 import Auth from "@/pages/auth";
 import NotFound from "@/pages/not-found";
@@ -67,9 +68,10 @@ function Router() {
           <Route path="/voice-marketplace" component={VoiceMarketplace} />
           <Route path="/personality-builder" component={PersonalityBuilder} />
           <Route path="/voice-builder" component={VoiceBuilder} />
-          <Route path="/pro" component={ProPage} />
-          <Route path="/pricing" component={PricingPage} />
-          <Route path="/billing" component={BillingPage} />
+                                <Route path="/pro" component={ProPage} />
+                      <Route path="/pricing" component={PricingPage} />
+                      <Route path="/billing" component={BillingPage} />
+                      <Route path="/downgrade-confirmation" component={DowngradeConfirmationPage} />
         </>
       )}
       {/* Auth page is always accessible */}

@@ -6,12 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
   const [selectedTier, setSelectedTier] = useState(user?.subscriptionTier || 'free');
 
   const updateSubscriptionMutation = useMutation({
@@ -214,7 +215,15 @@ export default function SubscriptionUpdater() {
 
         {/* Action Button */}
         <Button
-          onClick={() => updateSubscriptionMutation.mutate(selectedTier)}
+          onClick={() => {
+            if (isDowngrade(selectedTier)) {
+              // Redirect to downgrade confirmation page
+              setLocation(`/downgrade-confirmation?tier=${selectedTier}`);
+            } else {
+              // Direct update for same tier or upgrades (shouldn't happen)
+              updateSubscriptionMutation.mutate(selectedTier);
+            }
+          }}
           disabled={updateSubscriptionMutation.isPending || selectedTier === user?.subscriptionTier || isRestrictedTier(selectedTier)}
           className="w-full bg-gray-600 hover:bg-gray-500 text-white"
         >
