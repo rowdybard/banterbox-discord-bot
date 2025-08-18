@@ -283,6 +283,42 @@ async function migrate() {
     } else {
       console.log('✅ participants column already exists in context_memory');
     }
+
+    // 16. Add last_plan_change_at column to users table
+    const lastPlanChangeAtCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'last_plan_change_at'
+    `);
+    
+    if (lastPlanChangeAtCheck.rows.length === 0) {
+      console.log('➕ Adding last_plan_change_at column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN last_plan_change_at TIMESTAMP
+      `);
+      console.log('✅ last_plan_change_at column added successfully');
+    } else {
+      console.log('✅ last_plan_change_at column already exists');
+    }
+
+    // 17. Add plan_change_count column to users table
+    const planChangeCountCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'plan_change_count'
+    `);
+    
+    if (planChangeCountCheck.rows.length === 0) {
+      console.log('➕ Adding plan_change_count column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN plan_change_count INTEGER DEFAULT 0
+      `);
+      console.log('✅ plan_change_count column added successfully');
+    } else {
+      console.log('✅ plan_change_count column already exists');
+    }
     
     console.log('✅ Sessions table configured');
     console.log('🎉 Comprehensive database migration completed successfully!');

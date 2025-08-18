@@ -192,7 +192,7 @@ If critical issues are found:
   - Added database columns: `last_plan_change_at`, `plan_change_count`
   - Updated subscription updater to show plan change limits
   - Added server-side validation for plan change limits
-  - Created migration script for new database columns
+  - **READY**: Migration script updated with plan switching columns
   - **FIXED**: Removed BYOK from restricted tiers in subscription updater UI
 - **Impact**: BYOK users can now downgrade, and all users have reasonable plan switching limits
 
