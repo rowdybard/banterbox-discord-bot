@@ -973,6 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
       // Get Discord service status
       const discordServiceStatus = globalDiscordService ? globalDiscordService.getConnectionStatus() : null;
+      const autoReconnectStatus = globalDiscordService ? globalDiscordService.getAutoReconnectStatus() : null;
   
       res.json({
         isConnected: verifiedGuilds.length > 0,
@@ -982,7 +983,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         botOnline: !!globalDiscordService,
         botHealthy: globalDiscordService?.isHealthy() || false,
         guilds: verifiedGuilds,
-        serviceStatus: discordServiceStatus
+        serviceStatus: discordServiceStatus,
+        autoReconnect: autoReconnectStatus
       });
     } catch (error) {
       console.error('Error getting Discord status:', error);

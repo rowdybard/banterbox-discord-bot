@@ -17,6 +17,13 @@ export class DiscordService {
   private reconnectDelay: number = 5000;
   private heartbeatInterval?: NodeJS.Timeout;
   private isReconnecting: boolean = false;
+  
+  // Auto-reconnect protection
+  private voiceChannelMemory: Map<string, string> = new Map(); // guildId -> channelId
+  private autoReconnectEnabled: boolean = true;
+  private autoReconnectInterval?: NodeJS.Timeout;
+  private maxAutoReconnectAttempts: number = 3;
+  private autoReconnectAttempts: Map<string, number> = new Map(); // guildId -> attempts
 
   constructor(config: DiscordConfig) {
     this.config = config;
@@ -202,10 +209,19 @@ export class DiscordService {
         if (newState.channel) {
           // Bot joined a voice channel
           console.log(`Bot joined voice channel ${newState.channel.name} in guild ${newState.guild.name} - streaming mode activated`);
+          // Remember this channel for auto-reconnect
+          this.voiceChannelMemory.set(guildId, newState.channel.id);
+          this.autoReconnectAttempts.delete(guildId); // Reset attempts on successful join
         } else if (oldState.channel) {
           // Bot left a voice channel
           console.log(`Bot left voice channel ${oldState.channel.name} in guild ${newState.guild.name} - streaming mode deactivated`);
           this.voiceConnections.delete(guildId);
+          
+          // Check if this was an unexpected disconnect (not manual leave)
+          if (this.autoReconnectEnabled && this.voiceChannelMemory.has(guildId)) {
+            console.log(`Unexpected voice disconnect detected for guild ${guildId}, will attempt auto-reconnect`);
+            this.scheduleAutoReconnect(guildId);
+          }
         }
       } catch (error) {
         console.error('Error handling voice state update:', error);
@@ -265,6 +281,9 @@ export class DiscordService {
           // Check if client is still healthy (doesn't need manual ping in modern Discord.js)
           const ping = this.client.ws.ping;
           console.log(`Discord heartbeat check - connection healthy (ping: ${ping}ms)`); // Fixed heartbeat error
+          
+          // Check for orphaned voice connections (connection exists but bot not in channel)
+          this.checkOrphanedVoiceConnections();
         } else {
           console.warn('Discord client not ready during heartbeat check');
         }
@@ -278,6 +297,13 @@ export class DiscordService {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = undefined;
+    }
+  }
+
+  private stopAutoReconnect() {
+    if (this.autoReconnectInterval) {
+      clearInterval(this.autoReconnectInterval);
+      this.autoReconnectInterval = undefined;
     }
   }
 
@@ -326,6 +352,9 @@ export class DiscordService {
 
   disconnect() {
     this.stopHeartbeat();
+    this.stopAutoReconnect();
+    this.voiceChannelMemory.clear();
+    this.autoReconnectAttempts.clear();
     this.client.destroy();
     console.log('Discord bot disconnected');
   }
@@ -401,6 +430,9 @@ export class DiscordService {
       if (connection) {
         connection.destroy();
         this.voiceConnections.delete(guildId);
+        // Clear auto-reconnect memory when manually leaving
+        this.voiceChannelMemory.delete(guildId);
+        this.autoReconnectAttempts.delete(guildId);
         console.log(`Bot left voice channel in guild ${guildId}`);
         return true;
       }
@@ -622,8 +654,189 @@ export class DiscordService {
       isReconnecting: this.isReconnecting,
       reconnectAttempts: this.reconnectAttempts,
       voiceConnections: this.voiceConnections.size,
-      guilds: this.client.guilds.cache.size
+      guilds: this.client.guilds.cache.size,
+      autoReconnectEnabled: this.autoReconnectEnabled,
+      voiceChannelMemory: this.voiceChannelMemory.size
     };
+  }
+
+  // Auto-reconnect protection methods
+
+  /**
+   * Schedule auto-reconnect for a specific guild
+   */
+  private scheduleAutoReconnect(guildId: string) {
+    const attempts = this.autoReconnectAttempts.get(guildId) || 0;
+    
+    if (attempts >= this.maxAutoReconnectAttempts) {
+      console.log(`Max auto-reconnect attempts (${this.maxAutoReconnectAttempts}) reached for guild ${guildId}`);
+      this.voiceChannelMemory.delete(guildId);
+      this.autoReconnectAttempts.delete(guildId);
+      return;
+    }
+
+    const delay = Math.min(5000 * Math.pow(2, attempts), 30000); // Exponential backoff: 5s, 10s, 20s, 30s
+    console.log(`Scheduling auto-reconnect for guild ${guildId} in ${delay}ms (attempt ${attempts + 1}/${this.maxAutoReconnectAttempts})`);
+    
+    setTimeout(() => {
+      this.attemptAutoReconnect(guildId);
+    }, delay);
+  }
+
+  /**
+   * Attempt to auto-reconnect to a voice channel
+   */
+  private async attemptAutoReconnect(guildId: string) {
+    try {
+      const channelId = this.voiceChannelMemory.get(guildId);
+      if (!channelId) {
+        console.log(`No voice channel memory for guild ${guildId}, skipping auto-reconnect`);
+        return;
+      }
+
+      const attempts = this.autoReconnectAttempts.get(guildId) || 0;
+      this.autoReconnectAttempts.set(guildId, attempts + 1);
+
+      console.log(`Attempting auto-reconnect to voice channel ${channelId} in guild ${guildId} (attempt ${attempts + 1}/${this.maxAutoReconnectAttempts})`);
+
+      // Check if bot is already in a voice channel
+      if (this.isInVoiceChannel(guildId)) {
+        console.log(`Bot already in voice channel for guild ${guildId}, skipping auto-reconnect`);
+        this.autoReconnectAttempts.delete(guildId);
+        return;
+      }
+
+      // Check if the channel still exists and bot has permission
+      const guild = this.client.guilds.cache.get(guildId);
+      if (!guild) {
+        console.log(`Guild ${guildId} not found, removing from auto-reconnect memory`);
+        this.voiceChannelMemory.delete(guildId);
+        this.autoReconnectAttempts.delete(guildId);
+        return;
+      }
+
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel || !channel.isVoiceBased()) {
+        console.log(`Voice channel ${channelId} not found or not voice-based, removing from auto-reconnect memory`);
+        this.voiceChannelMemory.delete(guildId);
+        this.autoReconnectAttempts.delete(guildId);
+        return;
+      }
+
+      // Check bot permissions
+      const botMember = guild.members.cache.get(this.client.user!.id);
+      if (!botMember || !channel.permissionsFor(botMember).has('Connect')) {
+        console.log(`Bot doesn't have permission to connect to channel ${channelId}, removing from auto-reconnect memory`);
+        this.voiceChannelMemory.delete(guildId);
+        this.autoReconnectAttempts.delete(guildId);
+        return;
+      }
+
+      // Attempt to join the voice channel
+      const success = await this.joinVoiceChannel(guildId, channelId);
+      
+      if (success) {
+        console.log(`✅ Auto-reconnect successful for guild ${guildId}`);
+        this.autoReconnectAttempts.delete(guildId);
+      } else {
+        console.log(`❌ Auto-reconnect failed for guild ${guildId}, will retry if attempts remain`);
+        if (attempts + 1 < this.maxAutoReconnectAttempts) {
+          this.scheduleAutoReconnect(guildId);
+        } else {
+          console.log(`Max auto-reconnect attempts reached for guild ${guildId}, giving up`);
+          this.voiceChannelMemory.delete(guildId);
+          this.autoReconnectAttempts.delete(guildId);
+        }
+      }
+    } catch (error) {
+      console.error(`Error during auto-reconnect for guild ${guildId}:`, error);
+      const attempts = this.autoReconnectAttempts.get(guildId) || 0;
+      if (attempts + 1 < this.maxAutoReconnectAttempts) {
+        this.scheduleAutoReconnect(guildId);
+      } else {
+        console.log(`Max auto-reconnect attempts reached for guild ${guildId}, giving up`);
+        this.voiceChannelMemory.delete(guildId);
+        this.autoReconnectAttempts.delete(guildId);
+      }
+    }
+  }
+
+  /**
+   * Check for orphaned voice connections (connection exists but bot not in channel)
+   */
+  private checkOrphanedVoiceConnections() {
+    for (const [guildId, connection] of this.voiceConnections.entries()) {
+      const guild = this.client.guilds.cache.get(guildId);
+      if (!guild) {
+        console.log(`Guild ${guildId} not found, cleaning up orphaned voice connection`);
+        this.voiceConnections.delete(guildId);
+        continue;
+      }
+
+      const botVoiceState = guild.voiceStates.cache.get(this.client.user!.id);
+      if (!botVoiceState || !botVoiceState.channel) {
+        console.log(`Bot not in voice channel for guild ${guildId}, cleaning up orphaned connection`);
+        this.voiceConnections.delete(guildId);
+        connection.destroy();
+        
+        // Attempt auto-reconnect if we have memory of this channel
+        if (this.autoReconnectEnabled && this.voiceChannelMemory.has(guildId)) {
+          console.log(`Attempting auto-reconnect for orphaned connection in guild ${guildId}`);
+          this.scheduleAutoReconnect(guildId);
+        }
+      }
+    }
+  }
+
+  /**
+   * Enable/disable auto-reconnect protection
+   */
+  setAutoReconnectEnabled(enabled: boolean) {
+    this.autoReconnectEnabled = enabled;
+    console.log(`Auto-reconnect protection ${enabled ? 'enabled' : 'disabled'}`);
+    
+    if (!enabled) {
+      // Clear all auto-reconnect state
+      this.voiceChannelMemory.clear();
+      this.autoReconnectAttempts.clear();
+      this.stopAutoReconnect();
+    }
+  }
+
+  /**
+   * Get auto-reconnect status for debugging
+   */
+  getAutoReconnectStatus() {
+    return {
+      enabled: this.autoReconnectEnabled,
+      voiceChannelMemory: Array.from(this.voiceChannelMemory.entries()).map(([guildId, channelId]) => ({
+        guildId,
+        channelId
+      })),
+      autoReconnectAttempts: Array.from(this.autoReconnectAttempts.entries()).map(([guildId, attempts]) => ({
+        guildId,
+        attempts
+      }))
+    };
+  }
+
+  /**
+   * Manually trigger auto-reconnect for a guild (for testing)
+   */
+  async triggerAutoReconnect(guildId: string) {
+    if (!this.autoReconnectEnabled) {
+      console.log('Auto-reconnect is disabled');
+      return false;
+    }
+
+    const channelId = this.voiceChannelMemory.get(guildId);
+    if (!channelId) {
+      console.log(`No voice channel memory for guild ${guildId}`);
+      return false;
+    }
+
+    console.log(`Manually triggering auto-reconnect for guild ${guildId}`);
+    return await this.attemptAutoReconnect(guildId);
   }
 }
 

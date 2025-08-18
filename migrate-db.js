@@ -103,7 +103,25 @@ async function migrate() {
       console.log('✅ originalMessage column already exists in context_memory');
     }
     
-    // 6. Create sessions table if it doesn't exist
+    // 6. Add banterResponse column to context_memory table
+    const contextBanterResponseCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'context_memory' AND column_name = 'banter_response'
+    `);
+    
+    if (contextBanterResponseCheck.rows.length === 0) {
+      console.log('➕ Adding banterResponse column to context_memory table...');
+      await client.query(`
+        ALTER TABLE context_memory 
+        ADD COLUMN banter_response TEXT
+      `);
+      console.log('✅ banterResponse column added to context_memory successfully');
+    } else {
+      console.log('✅ banterResponse column already exists in context_memory');
+    }
+    
+    // 7. Create sessions table if it doesn't exist
     const sessionsTableCheck = await client.query(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -124,7 +142,7 @@ async function migrate() {
       console.log('✅ Sessions table already exists');
     }
     
-    // 7. Create unique index on sessions.sid if it doesn't exist
+    // 8. Create unique index on sessions.sid if it doesn't exist
     const sessionsSidIndexCheck = await client.query(`
       SELECT indexname 
       FROM pg_indexes 
@@ -141,7 +159,7 @@ async function migrate() {
       console.log('✅ Sessions sid index already exists');
     }
     
-    // 8. Create index on sessions.expire if it doesn't exist
+    // 9. Create index on sessions.expire if it doesn't exist
     const sessionsExpireIndexCheck = await client.query(`
       SELECT indexname 
       FROM pg_indexes 
