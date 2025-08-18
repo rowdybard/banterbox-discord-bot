@@ -21,7 +21,7 @@ export class ContextService {
     const contextSummary = this.generateContextSummary(eventType, eventData);
 
     // Calculate expiration time based on importance (more important = longer retention)
-    const hoursToRetain = Math.max(1, importance * 2); // 1-20 hours based on importance
+    const hoursToRetain = Math.max(2, importance * 3); // 2-30 hours based on importance
     const expiresAt = new Date(Date.now() + hoursToRetain * 60 * 60 * 1000);
 
     // Extract participants from event data
@@ -64,12 +64,12 @@ export class ContextService {
     try {
       console.log(`Getting context for user ${userId}, event type ${currentEventType}, guild ${guildId}`);
       
-      // Get recent context (last 5 interactions)
-      const recentContext = await storage.getRecentContext(userId, guildId, 5);
+      // Get recent context (last 8 interactions for better memory)
+      const recentContext = await storage.getRecentContext(userId, guildId, 8);
       console.log(`Found ${recentContext.length} recent context items`);
       
-      // Get similar event context (last 3 of same type)
-      const similarContext = await storage.getContextByType(userId, currentEventType, guildId, 3);
+      // Get similar event context (last 5 of same type)
+      const similarContext = await storage.getContextByType(userId, currentEventType, guildId, 5);
       console.log(`Found ${similarContext.length} similar context items`);
       
       if (recentContext.length === 0 && similarContext.length === 0) {
@@ -79,34 +79,34 @@ export class ContextService {
       
       let contextString = "";
       
-      // Add recent conversation context
+      // Add recent conversation context with better formatting
       if (recentContext.length > 0) {
-        contextString += "Recent conversation:\n";
-        recentContext.reverse().forEach(ctx => {
+        contextString += "Recent conversation history:\n";
+        recentContext.reverse().forEach((ctx, index) => {
           if (ctx.originalMessage) {
-            contextString += `- User: ${ctx.originalMessage}\n`;
+            contextString += `${index + 1}. User said: "${ctx.originalMessage}"\n`;
           }
           if (ctx.banterResponse) {
-            contextString += `- You: ${ctx.banterResponse}\n`;
+            contextString += `   You responded: "${ctx.banterResponse}"\n`;
           }
         });
         contextString += "\n";
       }
       
-      // Add similar event context
+      // Add similar event context for variety
       if (similarContext.length > 0) {
-        contextString += `Previous ${currentEventType} responses:\n`;
-        similarContext.forEach(ctx => {
+        contextString += `Previous responses to similar ${currentEventType} events:\n`;
+        similarContext.forEach((ctx, index) => {
           if (ctx.banterResponse) {
-            contextString += `- "${ctx.banterResponse}"\n`;
+            contextString += `${index + 1}. "${ctx.banterResponse}"\n`;
           }
         });
         contextString += "\n";
       }
       
-      // Add context instruction
+      // Add improved context instruction
       if (contextString) {
-        contextString += "Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. Keep responses fresh but connected to the conversation.";
+        contextString += "IMPORTANT: Use this conversation history to provide contextually aware responses. Remember what was discussed and refer back to it naturally. Avoid repeating the same responses - be creative and varied while staying connected to the conversation. If someone mentioned something specific (like a car model, hobby, etc.), reference it naturally in your response.";
       }
       
       return contextString;
@@ -127,7 +127,7 @@ export class ContextService {
     guildId?: string
   ): Promise<void> {
     // Record successful banter patterns for future reference
-    await this.recordEvent(userId, eventType, { ...eventData, banterText }, guildId, 2); // Higher importance for successful banters
+    await this.recordEvent(userId, eventType, { ...eventData, banterText }, guildId, 3); // Higher importance for successful banters
   }
 
   /**
@@ -137,7 +137,7 @@ export class ContextService {
     switch (eventType) {
       case "chat":
         return `${eventData.username || "Someone"} chatted${
-          eventData.message ? ': "' + eventData.message.substring(0, 30) + '"' : ""
+          eventData.message ? ': "' + eventData.message.substring(0, 50) + '"' : ""
         }`;
 
       case "subscription":
@@ -148,7 +148,7 @@ export class ContextService {
       case "donation":
         return `${eventData.username || "Someone"} donated $${
           eventData.amount || 0
-        }${eventData.message ? ' saying "' + eventData.message.substring(0, 30) + '"' : ""}`;
+        }${eventData.message ? ' saying "' + eventData.message.substring(0, 50) + '"' : ""}`;
 
       case "raid":
         return `${eventData.username || "Someone"} raided with ${eventData.raiderCount || 0} viewers`;
@@ -157,7 +157,7 @@ export class ContextService {
         const content = eventData.messageContent || eventData.message || "";
         return `${
           eventData.username || eventData.displayName || "Someone"
-        } sent message in Discord${content ? ': "' + content.substring(0, 30) + '"' : ""}`;
+        } sent message in Discord${content ? ': "' + content.substring(0, 50) + '"' : ""}`;
       }
 
       case "discord_member_join":

@@ -92,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateBanter(eventType: EventType, eventData: EventData, originalMessage?: string, userId?: string, guildId?: string): Promise<string> {
     try {
       // Get personality settings from web dashboard (source of truth)
-      let personalityContext = "Be a human-like personality. Make responses under 20 words with natural conversation. Avoid AI cliches and excessive metaphors.";
+      let personalityContext = "Be a human-like personality. Make responses under 25 words with natural conversation. Avoid AI cliches and excessive metaphors. Be creative and varied in your responses.";
       
       // Always use user settings from web dashboard for personality
       if (userId) {
@@ -105,12 +105,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
-              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 20 words. Use plain text only.",
-              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only.",
-              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only.",
-              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only.",
-              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only.",
-              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only."
+              witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Use plain text only. Be creative and avoid repetition.",
+              friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Use plain text only. Show genuine interest and vary your responses.",
+              sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Use plain text only. Mix up your sarcastic style.",
+              hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Use plain text only. Vary your hype energy levels.",
+              chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Use plain text only. Mix up your chill vibes.",
+              roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Use plain text only. Vary your roasting style."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.witty;
           }
@@ -182,20 +182,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
       }
 
+      // Add pronunciation hints for common words that might be mispronounced
+      let enhancedPrompt = prompt;
+      if (originalMessage) {
+        const lowerMessage = originalMessage.toLowerCase();
+        if (lowerMessage.includes('altima')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Altima' is pronounced 'all-TEE-mah' (like 'all' + 'team' + 'ah').";
+        }
+        if (lowerMessage.includes('camry')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Camry' is pronounced 'CAM-ree' (like 'camera' without the 'a').";
+        }
+        if (lowerMessage.includes('civic')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Civic' is pronounced 'SIV-ik' (like 'civil' + 'ick').";
+        }
+        if (lowerMessage.includes('accord')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Accord' is pronounced 'ah-CORD' (like 'a' + 'cord').";
+        }
+        if (lowerMessage.includes('corolla')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Corolla' is pronounced 'kuh-ROLL-ah' (like 'coral' + 'ah').";
+        }
+        if (lowerMessage.includes('sentra')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Sentra' is pronounced 'SEN-trah' (like 'center' + 'ah').";
+        }
+        if (lowerMessage.includes('maxima')) {
+          enhancedPrompt += "\n\nPronunciation note: 'Maxima' is pronounced 'MAX-ih-mah' (like 'maximum' + 'ah').";
+        }
+      }
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
           {
             role: "system",
-            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. Use plain text only - no markdown formatting, asterisks, or special characters. Write naturally as if speaking."
+            content: "Generate entertaining responses for live streamers. Keep responses engaging, fun, and under 25 words. Match the personality and energy requested. Use plain text only - no markdown formatting, asterisks, or special characters. Write naturally as if speaking. Be creative and varied - avoid repeating the same phrases or responses. Each response should feel fresh and unique."
           },
           {
             role: "user",
-            content: prompt
+            content: enhancedPrompt
           }
         ],
-        max_tokens: 100,
-        temperature: 0.9,
+        max_tokens: 120,
+        temperature: 1.1, // Increased temperature for more variety
+        presence_penalty: 0.3, // Penalize repetition
+        frequency_penalty: 0.5, // Penalize frequent words
       });
 
       const banterResponse = response.choices[0].message.content || "Thanks for the interaction!";
