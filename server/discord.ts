@@ -384,17 +384,23 @@ export class DiscordService {
         adapterCreator: guild.voiceAdapterCreator,
         selfDeaf: false, // Allow bot to be undeafened for proper audio playback
         selfMute: false,
+        // Add connection stability options
+        debug: false, // Disable debug logging to reduce noise
       });
 
       // Import entersState function
       const { entersState, VoiceConnectionStatus } = await import('@discordjs/voice');
       
-      // Wait for connection to be ready with timeout
+      // Wait for connection to be ready with increased timeout and better error handling
       try {
-        await entersState(connection, VoiceConnectionStatus.Ready, 10000);
+        await entersState(connection, VoiceConnectionStatus.Ready, 15000); // Increased timeout to 15 seconds
         console.log('Voice connection ready for audio playback');
       } catch (timeoutError) {
         console.warn('Voice connection timeout, but continuing anyway:', timeoutError);
+        // Log more details about the timeout
+        if (timeoutError instanceof Error) {
+          console.warn('Timeout details:', timeoutError.message);
+        }
       }
 
       // Add connection event listeners for stability
@@ -410,7 +416,16 @@ export class DiscordService {
 
       connection.on('error', (error) => {
         console.error('Discord voice connection error:', error);
+        // Log more details about the error
+        if (error instanceof Error) {
+          console.error('Error details:', error.message);
+          console.error('Error stack:', error.stack);
+        }
         // Don't immediately destroy connection on error - let it try to recover
+        // Only destroy if it's a critical error
+        if (error instanceof Error && error.message.includes('ABORT_ERR')) {
+          console.warn('Abort error detected - this is usually a timeout and can be ignored');
+        }
       });
 
       this.voiceConnections.set(guildId, connection);
