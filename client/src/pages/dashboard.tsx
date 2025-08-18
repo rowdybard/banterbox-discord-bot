@@ -8,6 +8,7 @@ import { UsageDashboard } from "@/components/dashboard/usage-dashboard";
 import BillingDashboard from "@/components/dashboard/billing-dashboard";
 import SubscriptionUpdater from "@/components/dashboard/subscription-updater";
 import UserDebug from "@/components/dashboard/user-debug";
+import { AuthDebug } from "@/components/ui/auth-debug";
 import { LoadingState } from "@/components/ui/loading-state";
 
 export default function Dashboard() {
@@ -58,6 +59,11 @@ export default function Dashboard() {
           {/* User Debug (for testing) */}
           <div className="lg:col-span-2 xl:col-span-1">
             <UserDebug />
+          </div>
+
+          {/* Auth Debug (for testing) */}
+          <div className="lg:col-span-2 xl:col-span-1">
+            <AuthDebug />
           </div>
 
           {/* Subscription Updater (for testing) */}
