@@ -31,7 +31,97 @@ async function migrate() {
       console.log('✅ passwordHash column already exists');
     }
     
-    // 2. Add favoritePersonalities column to user_settings table
+    // 2. Add subscription_tier column to users table
+    const subscriptionTierCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'subscription_tier'
+    `);
+    
+    if (subscriptionTierCheck.rows.length === 0) {
+      console.log('➕ Adding subscription_tier column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN subscription_tier TEXT DEFAULT 'free'
+      `);
+      console.log('✅ subscription_tier column added successfully');
+    } else {
+      console.log('✅ subscription_tier column already exists');
+    }
+    
+    // 3. Add subscription_status column to users table
+    const subscriptionStatusCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'subscription_status'
+    `);
+    
+    if (subscriptionStatusCheck.rows.length === 0) {
+      console.log('➕ Adding subscription_status column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN subscription_status TEXT DEFAULT 'active'
+      `);
+      console.log('✅ subscription_status column added successfully');
+    } else {
+      console.log('✅ subscription_status column already exists');
+    }
+    
+    // 4. Add subscription_id column to users table
+    const subscriptionIdCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'subscription_id'
+    `);
+    
+    if (subscriptionIdCheck.rows.length === 0) {
+      console.log('➕ Adding subscription_id column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN subscription_id VARCHAR(255)
+      `);
+      console.log('✅ subscription_id column added successfully');
+    } else {
+      console.log('✅ subscription_id column already exists');
+    }
+    
+    // 5. Add trial_ends_at column to users table
+    const trialEndsAtCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'trial_ends_at'
+    `);
+    
+    if (trialEndsAtCheck.rows.length === 0) {
+      console.log('➕ Adding trial_ends_at column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN trial_ends_at TIMESTAMP
+      `);
+      console.log('✅ trial_ends_at column added successfully');
+    } else {
+      console.log('✅ trial_ends_at column already exists');
+    }
+    
+    // 6. Add current_period_end column to users table
+    const currentPeriodEndCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'current_period_end'
+    `);
+    
+    if (currentPeriodEndCheck.rows.length === 0) {
+      console.log('➕ Adding current_period_end column to users table...');
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN current_period_end TIMESTAMP
+      `);
+      console.log('✅ current_period_end column added successfully');
+    } else {
+      console.log('✅ current_period_end column already exists');
+    }
+    
+    // 7. Add favoritePersonalities column to user_settings table
     const favoritePersonalitiesCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -49,7 +139,7 @@ async function migrate() {
       console.log('✅ favoritePersonalities column already exists');
     }
     
-    // 3. Add favoriteVoices column to user_settings table
+    // 8. Add favoriteVoices column to user_settings table
     const favoriteVoicesCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -67,7 +157,7 @@ async function migrate() {
       console.log('✅ favoriteVoices column already exists');
     }
     
-    // 4. Add originalMessage column to banter_items table
+    // 9. Add originalMessage column to banter_items table
     const banterOriginalMessageCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -85,7 +175,7 @@ async function migrate() {
       console.log('✅ originalMessage column already exists in banter_items');
     }
     
-    // 5. Add originalMessage column to context_memory table
+    // 10. Add originalMessage column to context_memory table
     const contextOriginalMessageCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -103,7 +193,7 @@ async function migrate() {
       console.log('✅ originalMessage column already exists in context_memory');
     }
     
-    // 6. Add banterResponse column to context_memory table
+    // 11. Add banterResponse column to context_memory table
     const contextBanterResponseCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -121,7 +211,7 @@ async function migrate() {
       console.log('✅ banterResponse column already exists in context_memory');
     }
     
-    // 7. Create sessions table if it doesn't exist
+    // 12. Create sessions table if it doesn't exist
     const sessionsTableCheck = await client.query(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -142,7 +232,7 @@ async function migrate() {
       console.log('✅ Sessions table already exists');
     }
     
-    // 8. Create unique index on sessions.sid if it doesn't exist
+    // 13. Create unique index on sessions.sid if it doesn't exist
     const sessionsSidIndexCheck = await client.query(`
       SELECT indexname 
       FROM pg_indexes 
@@ -159,7 +249,7 @@ async function migrate() {
       console.log('✅ Sessions sid index already exists');
     }
     
-    // 9. Create index on sessions.expire if it doesn't exist
+    // 14. Create index on sessions.expire if it doesn't exist
     const sessionsExpireIndexCheck = await client.query(`
       SELECT indexname 
       FROM pg_indexes 
@@ -176,7 +266,7 @@ async function migrate() {
       console.log('✅ Sessions expire index already exists');
     }
     
-    // 10. Add participants column to context_memory table
+    // 15. Add participants column to context_memory table
     const contextParticipantsCheck = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
