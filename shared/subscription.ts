@@ -21,7 +21,7 @@ export function getSubscriptionInfo(user: User | null | undefined): Subscription
   const tier = (user.subscriptionTier as SubscriptionTier) || 'free';
   const status = (user.subscriptionStatus as SubscriptionStatus) || 'active';
   const isPro = tier === 'pro' || tier === 'byok' || tier === 'enterprise';
-  const isTrialing = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
+  const isTrialing = user.trialEndsAt ? new Date(user.trialEndsAt) > new Date() : false;
   
   // Fix: If user has pro tier, they should be considered active regardless of status
   // This prevents the "pro but inactive" issue
@@ -31,8 +31,8 @@ export function getSubscriptionInfo(user: User | null | undefined): Subscription
     tier,
     status,
     isPro,
-    isTrialing,
-    isActive,
+    isTrialing: isTrialing || false,
+    isActive: isActive || false,
     trialEndsAt: user.trialEndsAt ? new Date(user.trialEndsAt) : undefined,
     currentPeriodEnd: user.currentPeriodEnd ? new Date(user.currentPeriodEnd) : undefined,
   };

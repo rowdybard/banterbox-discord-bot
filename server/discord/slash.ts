@@ -148,8 +148,8 @@ export async function handleCommand(body: any) {
   } catch (error) {
     console.error('❌ Slash command error in main handler:', error);
     console.error('❌ Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
       commandName,
       guildId,
       userId,
@@ -265,8 +265,8 @@ BanterBox will now generate witty banters for events in this server. Use \`/conf
   } catch (error) {
     console.error('❌ Error in handleLinkCommand:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
       guildId,
       userId,
       body: body.data

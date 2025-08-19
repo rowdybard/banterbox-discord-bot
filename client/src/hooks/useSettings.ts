@@ -43,6 +43,7 @@ export function useSettings(userId: string) {
     voiceId: null,
     autoPlay: true,
     volume: 75,
+    responseFrequency: 50,
     enabledEvents: ['chat'],
     overlayPosition: 'bottom-center',
     overlayDuration: 12,

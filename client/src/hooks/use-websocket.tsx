@@ -141,15 +141,17 @@ export function useWebSocket(onMessage?: (data: any) => void) {
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }
       if (wsRef.current) {
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
-  }, []);
+  }, [connect]);
 
   return {
     lastMessage,

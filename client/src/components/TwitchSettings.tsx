@@ -9,6 +9,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
+interface TwitchSettingsData {
+  // Add the interface definition here
+  [key: string]: any;
+}
+
 export default function TwitchSettings() {
   const { user } = useAuth();
   const userId = user?.id;

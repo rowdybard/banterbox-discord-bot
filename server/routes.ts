@@ -8,6 +8,7 @@ import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { getTierConfig } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 import { isProUser, getSubscriptionInfo } from "@shared/subscription";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
@@ -391,12 +392,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For Twitch events, we log but don't throw - just skip generation
         return;
       }
+
+      // Check response frequency setting
+      const userSettings = await storage.getUserSettings(userId);
+      const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
+      
+      // Apply response frequency filtering for Twitch events
+      const shouldRespond = applyResponseFrequencyFilter(responseFrequency, 'twitch_event', originalMessage);
+      if (!shouldRespond) {
+        console.log(`Skipping Twitch response due to frequency setting (${responseFrequency}%)`);
+        return;
+      }
       
       // Generate the banter text
       const banterText = await generateBanter(eventType, eventData, originalMessage);
       
-      // Get user settings for voice preferences (web dashboard source of truth)
-      const userSettings = await storage.getUserSettings(userId);
+      // Get voice preferences from user settings
       const voiceProvider = userSettings?.voiceProvider || 'openai';
       const voiceId = userSettings?.voiceId;
       
@@ -419,17 +430,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
+          const favoriteVoices = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices as any[] : [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
             voiceProvider,
             selectedVoiceId,
-            favoriteVoices: Array.isArray(favoriteVoices) ? favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })) : [],
+            favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
             settings: userSettings
           });
           
-          if (selectedVoiceId && Array.isArray(favoriteVoices) && favoriteVoices.length > 0) {
+          if (selectedVoiceId && favoriteVoices.length > 0) {
             // Find the selected voice in favorites
             const selectedVoice = favoriteVoices.find((voice: any) => 
               voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
@@ -548,11 +559,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Favorite voice generation debug:', {
           voiceProvider,
           selectedVoiceId,
-          favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+          favoriteVoices: Array.isArray(favoriteVoices) ? favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })) : [],
           settings: settings
         });
         
-        if (selectedVoiceId && favoriteVoices.length > 0) {
+        if (selectedVoiceId && Array.isArray(favoriteVoices) && favoriteVoices.length > 0) {
           // Find the selected voice in favorites
           const selectedVoice = favoriteVoices.find((voice: any) => 
             voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
@@ -621,6 +632,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Daily limit reached for workspace ${workspaceUserId}: ${usageCheck.current}/${usageCheck.limit}`);
         return;
       }
+
+      // Check response frequency setting
+      const userSettings = await storage.getUserSettings(workspaceUserId);
+      const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
+      
+      // Apply response frequency filtering
+      const shouldRespond = applyResponseFrequencyFilter(responseFrequency, eventData.responseReason, originalMessage);
+      if (!shouldRespond) {
+        console.log(`Skipping response due to frequency setting (${responseFrequency}%) for reason: ${eventData.responseReason}`);
+        return;
+      }
       
       // Generate banter based on event type  
       const eventTypeForBanter = eventType as EventType;
@@ -663,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
+          const favoriteVoices = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices as any[] : [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
@@ -719,7 +741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (audioUrl && globalDiscordService && isInVoiceChannel) {
           // Use the public object URL instead of localhost - Discord needs external access
           const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
-          console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+          console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME ? 'SET' : 'NOT_SET'}`);
           console.log(`Parsed domain: ${renderDomain}`);
           
           // Handle different audio URL types  
@@ -748,7 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const testResponse = await fetch(publicAudioUrl);
             console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
           } catch (error) {
-            console.log(`Audio URL not accessible:`, error.message);
+            console.log(`Audio URL not accessible:`, error instanceof Error ? error.message : 'Unknown error');
           }
           
           try {
@@ -818,7 +840,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete onboarding endpoint
   app.post('/api/user/complete-onboarding', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       await storage.completeOnboarding(userId);
       res.json({ success: true });
     } catch (error) {
@@ -830,7 +855,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search banters endpoint
   app.get('/api/banter/search', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const { query, eventType, limit } = req.query;
       
       const banters = await storage.searchBanters(
@@ -882,7 +910,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Users can only access their own settings
       if (userId !== authenticatedUserId && userId !== "demo-user") {
@@ -920,7 +951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const updates = req.body;
       
       // Users can only update their own settings
@@ -1052,7 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/play", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -1083,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/replay", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -1204,7 +1238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a link code for Discord bot linking
   app.post("/api/discord/link-code", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1359,7 +1393,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/discord/cleanup-stale", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.body;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Ensure user can only clean their own data
       if (userId !== authenticatedUserId) {
@@ -1402,7 +1439,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Emergency Discord bot restart (admin only)
   app.post("/api/discord/restart", isAuthenticated, async (req, res) => {
     try {
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Only allow restart if Discord service exists and is unhealthy
       if (!globalDiscordService) {
@@ -1448,7 +1488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error('Error restarting Discord bot:', error);
-      res.status(500).json({ message: "Failed to restart Discord bot", error: error.message });
+      res.status(500).json({ message: "Failed to restart Discord bot", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -1456,14 +1496,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
       const { name, prompt, description } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
-      if (!name || !prompt) {
-        return res.status(400).json({ message: "Name and prompt are required" });
+      // Input validation
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: "Name is required and must be a non-empty string" });
+      }
+      
+      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+        return res.status(400).json({ message: "Prompt is required and must be a non-empty string" });
+      }
+      
+      if (name.length > 100) {
+        return res.status(400).json({ message: "Name must be 100 characters or less" });
+      }
+      
+      if (prompt.length > 2000) {
+        return res.status(400).json({ message: "Prompt must be 2000 characters or less" });
+      }
+      
+      if (description && (typeof description !== 'string' || description.length > 500)) {
+        return res.status(400).json({ message: "Description must be a string and 500 characters or less" });
       }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       const newPersonality = {
         id: randomUUID(),
@@ -1488,9 +1548,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const settings = await storage.getUserSettings(userId);
-      const favorites = settings?.favoritePersonalities || [];
+      const favorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       res.json({ personalities: favorites });
     } catch (error) {
@@ -1502,10 +1565,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/favorites/personalities/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       const updatedFavorites = currentFavorites.filter((p: any) => p.id !== id);
       
       await storage.updateUserSettings(userId, {
@@ -1523,14 +1589,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/voices", isAuthenticated, async (req, res) => {
     try {
       const { name, voiceId, provider, description } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       if (!name || !voiceId || !provider) {
         return res.status(400).json({ message: "Name, voiceId, and provider are required" });
       }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       
       const newVoice = {
         id: randomUUID(),
@@ -1556,7 +1625,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/favorites/voices", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const settings = await storage.getUserSettings(userId);
       const favorites = settings?.favoriteVoices || [];
       
@@ -1570,10 +1642,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/favorites/voices/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       const updatedFavorites = currentFavorites.filter((v: any) => v.id !== id);
       
       await storage.updateUserSettings(userId, {
@@ -1591,7 +1666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/test-personality", isAuthenticated, async (req, res) => {
     try {
       const { personality, message } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log(`🧪 Testing personality: ${personality} for user: ${userId}`);
       
@@ -1632,8 +1707,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Personality test error:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message,
-        stack: error.stack 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
       });
     }
   });
@@ -1641,10 +1716,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test Discord database operations
   app.post("/api/discord/test-db", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       console.log(`🧪 Testing Discord DB operations for user: ${userId}`);
       
-      const results = {
+      const results: {
+        tests: Array<{ name: string; status: string; data: any }>;
+        success: boolean;
+        errors: Array<{ test: string; error: string; stack?: string }>;
+      } = {
         tests: [],
         success: true,
         errors: []
@@ -1731,8 +1810,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         results.success = false;
         results.errors.push({
           test: 'database_operations',
-          error: error.message,
-          stack: error.stack
+                  error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
         });
         console.error('Database test error:', error);
       }
@@ -1742,8 +1821,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Test endpoint error:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message,
-        stack: error.stack 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined 
       });
     }
   });
@@ -1751,7 +1830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clear ALL Discord cache/connections for fresh start
   app.post("/api/discord/clear-cache", isAuthenticated, async (req, res) => {
     try {
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
       console.log(`🧹 Clearing ALL Discord cache for user ${authenticatedUserId}`);
       
       let totalCleared = 0;
@@ -1909,7 +1988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/simulate/chat", isAuthenticated, async (req: any, res) => {
     try {
       const { username, message } = req.body;
-      const userId = req.user.id; // Use authenticated user ID
+      const userId = (req.user as any)?.id; // Use authenticated user ID
       
       // Check daily usage limits
       const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
@@ -1963,7 +2042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -1975,7 +2054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get ElevenLabs voices (Pro users only)
   app.get('/api/elevenlabs/voices', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
@@ -1996,7 +2075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/elevenlabs/test-voice', isAuthenticated, async (req: any, res) => {
     try {
       const { voiceId, text } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
@@ -2415,7 +2494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/personality-builder/save", isAuthenticated, async (req, res) => {
     try {
       const { name, description, prompt, category, tags, addToMarketplace } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log('Personality save request:', { userId, name, addToMarketplace }); // Debug log
       
@@ -2454,7 +2533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Always save to user's favorite personalities (private library)
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities : [];
       const updatedFavorites = [...currentFavorites, newPersonality];
       
       console.log('Updating user settings with personality:', { 
@@ -2480,6 +2559,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
             isActive: true,
+            isVerified: false,
+            downloads: 0,
+            upvotes: 0,
+            downvotes: 0,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Personality submitted to marketplace:', marketplacePersonality.id);
@@ -2516,7 +2599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/personalities/:personalityId/download", isAuthenticated, async (req, res) => {
     try {
       const { personalityId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the personality from marketplace
@@ -2537,7 +2620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add to user's favorites
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       
       const downloadedPersonality = {
         id: randomUUID(),
@@ -2579,7 +2662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/personalities/:personalityId/download-sample", isAuthenticated, async (req, res) => {
     try {
       const { personalityId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const samplePersonalities = [
         {
@@ -2639,7 +2722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user already has this personality
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       const alreadyDownloaded = currentFavorites.some((personality: any) => 
         personality.name === personalityToDownload.name && 
         personality.prompt === personalityToDownload.prompt
@@ -2690,7 +2773,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/personality/test", isAuthenticated, async (req, res) => {
     try {
       const { personality, prompt, message } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Check subscription tier - personality builder requires Pro or higher
       const user = await storage.getUser(userId);
@@ -2754,7 +2837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error testing personality:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message 
+        error: error instanceof Error ? error.message : 'Unknown error' 
       });
     }
   });
@@ -2953,7 +3036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/voices/:voiceId/download", isAuthenticated, async (req, res) => {
     try {
       const { voiceId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the voice from marketplace
@@ -2974,7 +3057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add to user's favorites
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       
       const downloadedVoice = {
         id: randomUUID(),
@@ -3018,7 +3101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/voices/:voiceId/download-sample", isAuthenticated, async (req, res) => {
     try {
       const { voiceId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const sampleVoices = [
         {
@@ -3090,7 +3173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user already has this voice
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const alreadyDownloaded = currentFavorites.some((voice: any) => 
         voice.baseVoiceId === voiceToDownload.baseVoiceId && 
         voice.name === voiceToDownload.name
@@ -3144,7 +3227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice-builder/preview", isAuthenticated, async (req, res) => {
     try {
       const { text, baseVoiceId, settings } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       if (!text || !baseVoiceId) {
         return res.status(400).json({ message: "Text and baseVoiceId are required" });
@@ -3181,7 +3264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice-builder/save", isAuthenticated, async (req, res) => {
     try {
       const { name, description, category, tags, baseVoiceId, settings, addToMarketplace, sampleText } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log('Voice save request:', { userId, name, baseVoiceId, addToMarketplace }); // Debug log
       
@@ -3224,7 +3307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Always save to user's favorite voices (private library)
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const updatedFavorites = [...currentFavorites, customVoice];
       
       console.log('Updating user settings with voice:', { 
@@ -3255,6 +3338,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
             isActive: true,
+            isVerified: false,
+            downloads: 0,
+            upvotes: 0,
+            downvotes: 0,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Voice submitted to marketplace:', marketplaceVoice.id);
@@ -3273,7 +3360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Error saving custom voice:', error);
-      res.status(500).json({ message: "Failed to save custom voice", error: error.message });
+      res.status(500).json({ message: "Failed to save custom voice", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -3282,7 +3369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's subscription status
   app.get("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -3308,7 +3395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update user's subscription tier (for testing/admin purposes)
   app.put("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { tier, status = 'active' } = req.body;
       
       if (!tier || !['free', 'pro', 'byok', 'enterprise'].includes(tier)) {
@@ -3393,7 +3480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/billing/create-checkout", isAuthenticated, async (req: any, res) => {
     try {
       const { tier, interval } = req.body; // interval: 'month' or 'year'
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
 
       // TODO: Implement Stripe checkout session creation
       // For now, return a mock checkout URL
@@ -3414,7 +3501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's API keys
   app.get("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
@@ -3442,7 +3529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save API keys
   app.post("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
       const user = await storage.getUser(userId);
       
@@ -3484,7 +3571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test API keys
   app.post("/api/billing/test-api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
       const user = await storage.getUser(userId);
       
@@ -3537,7 +3624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete API key
   app.delete("/api/billing/api-keys/:provider", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { provider } = req.params;
       const user = await storage.getUser(userId);
       
@@ -3557,11 +3644,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get usage statistics
   app.get("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
 
-      const tierConfig = getTierConfig(subscriptionTier);
+      const tierConfig = getTierConfig(subscriptionTier as SubscriptionTier);
       const usage = await storage.getUsageTracking(userId, 'current');
       
       const usageData = {
@@ -3593,7 +3680,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update usage tracking
   app.post("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { bantersGenerated, openaiTokensUsed, elevenlabsCharactersUsed, audioMinutesGenerated } = req.body;
       
       await storage.updateUsageTracking(userId, {
@@ -3634,7 +3721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/elevenlabs/generate", isAuthenticated, async (req: any, res) => {
     try {
       const { text, voiceId } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
@@ -3651,7 +3738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Text and voiceId are required" });
       }
 
-      const audioUrl = await generateElevenLabsAudio(text, voiceId);
+      const audioUrl = await elevenLabsService.generateSpeech(text, voiceId);
       res.json({ audioUrl });
     } catch (error) {
       console.error('Error generating ElevenLabs audio:', error);
@@ -3662,7 +3749,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Store API keys for BYOK users
   app.post("/api/settings/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const { openai, elevenlabs } = req.body;
       
       if (!openai || !elevenlabs) {
@@ -3676,27 +3766,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // TODO: Add validation for ElevenLabs key format
       
-      // Store encrypted API keys in user settings
-      const [updatedSettings] = await db
-        .update(userSettings)
-        .set({ 
-          openaiApiKey: openai, // TODO: Encrypt this
-          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
-          updatedAt: new Date()
-        })
-        .where(eq(userSettings.userId, userId))
-        .returning();
-      
-      if (!updatedSettings) {
-        // Create new settings if they don't exist
-        await db.insert(userSettings).values({
-          userId,
-          openaiApiKey: openai, // TODO: Encrypt this
-          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
+      // Store API keys using storage service
+      await storage.saveUserApiKey({ userId, provider: 'openai', apiKey: openai });
+      await storage.saveUserApiKey({ userId, provider: 'elevenlabs', apiKey: elevenlabs });
       
       res.json({ 
         message: "API keys stored successfully",
@@ -3711,7 +3783,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fix subscription status for pro users
   app.post("/api/billing/fix-subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Get current user
       const [user] = await db.select().from(users).where(eq(users.id, userId));
@@ -3752,7 +3827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create Stripe checkout session for subscription upgrades
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { tier, setupMode } = req.body;
       
       if (!tier || !['pro', 'byok'].includes(tier)) {
@@ -3830,6 +3905,26 @@ function isDirectQuestion(message: string): boolean {
   
   // Check if message matches any direct question pattern
   return directQuestionPatterns.some(pattern => pattern.test(lowerMessage));
+}
+
+/**
+ * Applies response frequency filtering based on user settings
+ */
+function applyResponseFrequencyFilter(responseFrequency: number, responseReason: string, originalMessage: string): boolean {
+  // Always respond to direct mentions regardless of frequency setting
+  if (responseReason === 'direct mention') {
+    return true;
+  }
+
+  // Generate a random number between 0 and 100
+  const randomValue = Math.random() * 100;
+  
+  // If random value is less than response frequency, allow the response
+  const shouldRespond = randomValue <= responseFrequency;
+  
+  console.log(`Response frequency check: ${randomValue.toFixed(1)} <= ${responseFrequency} = ${shouldRespond} (reason: ${responseReason})`);
+  
+  return shouldRespond;
 }
 
 /**

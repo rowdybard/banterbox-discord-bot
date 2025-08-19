@@ -96,7 +96,7 @@ export class FirebaseContextService {
         .limit(50) // Get more items and filter in memory
         .get();
 
-      const allContext = recentContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allContext = recentContextSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
       // Filter by expiration date in memory
       const validContext = allContext.filter((ctx: any) => {
@@ -280,7 +280,7 @@ export class FirebaseContextService {
         .get();
 
       const batch = db.batch();
-      expiredSnapshot.docs.forEach(doc => {
+      expiredSnapshot.docs.forEach((doc: any) => {
         batch.delete(doc.ref);
       });
 
@@ -355,25 +355,25 @@ export class FirebaseContextService {
         .limit(50) // Get more items and filter/sort in memory
         .get();
 
-      let recentContext = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let recentContext = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
       // Filter by expiration date in memory
-      recentContext = recentContext.filter(ctx => {
+      recentContext = recentContext.filter((ctx: any) => {
         const expiresAt = ctx.expiresAt?.toDate ? ctx.expiresAt.toDate() : new Date(ctx.expiresAt);
         return expiresAt > new Date();
       });
 
       // Filter by guildId if specified
       if (guildId) {
-        const guildContext = recentContext.filter(ctx => ctx.guildId === guildId);
-        const globalContext = recentContext.filter(ctx => !ctx.guildId);
+        const guildContext = recentContext.filter((ctx: any) => ctx.guildId === guildId);
+        const globalContext = recentContext.filter((ctx: any) => !ctx.guildId);
         recentContext = [...guildContext, ...globalContext];
       } else {
-        recentContext = recentContext.filter(ctx => !ctx.guildId);
+        recentContext = recentContext.filter((ctx: any) => !ctx.guildId);
       }
 
       // Sort by creation date in memory
-      recentContext.sort((a, b) => {
+      recentContext.sort((a: any, b: any) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
         return dateB.getTime() - dateA.getTime();
@@ -385,21 +385,21 @@ export class FirebaseContextService {
       }
 
       // Count event types
-      const eventCounts = recentContext.reduce<Record<string, number>>((acc, ctx) => {
+      const eventCounts = recentContext.reduce((acc: Record<string, number>, ctx: any) => {
         acc[ctx.eventType] = (acc[ctx.eventType] ?? 0) + 1;
         return acc;
-      }, {});
+      }, {} as Record<string, number>);
 
       // Top 3 event types
       const topEventTypes = Object.entries(eventCounts)
-        .sort(([, a], [, b]) => b - a)
+        .sort(([, a]: [string, any], [, b]: [string, any]) => b - a)
         .slice(0, 3)
         .map(([type]) => type);
 
       // Short recent activity summary
       const recentActivity = recentContext
-        .map((c) => c.contextSummary)
-        .filter((s): s is string => Boolean(s))
+        .map((c: any) => c.contextSummary)
+        .filter((s: any): s is string => Boolean(s))
         .slice(0, 3)
         .join('; ');
 

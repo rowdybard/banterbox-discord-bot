@@ -138,8 +138,11 @@ export function PersonalitySelector({ userId }: PersonalitySelectorProps) {
         </div>
 
         {/* Personality Description */}
-        {currentPreset && selectedPersonality !== 'custom' && (
+        {currentPreset && selectedPersonality !== 'custom' && (currentPreset as any) && (
           <div className="space-y-3">
+            <div className="text-sm text-gray-400">
+              <strong>Current Preset:</strong> {(currentPreset as any)?.name || 'Unknown'}
+            </div>
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
                 {currentPreset.description}

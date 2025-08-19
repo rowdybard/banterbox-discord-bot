@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   try {
     server = await registerRoutes(app);
   } catch (error) {
-    console.warn('⚠️  Discord service failed to start (likely missing tokens):', error.message);
+    console.warn('⚠️  Discord service failed to start (likely missing tokens):', error instanceof Error ? error.message : 'Unknown error');
     console.log('📝 Server continuing without Discord functionality...');
     
     // Start minimal server without Discord
