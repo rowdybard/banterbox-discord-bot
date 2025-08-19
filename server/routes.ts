@@ -61,18 +61,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Global Discord service for bot operations
   let globalDiscordService: DiscordService | null = null;
   
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
     clients.add(ws);
-    console.log('Client connected to WebSocket');
+    console.log(`Client connected to WebSocket from ${req.socket.remoteAddress}`);
+    console.log(`Total WebSocket clients: ${clients.size}`);
     
-    ws.on('close', () => {
+    // Send initial connection confirmation
+    ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected successfully' }));
+    
+    // Set up ping interval to keep connection alive
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+      }
+    }, 60000); // Send ping every 60 seconds to reduce frequency
+    
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        console.log('Received WebSocket message:', data);
+        
+        // Handle ping messages
+        if (data.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', (code, reason) => {
+      clearInterval(pingInterval); // Clear ping interval on close
       clients.delete(ws);
-      console.log('Client disconnected from WebSocket');
+      console.log(`Client disconnected from WebSocket. Code: ${code}, Reason: ${reason}`);
+      console.log(`Total WebSocket clients: ${clients.size}`);
     });
     
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
+      clearInterval(pingInterval); // Clear ping interval on error
       clients.delete(ws);
+      console.log(`Total WebSocket clients: ${clients.size}`);
     });
   });
   
