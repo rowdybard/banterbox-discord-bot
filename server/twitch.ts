@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { storage } from "./storage";
+import { firebaseStorage } from "./firebaseStorage";
 
 interface TwitchEventSubMessage {
   metadata: {
@@ -351,8 +351,8 @@ export class TwitchEventSubClient {
         return;
       }
 
-      // Get user from storage to find the actual BanterBox user ID
-      const twitchSettings = await storage.getTwitchSettings(userInfo.id);
+          // Get user from storage to find the actual BanterBox user ID
+    const twitchSettings = await firebaseStorage.getTwitchSettings(userInfo.id);
       if (!twitchSettings) {
         console.error("No Twitch settings found for user");
         return;

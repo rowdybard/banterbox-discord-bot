@@ -6,9 +6,8 @@ import { WebSocketServer, WebSocket } from "ws";
 interface ExtendedWebSocket extends WebSocket {
   isAlive?: boolean;
 }
-import { storage } from "./storage";
+import { firebaseStorage } from "./firebaseStorage";
 import { ObjectStorageService } from "./objectStorage";
-import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
@@ -24,14 +23,22 @@ import discordInteractions from "./discord/interactions";
 import { ContextService } from "./contextService";
 import { registerCommands, getBotInviteUrl } from "./discord/commands";
 import TwitchEventSubClient from "./twitch";
-import { DiscordService } from "./discord";
+// import { DiscordService } from "./discord";
 import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
 import { FirebaseContextService } from "./firebaseContextService";
 
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
-});
+const openai = process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR
+    })
+  : null;
+
+// Log environment variable status for debugging
+console.log('Environment variables status:');
+console.log('- OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT_SET');
+console.log('- OPENAI_API_KEY_ENV_VAR:', process.env.OPENAI_API_KEY_ENV_VAR ? 'SET' : 'NOT_SET');
+console.log('- NODE_ENV:', process.env.NODE_ENV || 'NOT_SET');
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication middleware (local and Google)
@@ -62,10 +69,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const twitchClients = new Map<string, TwitchEventSubClient>();
   
   // Store active Discord clients
-  const discordClients = new Map<string, DiscordService>();
+  const discordClients = new Map<string, any>();
   
   // Global Discord service for bot operations
-  let globalDiscordService: DiscordService | null = null;
+  let globalDiscordService: any = null;
   
   wss.on('connection', (ws: ExtendedWebSocket, req) => {
     clients.add(ws);
@@ -159,7 +166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Always use user settings from web dashboard for personality
       if (userId) {
         try {
-          const settings = await storage.getUserSettings(userId);
+          const settings = await firebaseStorage.getUserSettings(userId);
           console.log(`DEBUG: Fetched settings for user ${userId}:`, {
             banterPersonality: settings?.banterPersonality,
             customPersonalityPrompt: settings?.customPersonalityPrompt ? 'Has custom prompt' : 'No custom prompt',
@@ -216,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Record this interaction in context memory FIRST
-      const contextualUserId = guildId ? (await storage.getGuildLink(guildId))?.workspaceId : userId;
+      const contextualUserId = guildId ? (await firebaseStorage.getGuildLink(guildId))?.workspaceId : userId;
       let contextId: string | null = null;
       
       if (contextualUserId) {
@@ -247,10 +254,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add context to prompt if available - make it feel more natural
       if (contextString) {
-        prompt = `${personalityContext}\n\n${contextString}\n\n`;
+        prompt = `${personalityContext}nn${contextString}nn`;
         console.log(`DEBUG: Using personality + context for user ${userId}`);
       } else {
-        prompt = `${personalityContext}\n\n`;
+        prompt = `${personalityContext}nn`;
         console.log(`DEBUG: Using personality only (no context) for user ${userId}`);
       }
       
@@ -324,25 +331,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (originalMessage) {
         const lowerMessage = originalMessage.toLowerCase();
         if (lowerMessage.includes('altima')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Altima' is pronounced 'all-TEE-mah' (like 'all' + 'team' + 'ah').";
+          enhancedPrompt += "nnPronunciation note: 'Altima' is pronounced 'all-TEE-mah' (like 'all' + 'team' + 'ah').";
         }
         if (lowerMessage.includes('camry')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Camry' is pronounced 'CAM-ree' (like 'camera' without the 'a').";
+          enhancedPrompt += "nnPronunciation note: 'Camry' is pronounced 'CAM-ree' (like 'camera' without the 'a').";
         }
         if (lowerMessage.includes('civic')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Civic' is pronounced 'SIV-ik' (like 'civil' + 'ick').";
+          enhancedPrompt += "nnPronunciation note: 'Civic' is pronounced 'SIV-ik' (like 'civil' + 'ick').";
         }
         if (lowerMessage.includes('accord')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Accord' is pronounced 'ah-CORD' (like 'a' + 'cord').";
+          enhancedPrompt += "nnPronunciation note: 'Accord' is pronounced 'ah-CORD' (like 'a' + 'cord').";
         }
         if (lowerMessage.includes('corolla')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Corolla' is pronounced 'kuh-ROLL-ah' (like 'coral' + 'ah').";
+          enhancedPrompt += "nnPronunciation note: 'Corolla' is pronounced 'kuh-ROLL-ah' (like 'coral' + 'ah').";
         }
         if (lowerMessage.includes('sentra')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Sentra' is pronounced 'SEN-trah' (like 'center' + 'ah').";
+          enhancedPrompt += "nnPronunciation note: 'Sentra' is pronounced 'SEN-trah' (like 'center' + 'ah').";
         }
         if (lowerMessage.includes('maxima')) {
-          enhancedPrompt += "\n\nPronunciation note: 'Maxima' is pronounced 'MAX-ih-mah' (like 'maximum' + 'ah').";
+          enhancedPrompt += "nnPronunciation note: 'Maxima' is pronounced 'MAX-ih-mah' (like 'maximum' + 'ah').";
         }
       }
 
@@ -407,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Generating banter for Twitch ${eventType} event from user ${userId}`);
       
       // Check daily usage limits
-      const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
+      const usageCheck = await firebaseStorage.checkAndIncrementDailyUsage(userId);
       if (!usageCheck.allowed) {
         console.log(`Daily limit reached for user ${userId}: ${usageCheck.current}/${usageCheck.limit}`);
         // For Twitch events, we log but don't throw - just skip generation
@@ -415,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check response frequency setting
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
       
       // Apply response frequency filtering for Twitch events
@@ -438,15 +445,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         if (voiceProvider === 'elevenlabs') {
           // Use ElevenLabs if configured
-          const user = await storage.getUser(userId);
+          const user = await firebaseStorage.getUser(userId);
           const subscriptionTier = user?.subscriptionTier || 'free';
           const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
           
           if (isPro && voiceId) {
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
             if (audioBuffer) {
-              // Try Firebase first, fallback to object storage
-              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+              // Use Firebase storage
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer);
             }
           }
         } else if (voiceProvider === 'favorite') {
@@ -475,7 +482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
               if (audioBuffer) {
                 // Try Firebase first, fallback to object storage
-                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
               }
             }
           }
@@ -485,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('No favorite voice found, using default voice');
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
             if (audioBuffer) {
-              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
             }
           }
         } else {
@@ -497,7 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           const audioBuffer = Buffer.from(await response.arrayBuffer());
           // Try Firebase first, fallback to object storage
-          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
         }
       } catch (audioError) {
         console.error("Error generating audio:", audioError as Error);
@@ -505,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create banter item in storage
-      const banterItem = await storage.createBanterItem({
+      const banterItem = await firebaseStorage.createBanterItem({
         userId,
         eventType,
         eventData,
@@ -538,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function generateTTS(text: string, userId: string, originalMessage?: string): Promise<Buffer | null> {
     try {
       // Get user settings to determine voice provider
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const voiceProvider = settings?.voiceProvider || 'openai';
       
       // Apply pronunciation hints to the text if original message is provided
@@ -632,13 +639,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Generating banter for Discord ${eventType} event:`, eventData);
       
       // Get the workspace owner from guild settings instead of using Discord user ID
-      const guildSettings = await storage.getGuildSettings(eventData.guildId);
+      const guildSettings = await firebaseStorage.getGuildSettings(eventData.guildId);
       if (!guildSettings) {
         console.log('No guild settings found, skipping banter generation');
         return;
       }
       
-      const guildLink = await storage.getGuildLink(eventData.guildId);
+      const guildLink = await firebaseStorage.getGuildLink(eventData.guildId);
       const workspaceUserId = guildLink?.workspaceId;
       console.log(`DEBUG: Discord event - Guild: ${eventData.guildId}, Workspace User: ${workspaceUserId}`);
       
@@ -648,14 +655,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check daily usage limits using the workspace owner's ID
-      const usageCheck = await storage.checkAndIncrementDailyUsage(workspaceUserId);
+      const usageCheck = await firebaseStorage.checkAndIncrementDailyUsage(workspaceUserId);
       if (!usageCheck.allowed) {
         console.log(`Daily limit reached for workspace ${workspaceUserId}: ${usageCheck.current}/${usageCheck.limit}`);
         return;
       }
 
       // Check response frequency setting
-      const userSettings = await storage.getUserSettings(workspaceUserId);
+      const userSettings = await firebaseStorage.getUserSettings(workspaceUserId);
       const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
       
       // Apply response frequency filtering
@@ -694,7 +701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       try {
         // Use web dashboard user settings (source of truth) for voice
-        const userSettings = await storage.getUserSettings(workspaceUserId);
+        const userSettings = await firebaseStorage.getUserSettings(workspaceUserId);
         const voiceProvider = userSettings?.voiceProvider || 'openai';
         
         if (voiceProvider === 'elevenlabs') {
@@ -702,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
           if (audioBuffer) {
             // Try Firebase first, fallback to object storage
-            audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+            audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
@@ -730,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const audioBuffer = await elevenLabsService.generateSpeech(banterText, voiceId);
               if (audioBuffer) {
                 // Try Firebase first, fallback to object storage
-                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+                audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
               }
             }
           }
@@ -740,7 +747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('No favorite voice found, using default voice');
             const audioBuffer = await elevenLabsService.generateSpeech(banterText, elevenLabsService.getDefaultVoice());
             if (audioBuffer) {
-              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+              audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
             }
           }
         } else {
@@ -752,7 +759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           const audioBuffer = Buffer.from(await response.arrayBuffer());
           // Try Firebase first, fallback to object storage
-          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
+          audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
         }
         console.log(`Generated Discord banter with audio for ${eventType}: "${banterText}"`);
         console.log(`Audio URL generated: ${audioUrl}`);
@@ -768,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Handle different audio URL types  
           let publicAudioUrl: string;
           
-          if (audioUrl.startsWith('https://storage.googleapis.com/')) {
+          if (audioUrl.startsWith('https://firebaseStorage.googleapis.com/')) {
             // Firebase/GCS URLs are already public
             publicAudioUrl = audioUrl;
             console.log(`Using Firebase audio URL: ${publicAudioUrl}`);
@@ -809,7 +816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create banter item in storage
-      const banterItem = await storage.createBanterItem({
+      const banterItem = await firebaseStorage.createBanterItem({
         userId: workspaceUserId,
         eventType: eventTypeForBanter,
         eventData,
@@ -865,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      await storage.completeOnboarding(userId);
+      await firebaseStorage.completeOnboarding(userId);
       res.json({ success: true });
     } catch (error) {
       console.error('Error completing onboarding:', error);
@@ -882,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { query, eventType, limit } = req.query;
       
-      const banters = await storage.searchBanters(
+      const banters = await firebaseStorage.searchBanters(
         userId, 
         query || '', 
         eventType || 'all',
@@ -916,11 +923,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const file = await objectStorage.searchPublicObject(filePath);
+      const file = await firebaseStorage.searchPublicObject(filePath);
       if (!file) {
         return res.status(404).json({ error: "Audio file not found" });
       }
-      objectStorage.downloadObject(file, res);
+      firebaseStorage.downloadObject(file, res);
     } catch (error) {
       console.error("Error serving audio file:", error);
       return res.status(500).json({ error: "Internal server error" });
@@ -941,11 +948,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       
       if (!settings) {
         // Create default settings if they don't exist
-        const defaultSettings = await storage.createUserSettings({
+        const defaultSettings = await firebaseStorage.createUserSettings({
           userId,
           voiceProvider: 'openai',
           voiceId: null,
@@ -983,11 +990,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      let updated = await storage.updateUserSettings(userId, updates);
+      let updated = await firebaseStorage.updateUserSettings(userId, updates);
       
       // If settings don't exist, create them first
       if (!updated) {
-        const newSettings = await storage.createUserSettings({
+        const newSettings = await firebaseStorage.createUserSettings({
           userId,
           voiceProvider: updates.voiceProvider || 'openai',
           voiceId: updates.voiceId || null,
@@ -1030,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId } = req.params;
       const limit = parseInt(req.query.limit as string) || 10;
       
-      const banters = await storage.getBantersByUser(userId, limit);
+      const banters = await firebaseStorage.getBantersByUser(userId, limit);
       res.json(banters);
     } catch (error) {
       console.error('Error getting banter queue:', error);
@@ -1044,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId, eventType, eventData, originalMessage } = req.body;
       
       // Check daily usage limits
-      const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
+      const usageCheck = await firebaseStorage.checkAndIncrementDailyUsage(userId);
       if (!usageCheck.allowed) {
         return res.status(429).json({ 
           message: `Daily limit reached. You've used ${usageCheck.current} of ${usageCheck.limit} banters today.`,
@@ -1057,7 +1064,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const banterText = await generateBanter(eventType, eventData, originalMessage, userId);
       
       // Create banter item
-      const banterItem = await storage.createBanterItem({
+      const banterItem = await firebaseStorage.createBanterItem({
         userId,
         originalMessage,
         banterText,
@@ -1071,8 +1078,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const audioBuffer = await generateTTS(banterText, userId, originalMessage);
         if (audioBuffer) {
           // Save audio to object storage
-          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
-          await storage.updateBanterItem(banterItem.id, { audioUrl });
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
+          await firebaseStorage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
         }
       } catch (audioError) {
@@ -1082,9 +1089,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update daily stats
       const today = new Date().toISOString().split('T')[0];
-      const stats = await storage.getDailyStats(userId, today);
+      const stats = await firebaseStorage.getDailyStats(userId, today);
       if (stats) {
-        await storage.updateDailyStats(userId, today, {
+        await firebaseStorage.updateDailyStats(userId, today, {
           bantersGenerated: (stats.bantersGenerated || 0) + 1,
           chatResponses: eventType === 'chat' ? (stats.chatResponses || 0) + 1 : (stats.chatResponses || 0),
         });
@@ -1110,7 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
-      const banter = await storage.getBanterItem(id);
+      const banter = await firebaseStorage.getBanterItem(id);
       if (!banter) {
         return res.status(404).json({ message: "Banter not found" });
       }
@@ -1119,7 +1126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const updated = await storage.updateBanterItem(id, { isPlayed: true });
+      const updated = await firebaseStorage.updateBanterItem(id, { isPlayed: true });
 
       // Broadcast play event with WebSocket
       broadcast({
@@ -1141,7 +1148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
-      const banter = await storage.getBanterItem(id);
+      const banter = await firebaseStorage.getBanterItem(id);
       if (!banter) {
         return res.status(404).json({ message: "Banter not found" });
       }
@@ -1151,7 +1158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Mark as unplayed and update timestamp to move to top
-      const updated = await storage.updateBanterItem(id, { 
+      const updated = await firebaseStorage.updateBanterItem(id, { 
         isPlayed: false,
         createdAt: new Date()
       });
@@ -1179,7 +1186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Banter text is required" });
       }
       
-      const updated = await storage.updateBanterItem(id, { banterText: banterText.trim() });
+      const updated = await firebaseStorage.updateBanterItem(id, { banterText: banterText.trim() });
       if (!updated) {
         return res.status(404).json({ message: "Banter not found" });
       }
@@ -1201,7 +1208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const success = await storage.deleteBanterItem(id);
+      const success = await firebaseStorage.deleteBanterItem(id);
       if (!success) {
         return res.status(404).json({ message: "Banter not found" });
       }
@@ -1224,7 +1231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const date = req.query.date as string || new Date().toISOString().split('T')[0];
       
-      let stats = await storage.getDailyStats(userId, date);
+      let stats = await firebaseStorage.getDailyStats(userId, date);
       
       // If no stats exist, return default values instead of 404
       if (!stats) {
@@ -1268,7 +1275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const code = Math.random().toString(36).substring(2, 10).toUpperCase();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
   
-      const linkCode = await storage.createLinkCode({
+      const linkCode = await firebaseStorage.createLinkCode({
         code,
         workspaceId: userId,
         expiresAt,
@@ -1439,8 +1446,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!isActuallyInGuild) {
           // Bot is not actually in this guild, deactivate the link
-          await storage.deactivateGuildLink(link.guildId);
-          await storage.clearCurrentStreamer(link.guildId);
+          await firebaseStorage.deactivateGuildLink(link.guildId);
+          await firebaseStorage.clearCurrentStreamer(link.guildId);
           cleanedUp++;
           console.log(`Cleaned up stale guild link: ${link.guildId}`);
         }
@@ -1543,7 +1550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Description must be a string and 500 characters or less" });
       }
       
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       const newPersonality = {
@@ -1556,7 +1563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, newPersonality];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
@@ -1573,7 +1580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const favorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       res.json({ personalities: favorites });
@@ -1591,11 +1598,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       const updatedFavorites = currentFavorites.filter((p: any) => p.id !== id);
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
@@ -1619,7 +1626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Name, voiceId, and provider are required" });
       }
       
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       
       const newVoice = {
@@ -1633,7 +1640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, newVoice];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
       
@@ -1650,7 +1657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const favorites = settings?.favoriteVoices || [];
       
       res.json({ voices: favorites });
@@ -1668,11 +1675,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       const updatedFavorites = currentFavorites.filter((v: any) => v.id !== id);
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
       
@@ -1693,7 +1700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update web dashboard user settings if personality provided
       if (personality) {
-        await storage.updateUserSettings(userId, {
+        await firebaseStorage.updateUserSettings(userId, {
           banterPersonality: personality
         });
         console.log(`✅ Updated user ${userId} personality to: ${personality}`);
@@ -1714,7 +1721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Get current user settings to verify
-      const currentSettings = await storage.getUserSettings(userId);
+      const currentSettings = await firebaseStorage.getUserSettings(userId);
       
       res.json({
         success: true,
@@ -1756,7 +1763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
         
         console.log(`Testing createLinkCode with code: ${testCode}`);
-        const linkCode = await storage.createLinkCode({
+        const linkCode = await firebaseStorage.createLinkCode({
           code: testCode,
           workspaceId: userId,
           expiresAt,
@@ -1770,7 +1777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Test 2: Retrieve the link code
         console.log(`Testing getLinkCode with code: ${testCode}`);
-        const retrievedCode = await storage.getLinkCode(testCode);
+        const retrievedCode = await firebaseStorage.getLinkCode(testCode);
         
         if (retrievedCode && retrievedCode.code === testCode) {
           results.tests.push({
@@ -1786,7 +1793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const testGuildId = '123456789012345678';
         console.log(`Testing createGuildLink with guild: ${testGuildId}`);
         
-        const guildLink = await storage.createGuildLink({
+        const guildLink = await firebaseStorage.createGuildLink({
           guildId: testGuildId,
           workspaceId: userId,
           linkedByUserId: 'test-user-123',
@@ -1802,7 +1809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Test 4: Test guild settings
         console.log(`Testing upsertGuildSettings for guild: ${testGuildId}`);
         
-        const guildSettings = await storage.upsertGuildSettings({
+        const guildSettings = await firebaseStorage.upsertGuildSettings({
           guildId: testGuildId,
           workspaceId: userId,
           personality: 'test',
@@ -1818,8 +1825,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Cleanup test data
-        await storage.deactivateGuildLink(testGuildId);
-        await storage.consumeLinkCode(testCode);
+        await firebaseStorage.deactivateGuildLink(testGuildId);
+        await firebaseStorage.consumeLinkCode(testCode);
         
         results.tests.push({
           name: 'cleanup',
@@ -1859,8 +1866,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 1. Clear all guild links for this user
       const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, authenticatedUserId));
       for (const link of allGuildLinks) {
-        await storage.deactivateGuildLink(link.guildId);
-        await storage.clearCurrentStreamer(link.guildId);
+        await firebaseStorage.deactivateGuildLink(link.guildId);
+        await firebaseStorage.clearCurrentStreamer(link.guildId);
         totalCleared++;
         console.log(`❌ Deactivated guild link: ${link.guildId}`);
       }
@@ -1948,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { message } = req.body;
       
       // Check daily usage limits
-      const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
+      const usageCheck = await firebaseStorage.checkAndIncrementDailyUsage(userId);
       if (!usageCheck.allowed) {
         return res.status(429).json({ 
           message: `Daily limit reached. You've used ${usageCheck.current} of ${usageCheck.limit} banters today.`,
@@ -1961,7 +1968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testMessage = message || "This is a test message for BanterBox!";
       const banterText = await generateBanter('chat', { username: 'test_viewer' }, testMessage, userId);
       
-      const banterItem = await storage.createBanterItem({
+      const banterItem = await firebaseStorage.createBanterItem({
         userId,
         originalMessage: testMessage,
         banterText,
@@ -1982,8 +1989,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const audioBuffer = await generateTTS(banterText, userId, testMessage);
         if (audioBuffer) {
-          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
-          await storage.updateBanterItem(banterItem.id, { audioUrl });
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
+          await firebaseStorage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
           
           // Broadcast updated banter with audio
@@ -2012,7 +2019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id; // Use authenticated user ID
       
       // Check daily usage limits
-      const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
+      const usageCheck = await firebaseStorage.checkAndIncrementDailyUsage(userId);
       if (!usageCheck.allowed) {
         return res.status(429).json({ 
           message: `Daily limit reached. You've used ${usageCheck.current} of ${usageCheck.limit} banters today.`,
@@ -2024,7 +2031,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate banter for the simulated chat with user personality
       const banterText = await generateBanter('chat', { username }, message, userId);
       
-      const banterItem = await storage.createBanterItem({
+      const banterItem = await firebaseStorage.createBanterItem({
         userId,
         originalMessage: message,
         banterText,
@@ -2038,8 +2045,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const audioBuffer = await generateTTS(banterText, userId);
         if (audioBuffer) {
           // Save audio to object storage
-          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) || await objectStorage.saveAudioFile(audioBuffer);
-          await storage.updateBanterItem(banterItem.id, { audioUrl });
+          const audioUrl = await firebaseStorage.saveAudioFile(audioBuffer) ;
+          await firebaseStorage.updateBanterItem(banterItem.id, { audioUrl });
           banterItem.audioUrl = audioUrl;
         }
       } catch (audioError) {
@@ -2064,7 +2071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.user as any)?.id;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -2076,7 +2083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/elevenlabs/voices', isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.user as any)?.id;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -2098,7 +2105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { voiceId, text } = req.body;
       const userId = (req.user as any)?.id;
       
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -2143,7 +2150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const limit = parseInt(req.query.limit as string) || 10;
-      const banters = await storage.getBantersByUser(requestedUserId, limit);
+      const banters = await firebaseStorage.getBantersByUser(requestedUserId, limit);
       res.json(banters);
     } catch (error) {
       res.status(500).json({ message: "Failed to get banters" });
@@ -2161,7 +2168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const settings = await storage.getUserSettings(requestedUserId);
+      const settings = await firebaseStorage.getUserSettings(requestedUserId);
       if (!settings) {
         return res.status(404).json({ message: "Settings not found" });
       }
@@ -2178,7 +2185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/twitch/:userId", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.params;
-      const settings = await storage.getTwitchSettings(userId);
+      const settings = await firebaseStorage.getTwitchSettings(userId);
       
       if (!settings) {
         return res.status(404).json({ message: "Twitch settings not found" });
@@ -2196,7 +2203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/discord/:userId", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.params;
-      const settings = await storage.getDiscordSettings(userId);
+      const settings = await firebaseStorage.getDiscordSettings(userId);
       
       if (!settings) {
         return res.json({ isConnected: false });
@@ -2217,7 +2224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId } = req.params;
       console.log('Creating test Discord connection for user:', userId);
       
-      const result = await storage.upsertDiscordSettings({
+      const result = await firebaseStorage.upsertDiscordSettings({
         userId,
         discordUserId: 'test_discord_user_' + Date.now(),
         discordUsername: 'TestUser#' + Math.floor(Math.random() * 9999),
@@ -2245,7 +2252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId } = req.params;
       const { enabledEvents } = req.body;
       
-      const settings = await storage.updateDiscordEventSettings(userId, enabledEvents);
+      const settings = await firebaseStorage.updateDiscordEventSettings(userId, enabledEvents);
       if (!settings) {
         return res.status(404).json({ message: "Discord settings not found" });
       }
@@ -2263,7 +2270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId } = req.params;
       
       // Get Discord settings to get the bot token
-      const discordSettings = await storage.getDiscordSettings(userId);
+      const discordSettings = await firebaseStorage.getDiscordSettings(userId);
       if (!discordSettings || !discordSettings.accessToken) {
         return res.status(400).json({ message: "Discord not properly authenticated" });
       }
@@ -2315,7 +2322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Save Twitch settings
-      const settings = await storage.upsertTwitchSettings({
+      const settings = await firebaseStorage.upsertTwitchSettings({
         userId,
         accessToken,
         refreshToken,
@@ -2356,9 +2363,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update settings to disconnected
-      const settings = await storage.updateTwitchEventSettings(userId, []);
+      const settings = await firebaseStorage.updateTwitchEventSettings(userId, []);
       if (settings) {
-        await storage.upsertTwitchSettings({
+        await firebaseStorage.upsertTwitchSettings({
           ...settings,
           isConnected: false,
           accessToken: null,
@@ -2383,7 +2390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "enabledEvents must be an array" });
       }
 
-      const settings = await storage.updateTwitchEventSettings(userId, enabledEvents);
+      const settings = await firebaseStorage.updateTwitchEventSettings(userId, enabledEvents);
       if (!settings) {
         return res.status(404).json({ message: "Twitch settings not found" });
       }
@@ -2524,7 +2531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check subscription tier - personality builder requires Pro or higher
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -2553,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Created personality object:', newPersonality); // Debug log
       
       // Always save to user's favorite personalities (private library)
-      const settings = await storage.getUserSettings(userId);
+      const settings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities : [];
       const updatedFavorites = [...currentFavorites, newPersonality];
       
@@ -2563,7 +2570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedFavoritesCount: updatedFavorites.length 
       }); // Debug log
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
@@ -2640,7 +2647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Add to user's favorites
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       
       const downloadedPersonality = {
@@ -2658,7 +2665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, downloadedPersonality];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
@@ -2742,7 +2749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user already has this personality
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       const alreadyDownloaded = currentFavorites.some((personality: any) => 
         personality.name === personalityToDownload.name && 
@@ -2773,7 +2780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, downloadedPersonality];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
@@ -2797,7 +2804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id;
       
       // Check subscription tier - personality builder requires Pro or higher
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -3077,7 +3084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Add to user's favorites
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       
       const downloadedVoice = {
@@ -3097,7 +3104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, downloadedVoice];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
       
@@ -3193,7 +3200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user already has this voice
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const alreadyDownloaded = currentFavorites.some((voice: any) => 
         voice.baseVoiceId === voiceToDownload.baseVoiceId && 
@@ -3226,7 +3233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedFavorites = [...currentFavorites, downloadedVoice];
       
-      await storage.updateUserSettings(userId, {
+      await firebaseStorage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
       
@@ -3255,7 +3262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check subscription tier - voice builder requires Pro or higher
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -3295,7 +3302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check subscription tier - voice builder requires Pro or higher
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -3327,7 +3334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Created custom voice object:', customVoice); // Debug log
       
       // Always save to user's favorite voices (private library)
-      const userSettings = await storage.getUserSettings(userId);
+      const userSettings = await firebaseStorage.getUserSettings(userId);
       const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const updatedFavorites = [...currentFavorites, customVoice];
       
@@ -3337,7 +3344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedFavoritesCount: updatedFavorites.length 
       }); // Debug log
       
-      const updatedSettings = await storage.updateUserSettings(userId, {
+      const updatedSettings = await firebaseStorage.updateUserSettings(userId, {
         favoriteVoices: updatedFavorites
       });
       
@@ -3391,7 +3398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.user as any)?.id;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -3523,13 +3530,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.user as any)?.id;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
         return res.status(403).json({ message: "BYOK subscription required" });
       }
 
-      const apiKeys = await storage.getUserApiKeys(userId);
+      const apiKeys = await firebaseStorage.getUserApiKeys(userId);
       
       // Don't return the actual API keys, just metadata
       const safeApiKeys = apiKeys.map(key => ({
@@ -3552,7 +3559,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
         return res.status(403).json({ message: "BYOK subscription required" });
@@ -3579,7 +3586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       for (const keyData of keysToSave) {
-        await storage.saveUserApiKey(keyData);
+        await firebaseStorage.saveUserApiKey(keyData);
       }
 
       res.json({ success: true, message: "API keys saved successfully" });
@@ -3594,7 +3601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
         return res.status(403).json({ message: "BYOK subscription required" });
@@ -3647,13 +3654,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any)?.id;
       const { provider } = req.params;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
         return res.status(403).json({ message: "BYOK subscription required" });
       }
 
-      await storage.deleteUserApiKey(userId, provider);
+      await firebaseStorage.deleteUserApiKey(userId, provider);
       
       res.json({ success: true, message: "API key deleted successfully" });
     } catch (error) {
@@ -3666,11 +3673,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
       const userId = (req.user as any)?.id;
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
 
       const tierConfig = getTierConfig(subscriptionTier as SubscriptionTier);
-      const usage = await storage.getUsageTracking(userId, 'current');
+      const usage = await firebaseStorage.getUsageTracking(userId, 'current');
       
       const usageData = {
         tier: subscriptionTier,
@@ -3704,7 +3711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id;
       const { bantersGenerated, openaiTokensUsed, elevenlabsCharactersUsed, audioMinutesGenerated } = req.body;
       
-      await storage.updateUsageTracking(userId, {
+      await firebaseStorage.updateUsageTracking(userId, {
         bantersGenerated,
         openaiTokensUsed,
         elevenlabsCharactersUsed,
@@ -3744,7 +3751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { text, voiceId } = req.body;
       const userId = (req.user as any)?.id;
       
-      const user = await storage.getUser(userId);
+      const user = await firebaseStorage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
@@ -3788,8 +3795,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // TODO: Add validation for ElevenLabs key format
       
       // Store API keys using storage service
-      await storage.saveUserApiKey({ userId, provider: 'openai', apiKey: openai });
-      await storage.saveUserApiKey({ userId, provider: 'elevenlabs', apiKey: elevenlabs });
+      await firebaseStorage.saveUserApiKey({ userId, provider: 'openai', apiKey: openai });
+      await firebaseStorage.saveUserApiKey({ userId, provider: 'elevenlabs', apiKey: elevenlabs });
       
       res.json({ 
         message: "API keys stored successfully",
@@ -3957,10 +3964,10 @@ function buildFactualResponsePrompt(
   eventType: EventType,
   eventData: EventData
 ): string {
-  let prompt = `Question: "${question}"\n\n`;
+  let prompt = `Question: "${question}"nn`;
   
   if (contextString) {
-    prompt += `Recent context:\n${contextString}\n\n`;
+    prompt += `Recent context:n${contextString}nn`;
   }
   
   prompt += `Current event: ${eventType}`;
@@ -3974,7 +3981,7 @@ function buildFactualResponsePrompt(
     prompt += ` - "${eventData.messageContent}"`;
   }
   
-  prompt += `\n\nPlease provide a factual answer to the question based on the context and current event. If you don't have enough information, say so.`;
+  prompt += `nnPlease provide a factual answer to the question based on the context and current event. If you don't have enough information, say so.`;
   
   return prompt;
 }
