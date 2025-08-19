@@ -386,6 +386,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         audioUrl: audioUrl || null,
       });
       
+      console.log(`DEBUG: Created banter item for Twitch:`, {
+        id: banterItem.id,
+        userId,
+        eventType,
+        banterText: banterText.substring(0, 50) + '...',
+        hasAudio: !!audioUrl
+      });
+      
       // Broadcast to overlay via WebSocket
       broadcast({
         type: 'new_banter',
@@ -669,6 +677,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         originalMessage: originalMessage || '',
         banterText,
         audioUrl: audioUrl || null,
+      });
+      
+      console.log(`DEBUG: Created banter item for Discord:`, {
+        id: banterItem.id,
+        userId: workspaceUserId,
+        eventType: eventTypeForBanter,
+        banterText: banterText.substring(0, 50) + '...',
+        hasAudio: !!audioUrl
       });
       
       // Broadcast to overlay via WebSocket

@@ -33,8 +33,8 @@ export class FirebaseContextService {
       // Generate context summary based on event type
       const contextSummary = this.generateContextSummary(eventType, eventData);
 
-      // Calculate expiration time based on importance (more important = longer retention)
-      const hoursToRetain = Math.max(2, importance * 3); // 2-30 hours based on importance
+      // Revolutionary 72-hour context window for experimental long-term memory
+      const hoursToRetain = 72; // Fixed 72-hour retention for all context
       const expiresAt = new Date(Date.now() + hoursToRetain * 60 * 60 * 1000);
 
       // Extract participants from event data
@@ -99,48 +99,56 @@ export class FirebaseContextService {
       const allContext = recentContextSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Filter by expiration date in memory
-      const validContext = allContext.filter(ctx => {
+      const validContext = allContext.filter((ctx: any) => {
         const expiresAt = ctx.expiresAt?.toDate ? ctx.expiresAt.toDate() : new Date(ctx.expiresAt);
         return expiresAt > new Date();
       });
       
+      // Revolutionary Smart Context Logic - Only use context when it makes sense
+      const shouldUseContext = this.shouldUseContextForEvent(currentEventType, validContext.length);
+      
+      if (!shouldUseContext) {
+        console.log('Smart context logic: Skipping context for this event type');
+        return '';
+      }
+      
       // Filter by guildId if specified
       const guildContext = guildId 
-        ? validContext.filter(ctx => ctx.guildId === guildId)
-        : validContext.filter(ctx => !ctx.guildId);
+        ? validContext.filter((ctx: any) => ctx.guildId === guildId)
+        : validContext.filter((ctx: any) => !ctx.guildId);
       
       // Get global context (no guildId) if we have guildId specified
       const globalContext = guildId 
-        ? validContext.filter(ctx => !ctx.guildId)
+        ? validContext.filter((ctx: any) => !ctx.guildId)
         : [];
       
-      // Combine and sort by creation date
+      // Combine and sort by creation date - limit to prevent overwhelming
       const combinedContext = [...guildContext, ...globalContext]
-        .sort((a, b) => {
+        .sort((a: any, b: any) => {
           const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
           const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
           return dateB.getTime() - dateA.getTime();
         })
-        .slice(0, 8); // Take top 8 most recent
+        .slice(0, 4); // Reduced from 8 to 4 for less overwhelming context
       
       console.log(`Found ${combinedContext.length} total recent context items`);
       
       // Get similar event context (filter in memory instead of query)
       const similarContext = validContext
-        .filter(ctx => ctx.eventType === currentEventType)
-        .filter(ctx => {
+        .filter((ctx: any) => ctx.eventType === currentEventType)
+        .filter((ctx: any) => {
           if (guildId) {
             return ctx.guildId === guildId || !ctx.guildId;
           } else {
             return !ctx.guildId;
           }
         })
-        .sort((a, b) => {
+        .sort((a: any, b: any) => {
           const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
           const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
           return dateB.getTime() - dateA.getTime();
         })
-        .slice(0, 5);
+        .slice(0, 2); // Reduced from 5 to 2 for less overwhelming context
       
       console.log(`Found ${similarContext.length} similar context items`);
       
@@ -151,24 +159,21 @@ export class FirebaseContextService {
       
       let contextString = '';
       
-      // Add recent conversation context with natural, conversational formatting
+      // Revolutionary Context Formatting - More natural and less overwhelming
       if (combinedContext.length > 0) {
-        contextString += 'Recent conversation:\n';
-        combinedContext.reverse().forEach((ctx, index) => {
-          if (ctx.originalMessage) {
-            contextString += `- Someone said: "${ctx.originalMessage}"\n`;
-          }
-          if (ctx.banterResponse) {
-            contextString += `- You replied: "${ctx.banterResponse}"\n`;
+        contextString += 'Recent chat:\n';
+        combinedContext.reverse().forEach((ctx: any, index: number) => {
+          if (ctx.originalMessage && index < 2) { // Only show last 2 messages
+            contextString += `- "${ctx.originalMessage}"\n`;
           }
         });
         contextString += '\n';
       }
       
-      // Add similar event context for variety (only if we have recent context)
-      if (similarContext.length > 0 && combinedContext.length > 0) {
-        contextString += `You\'ve responded to similar things before:\n`;
-        similarContext.slice(0, 3).forEach((ctx, index) => {
+      // Only add similar context if it's truly relevant and not overwhelming
+      if (similarContext.length > 0 && combinedContext.length > 0 && Math.random() < 0.3) {
+        contextString += `Similar responses you've used:\n`;
+        similarContext.slice(0, 1).forEach((ctx: any) => { // Only show 1 similar response
           if (ctx.banterResponse) {
             contextString += `- "${ctx.banterResponse}"\n`;
           }
@@ -176,9 +181,9 @@ export class FirebaseContextService {
         contextString += '\n';
       }
       
-      // Add natural context instruction - less robotic, more conversational
+      // Revolutionary Context Instruction - Much more natural
       if (contextString) {
-        contextString += 'Keep the conversation flowing naturally. If someone mentioned something specific earlier (like what car they drive, their job, etc.), feel free to reference it. But don\'t force it - only bring it up if it fits naturally. Keep your responses fresh and varied.';
+        contextString += 'Use this context naturally. Only reference past conversations if it feels organic. Don\'t force connections - keep responses fresh and varied.';
       }
       
       return contextString;
@@ -217,6 +222,40 @@ export class FirebaseContextService {
     } catch (error) {
       console.error('Error updating context response:', error);
     }
+  }
+
+  /**
+   * Revolutionary Smart Context Logic - Determines when to use context
+   */
+  static shouldUseContextForEvent(eventType: EventType, contextCount: number): boolean {
+    // Don't use context if we have too much (overwhelming)
+    if (contextCount > 20) {
+      return false;
+    }
+    
+    // Always use context for these event types (they benefit from continuity)
+    const alwaysUseContext = ['discord_message', 'chat'];
+    if (alwaysUseContext.includes(eventType)) {
+      // But only 70% of the time to prevent over-reliance
+      return Math.random() < 0.7;
+    }
+    
+    // Sometimes use context for these event types
+    const sometimesUseContext = ['subscription', 'donation', 'raid', 'discord_member_join'];
+    if (sometimesUseContext.includes(eventType)) {
+      // 40% chance to use context
+      return Math.random() < 0.4;
+    }
+    
+    // Rarely use context for these event types (keep them fresh)
+    const rarelyUseContext = ['discord_reaction', 'follow', 'cheer'];
+    if (rarelyUseContext.includes(eventType)) {
+      // 20% chance to use context
+      return Math.random() < 0.2;
+    }
+    
+    // Default: 30% chance
+    return Math.random() < 0.3;
   }
 
   /**
