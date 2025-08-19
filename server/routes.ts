@@ -7,7 +7,7 @@ import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { getTierConfig } from "@shared/billing";
+import { getTierConfig, SubscriptionTier } from "@shared/billing";
 import { isProUser, getSubscriptionInfo } from "@shared/subscription";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
@@ -400,17 +400,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
+          const favoriteVoices = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices as any[] : [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
             voiceProvider,
             selectedVoiceId,
-            favoriteVoices: Array.isArray(favoriteVoices) ? favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })) : [],
+            favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
             settings: userSettings
           });
           
-          if (selectedVoiceId && Array.isArray(favoriteVoices) && favoriteVoices.length > 0) {
+          if (selectedVoiceId && favoriteVoices.length > 0) {
             // Find the selected voice in favorites
             const selectedVoice = favoriteVoices.find((voice: any) => 
               voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
@@ -655,7 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else if (voiceProvider === 'favorite') {
           // Use downloaded favorite voice
-          const favoriteVoices = (userSettings?.favoriteVoices as any[]) || [];
+          const favoriteVoices = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices as any[] : [];
           const selectedVoiceId = userSettings?.voiceId;
           
           console.log('Favorite voice generation debug:', {
@@ -711,7 +711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (audioUrl && globalDiscordService && isInVoiceChannel) {
           // Use the public object URL instead of localhost - Discord needs external access
           const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
-          console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+          console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME ? 'SET' : 'NOT_SET'}`);
           console.log(`Parsed domain: ${renderDomain}`);
           
           // Handle different audio URL types  
@@ -740,7 +740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const testResponse = await fetch(publicAudioUrl);
             console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
           } catch (error) {
-            console.log(`Audio URL not accessible:`, error.message);
+            console.log(`Audio URL not accessible:`, error instanceof Error ? error.message : 'Unknown error');
           }
           
           try {
@@ -810,7 +810,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete onboarding endpoint
   app.post('/api/user/complete-onboarding', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       await storage.completeOnboarding(userId);
       res.json({ success: true });
     } catch (error) {
@@ -822,7 +825,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search banters endpoint
   app.get('/api/banter/search', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const { query, eventType, limit } = req.query;
       
       const banters = await storage.searchBanters(
@@ -874,7 +880,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Users can only access their own settings
       if (userId !== authenticatedUserId && userId !== "demo-user") {
@@ -912,7 +921,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/settings/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const updates = req.body;
       
       // Users can only update their own settings
@@ -1351,7 +1363,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/discord/cleanup-stale", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.body;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = req.user?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Ensure user can only clean their own data
       if (userId !== authenticatedUserId) {
@@ -1394,7 +1409,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Emergency Discord bot restart (admin only)
   app.post("/api/discord/restart", isAuthenticated, async (req, res) => {
     try {
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = req.user?.id;
+      if (!authenticatedUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Only allow restart if Discord service exists and is unhealthy
       if (!globalDiscordService) {
@@ -1440,7 +1458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error('Error restarting Discord bot:', error);
-      res.status(500).json({ message: "Failed to restart Discord bot", error: error.message });
+      res.status(500).json({ message: "Failed to restart Discord bot", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -1448,14 +1466,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
       const { name, prompt, description } = req.body;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
-      if (!name || !prompt) {
-        return res.status(400).json({ message: "Name and prompt are required" });
+      // Input validation
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: "Name is required and must be a non-empty string" });
+      }
+      
+      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+        return res.status(400).json({ message: "Prompt is required and must be a non-empty string" });
+      }
+      
+      if (name.length > 100) {
+        return res.status(400).json({ message: "Name must be 100 characters or less" });
+      }
+      
+      if (prompt.length > 2000) {
+        return res.status(400).json({ message: "Prompt must be 2000 characters or less" });
+      }
+      
+      if (description && (typeof description !== 'string' || description.length > 500)) {
+        return res.status(400).json({ message: "Description must be a string and 500 characters or less" });
       }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       const newPersonality = {
         id: randomUUID(),
@@ -1480,9 +1518,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const settings = await storage.getUserSettings(userId);
-      const favorites = settings?.favoritePersonalities || [];
+      const favorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       
       res.json({ personalities: favorites });
     } catch (error) {
@@ -1494,10 +1535,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/favorites/personalities/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities as any[] : [];
       const updatedFavorites = currentFavorites.filter((p: any) => p.id !== id);
       
       await storage.updateUserSettings(userId, {
@@ -1515,14 +1559,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/voices", isAuthenticated, async (req, res) => {
     try {
       const { name, voiceId, provider, description } = req.body;
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       if (!name || !voiceId || !provider) {
         return res.status(400).json({ message: "Name, voiceId, and provider are required" });
       }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       
       const newVoice = {
         id: randomUUID(),
@@ -1624,8 +1671,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Personality test error:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message,
-        stack: error.stack 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
       });
     }
   });
@@ -3265,7 +3312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Error saving custom voice:', error);
-      res.status(500).json({ message: "Failed to save custom voice", error: error.message });
+      res.status(500).json({ message: "Failed to save custom voice", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -3553,7 +3600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
 
-      const tierConfig = getTierConfig(subscriptionTier);
+      const tierConfig = getTierConfig(subscriptionTier as SubscriptionTier);
       const usage = await storage.getUsageTracking(userId, 'current');
       
       const usageData = {
@@ -3643,7 +3690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Text and voiceId are required" });
       }
 
-      const audioUrl = await generateElevenLabsAudio(text, voiceId);
+      const audioUrl = await elevenLabsService.generateSpeech(text, voiceId);
       res.json({ audioUrl });
     } catch (error) {
       console.error('Error generating ElevenLabs audio:', error);
@@ -3654,7 +3701,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Store API keys for BYOK users
   app.post("/api/settings/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const { openai, elevenlabs } = req.body;
       
       if (!openai || !elevenlabs) {
@@ -3668,27 +3718,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // TODO: Add validation for ElevenLabs key format
       
-      // Store encrypted API keys in user settings
-      const [updatedSettings] = await db
-        .update(userSettings)
-        .set({ 
-          openaiApiKey: openai, // TODO: Encrypt this
-          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
-          updatedAt: new Date()
-        })
-        .where(eq(userSettings.userId, userId))
-        .returning();
-      
-      if (!updatedSettings) {
-        // Create new settings if they don't exist
-        await db.insert(userSettings).values({
-          userId,
-          openaiApiKey: openai, // TODO: Encrypt this
-          elevenlabsApiKey: elevenlabs, // TODO: Encrypt this
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
+      // Store API keys using storage service
+      await storage.saveUserApiKey({ userId, provider: 'openai', apiKey: openai });
+      await storage.saveUserApiKey({ userId, provider: 'elevenlabs', apiKey: elevenlabs });
       
       res.json({ 
         message: "API keys stored successfully",
@@ -3703,7 +3735,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fix subscription status for pro users
   app.post("/api/billing/fix-subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Get current user
       const [user] = await db.select().from(users).where(eq(users.id, userId));

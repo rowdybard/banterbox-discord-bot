@@ -399,9 +399,22 @@ export class DiscordService {
   disconnect() {
     this.stopHeartbeat();
     this.stopAutoReconnect();
+    
+    // Clean up all voice connections
+    for (const [guildId, connection] of this.voiceConnections.entries()) {
+      try {
+        connection.destroy();
+      } catch (error) {
+        console.error(`Error destroying voice connection for guild ${guildId}:`, error);
+      }
+    }
+    this.voiceConnections.clear();
+    
+    // Clean up memory maps
     this.voiceChannelMemory.clear();
     this.autoReconnectAttempts.clear();
     this.recentMessages.clear(); // Clear message cache on disconnect
+    
     this.client.destroy();
     console.log('Discord bot disconnected');
   }
@@ -552,7 +565,7 @@ export class DiscordService {
       
       // Convert localhost URL to public URL for Discord access
       const renderDomain = process.env.RENDER_EXTERNAL_HOSTNAME;
-      console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+      console.log(`RENDER_EXTERNAL_HOSTNAME env var: ${process.env.RENDER_EXTERNAL_HOSTNAME ? 'SET' : 'NOT_SET'}`);
       console.log(`Original audio URL: ${audioUrl}`);
       
       // Handle different audio URL types

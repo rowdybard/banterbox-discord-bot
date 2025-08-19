@@ -118,7 +118,7 @@ export class MemStorage implements IStorage {
       firstName: "Demo",
       lastName: "Streamer",
       profileImageUrl: null,
-      isPro: true, // Give demo user pro access
+      subscriptionTier: 'pro', // Give demo user pro access
       hasCompletedOnboarding: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -133,12 +133,15 @@ export class MemStorage implements IStorage {
       voiceId: null,
       autoPlay: true,
       volume: 75,
+      responseFrequency: 50,
       enabledEvents: ['chat'],
       overlayPosition: "bottom-center",
       overlayDuration: 5,
       overlayAnimation: "fade",
-              banterPersonality: "context",
+      banterPersonality: "context",
       customPersonalityPrompt: null,
+      favoritePersonalities: [],
+      favoriteVoices: [],
       updatedAt: new Date(),
     };
     this.userSettings.set("demo-user", demoSettings);
@@ -189,7 +192,7 @@ export class MemStorage implements IStorage {
         firstName: userData.firstName || null,
         lastName: userData.lastName || null,
         profileImageUrl: userData.profileImageUrl || null,
-        isPro: userData.isPro ?? false,
+        subscriptionTier: userData.subscriptionTier || 'free',
         hasCompletedOnboarding: userData.hasCompletedOnboarding ?? false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -213,7 +216,7 @@ export class MemStorage implements IStorage {
       firstName: insertUser.firstName || null,
       lastName: insertUser.lastName || null,
       profileImageUrl: insertUser.profileImageUrl || null,
-      isPro: insertUser.isPro ?? false,
+              subscriptionTier: insertUser.subscriptionTier || 'free',
       hasCompletedOnboarding: insertUser.hasCompletedOnboarding ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -246,7 +249,11 @@ export class MemStorage implements IStorage {
   async searchBanters(userId: string, query?: string, eventType?: string, limit = 20): Promise<BanterItem[]> {
     let banters = Array.from(this.banterItems.values())
       .filter(banter => banter.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
 
     if (query) {
       const searchTerm = query.toLowerCase();
@@ -617,7 +624,11 @@ export class MemStorage implements IStorage {
         if (ctx.expiresAt < new Date()) return false;
         return true;
       })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      })
       .slice(0, limit);
     return contexts;
   }
@@ -631,7 +642,11 @@ export class MemStorage implements IStorage {
         if (ctx.expiresAt < new Date()) return false;
         return true;
       })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      })
       .slice(0, limit);
     return contexts;
   }
@@ -933,8 +948,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllActiveGuildLinks(): Promise<GuildLink[]> {
-    const guildLinks = await db.select().from(guildLinks).where(eq(guildLinks.active, true));
-    return guildLinks;
+    const activeGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.active, true));
+    return activeGuildLinks;
   }
 
   async getGuildSettings(guildId: string): Promise<GuildSettings | undefined> {
