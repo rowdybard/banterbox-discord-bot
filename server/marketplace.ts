@@ -67,32 +67,32 @@ export class MarketplaceService {
     }
     
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      (query as any) = query.where(and(...conditions));
     }
     
     // Apply sorting
     switch (filters?.sortBy) {
       case 'newest':
-        query = query.orderBy(desc(marketplaceVoices.createdAt));
+        (query as any) = query.orderBy(desc(marketplaceVoices.createdAt));
         break;
       case 'downloads':
-        query = query.orderBy(desc(marketplaceVoices.downloads));
+        (query as any) = query.orderBy(desc(marketplaceVoices.downloads));
         break;
       case 'rating':
-        query = query.orderBy(
+        (query as any) = query.orderBy(
           desc(sql`${marketplaceVoices.upvotes} - ${marketplaceVoices.downvotes}`)
         );
         break;
       default:
         // Popular: combination of downloads and rating
-        query = query.orderBy(
+        (query as any) = query.orderBy(
           desc(sql`${marketplaceVoices.downloads} + (${marketplaceVoices.upvotes} - ${marketplaceVoices.downvotes}) * 10`)
         );
     }
     
     // Apply limit
     if (filters?.limit) {
-      query = query.limit(filters.limit);
+      (query as any) = query.limit(filters.limit);
     }
     
     return await query;
@@ -132,32 +132,32 @@ export class MarketplaceService {
     }
     
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      (query as any) = query.where(and(...conditions));
     }
     
     // Apply sorting
     switch (filters?.sortBy) {
       case 'newest':
-        query = query.orderBy(desc(marketplacePersonalities.createdAt));
+        (query as any) = query.orderBy(desc(marketplacePersonalities.createdAt));
         break;
       case 'downloads':
-        query = query.orderBy(desc(marketplacePersonalities.downloads));
+        (query as any) = query.orderBy(desc(marketplacePersonalities.downloads));
         break;
       case 'rating':
-        query = query.orderBy(
+        (query as any) = query.orderBy(
           desc(sql`${marketplacePersonalities.upvotes} - ${marketplacePersonalities.downvotes}`)
         );
         break;
       default:
         // Popular: combination of downloads and rating
-        query = query.orderBy(
+        (query as any) = query.orderBy(
           desc(sql`${marketplacePersonalities.downloads} + (${marketplacePersonalities.upvotes} - ${marketplacePersonalities.downvotes}) * 10`)
         );
     }
     
     // Apply limit
     if (filters?.limit) {
-      query = query.limit(filters.limit);
+      (query as any) = query.limit(filters.limit);
     }
     
     return await query;
@@ -389,7 +389,7 @@ export class MarketplaceService {
     let query = db.select().from(contentReports);
     
     if (status) {
-      query = query.where(eq(contentReports.status, status));
+      (query as any) = query.where(eq(contentReports.status, status));
     }
     
     return await query.orderBy(desc(contentReports.createdAt));

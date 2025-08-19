@@ -90,6 +90,7 @@ export const userSettings = pgTable("user_settings", {
   voiceId: text("voice_id"),
   autoPlay: boolean("auto_play").default(true),
   volume: integer("volume").default(75),
+  responseFrequency: integer("response_frequency").default(50), // 0-100 scale for response frequency
   enabledEvents: jsonb("enabled_events").default(['chat']),
   overlayPosition: text("overlay_position").default("bottom-center"),
   overlayDuration: integer("overlay_duration").default(12),

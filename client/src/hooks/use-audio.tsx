@@ -58,6 +58,16 @@ export function useAudio() {
       console.error("Failed to play audio:", error);
       setIsPlaying(false);
       setCurrentAudioId(null);
+      currentAudioRef.current = null;
+      
+      // Add user notification for audio errors
+      if (typeof window !== 'undefined' && (window as any).toast) {
+        (window as any).toast({
+          title: "Audio Error",
+          description: "Failed to play audio. Please try again.",
+          variant: "destructive"
+        });
+      }
     }
   }, [stopCurrentAudio, volume]);
 

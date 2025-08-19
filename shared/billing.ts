@@ -189,12 +189,14 @@ export function getTierConfig(tier: SubscriptionTier): PricingTier {
 
 export function isFeatureAvailable(tier: SubscriptionTier, feature: keyof PricingTier['limits']): boolean {
   const config = getTierConfig(tier);
-  return config.limits[feature] > 0;
+  const limit = config.limits[feature];
+  return typeof limit === 'number' && limit > 0;
 }
 
 export function getUsageLimit(tier: SubscriptionTier, feature: keyof PricingTier['limits']): number {
   const config = getTierConfig(tier);
-  return config.limits[feature];
+  const limit = config.limits[feature];
+  return typeof limit === 'number' ? limit : 0;
 }
 
 export function formatPrice(price: number, currency: string = 'USD'): string {

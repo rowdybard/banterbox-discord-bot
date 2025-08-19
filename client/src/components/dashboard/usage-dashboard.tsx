@@ -30,9 +30,9 @@ export function UsageDashboard({ userId, user }: UsageDashboardProps) {
   }) as { data: DailyStats | undefined, isLoading: boolean, error: any };
 
   const isProUser = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise';
-  const dailyLimit = isProUser ? Infinity : 50;
+  const dailyLimit = isProUser ? 0 : 50; // Use 0 for pro users to avoid Infinity arithmetic issues
   const currentUsage = stats?.bantersGenerated || 0;
-  const usagePercentage = isProUser ? 0 : Math.min((currentUsage / dailyLimit) * 100, 100);
+  const usagePercentage = isProUser ? 0 : Math.min((currentUsage / (dailyLimit || 1)) * 100, 100);
   
   const getUsageColor = () => {
     if (isProUser) return "text-yellow-400";

@@ -61,6 +61,10 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
   const [autoPlay, setAutoPlay] = useState(settings?.autoPlay ?? true);
   const [hasUnsavedVoiceChanges, setHasUnsavedVoiceChanges] = useState(false);
 
+  // Response Frequency State
+  const [responseFrequency, setResponseFrequency] = useState(settings?.responseFrequency || 50);
+  const [hasUnsavedResponseFrequencyChanges, setHasUnsavedResponseFrequencyChanges] = useState(false);
+
   // Personality Settings State
   const [selectedPersonality, setSelectedPersonality] = useState(settings?.banterPersonality || 'witty');
   const [customPrompt, setCustomPrompt] = useState(settings?.customPersonalityPrompt || '');
@@ -81,6 +85,10 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       setVolume(settings.volume || 75);
       setAutoPlay(settings.autoPlay ?? true);
       setHasUnsavedVoiceChanges(false);
+
+      // Response frequency settings
+      setResponseFrequency(settings.responseFrequency || 50);
+      setHasUnsavedResponseFrequencyChanges(false);
 
       // Personality settings
       setSelectedPersonality(settings.banterPersonality || 'witty');
@@ -125,6 +133,12 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
         toast({
           title: "Voice settings saved",
           description: "Your voice preferences have been updated.",
+        });
+      } else if (variables.responseFrequency !== undefined) {
+        setHasUnsavedResponseFrequencyChanges(false);
+        toast({
+          title: "Response frequency saved",
+          description: "Your response frequency settings have been updated.",
         });
       } else if (variables.banterPersonality !== undefined || variables.customPersonalityPrompt !== undefined) {
         setHasUnsavedPersonalityChanges(false);
@@ -213,17 +227,14 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       setVoiceId('');
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
-    } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
-      // Check if current voiceId is already a valid favorite voice
-      const currentVoiceIsFavorite = favoriteVoices.voices.some((voice: any) => 
+    } else if (provider === 'favorite' && (favoriteVoices as any)?.voices?.length > 0) {
+      const currentVoiceIsFavorite = (favoriteVoices as any).voices.some((voice: any) =>
         voice.baseVoiceId === voiceId || voice.voiceId === voiceId
       );
       
       if (!currentVoiceIsFavorite) {
-        // Set to first favorite voice if current voice is not a favorite
-        setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
+        setVoiceId((favoriteVoices as any).voices[0].baseVoiceId || (favoriteVoices as any).voices[0].voiceId);
       }
-      // If current voice is already a favorite, keep it
     }
   };
 
@@ -247,6 +258,13 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
   const handleAutoPlayChange = (checked: boolean) => {
     setAutoPlay(checked);
     setHasUnsavedVoiceChanges(true);
+  };
+
+  // Response Frequency Handlers
+  const handleResponseFrequencyChange = (value: number[]) => {
+    const newFrequency = value[0];
+    setResponseFrequency(newFrequency);
+    setHasUnsavedResponseFrequencyChanges(true);
   };
 
   // Test current voice
@@ -311,6 +329,14 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       voiceId: (voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') ? voiceId : undefined,
       volume,
       autoPlay,
+    };
+    
+    updateSettingsMutation.mutate(updates);
+  };
+
+  const handleSaveResponseFrequencySettings = () => {
+    const updates: Partial<UserSettings> = {
+      responseFrequency,
     };
     
     updateSettingsMutation.mutate(updates);
@@ -399,12 +425,12 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                   ))}
                   
                   {/* Favorite Voices */}
-                  {favoriteVoices?.voices?.length > 0 && (
+                  {(favoriteVoices as any)?.voices?.length > 0 && (
                     <>
                       <div className="px-2 py-1.5 text-xs font-medium text-gray-400 border-b border-gray-600 mt-2">
                         Saved Voices
                       </div>
-                      {favoriteVoices.voices.map((voice: any) => (
+                      {(favoriteVoices as any).voices.map((voice: any) => (
                         <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
                           <div className="flex items-center space-x-2">
                             <Star className="h-3 w-3 text-yellow-400" />
@@ -420,7 +446,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
           )}
 
           {/* Favorite Voice Selection */}
-          {voiceProvider === 'favorite' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && favoriteVoices?.voices?.length > 0 && (
+          {voiceProvider === 'favorite' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (favoriteVoices as any)?.voices?.length > 0 && (
             <div>
               <Label className="text-sm font-medium text-gray-300 mb-2 block">
                 Saved Voice
@@ -434,7 +460,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                   <SelectValue placeholder="Select a saved voice..." />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  {favoriteVoices.voices.map((voice: any) => (
+                  {(favoriteVoices as any).voices.map((voice: any) => (
                     <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
                       <div className="flex items-center space-x-2">
                         <Star className="h-3 w-3 text-yellow-400" />
@@ -515,6 +541,70 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
             <div className="text-xs text-yellow-400 flex items-center space-x-1">
               <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
               <span>You have unsaved voice changes</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Response Frequency Settings */}
+      <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <i className="fas fa-chart-line text-primary h-5 w-5"></i>
+            <CardTitle className="text-white">Response Frequency</CardTitle>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Control how often BanterBox responds to trigger words and direct questions
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          
+          {/* Response Frequency Slider */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-medium text-gray-300">
+                Response Frequency
+              </Label>
+              <span className="text-sm text-gray-400">{responseFrequency}%</span>
+            </div>
+            <Slider
+              value={[responseFrequency]}
+              onValueChange={handleResponseFrequencyChange}
+              max={100}
+              min={0}
+              step={5}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <span>Less Responsive</span>
+              <span>More Responsive</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {responseFrequency <= 25 && "Very selective - only responds to direct mentions and important questions"}
+              {responseFrequency > 25 && responseFrequency <= 50 && "Moderate - responds to trigger words and direct questions"}
+              {responseFrequency > 50 && responseFrequency <= 75 && "Responsive - responds to most interactions and conversations"}
+              {responseFrequency > 75 && "Very responsive - responds to almost all interactions"}
+            </p>
+          </div>
+
+          {/* Response Frequency Action Buttons */}
+          <div className="flex items-center space-x-3 pt-4 border-t border-gray-700">
+            <Button
+              onClick={handleSaveResponseFrequencySettings}
+              disabled={!hasUnsavedResponseFrequencyChanges || updateSettingsMutation.isPending}
+              className="bg-primary hover:bg-primary/90 text-white"
+              data-testid="button-save-response-frequency-settings"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {updateSettingsMutation.isPending ? "Saving..." : "Save Response Frequency"}
+            </Button>
+          </div>
+
+          {/* Response Frequency Unsaved Changes Indicator */}
+          {hasUnsavedResponseFrequencyChanges && (
+            <div className="text-xs text-yellow-400 flex items-center space-x-1">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+              <span>You have unsaved response frequency changes</span>
             </div>
           )}
         </CardContent>
