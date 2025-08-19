@@ -16,8 +16,11 @@ import {
   ThumbsUp,
   ThumbsDown,
   Sparkles,
-  Mic
+  Mic,
+  Flag
 } from "lucide-react";
+import { RatingButtons } from "@/components/marketplace/rating-buttons";
+import { ReportDialog } from "@/components/marketplace/report-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const VOICE_CATEGORIES = [
@@ -46,6 +49,8 @@ export default function VoiceMarketplacePage() {
   const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'downloads'>('recent');
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportItem, setReportItem] = useState<{ id: string; name: string } | null>(null);
 
   const { toast } = useToast();
 
@@ -278,14 +283,24 @@ export default function VoiceMarketplacePage() {
                         <Download className="h-3 w-3" />
                         {voice.downloads}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <ThumbsUp className="h-3 w-3" />
-                        {voice.upvotes}
-                      </span>
+                      <RatingButtons
+                        itemType="voice"
+                        itemId={voice.id}
+                        upvotes={voice.upvotes}
+                        downvotes={voice.downvotes}
+                        size="sm"
+                      />
                     </div>
-                    <span className="text-xs">
-                      {new Date(voice.createdAt).toLocaleDateString()}
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setReportItem({ id: voice.id, name: voice.name });
+                        setReportDialogOpen(true);
+                      }}
+                    >
+                      <Flag className="h-3 w-3" />
+                    </Button>
                   </div>
 
                   <div className="flex gap-2">
@@ -336,6 +351,17 @@ export default function VoiceMarketplacePage() {
           </Card>
         )}
       </div>
+      
+      {/* Report Dialog */}
+      {reportItem && (
+        <ReportDialog
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          itemType="voice"
+          itemId={reportItem.id}
+          itemName={reportItem.name}
+        />
+      )}
     </div>
   );
 }

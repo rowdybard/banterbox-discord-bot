@@ -1851,18 +1851,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test ElevenLabs voice (Pro users only)
   app.post('/api/elevenlabs/test-voice', isAuthenticated, async (req: any, res) => {
     try {
+      const { voiceId, text } = req.body;
       const userId = req.user.id;
+      
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
       
       if (!isPro) {
-        return res.status(403).json({ message: "Pro subscription required" });
+        return res.status(403).json({ 
+          message: "ElevenLabs voices require Pro subscription",
+          upgrade: "Upgrade to Pro to access premium voices"
+        });
       }
 
-      const { voiceId, text } = req.body;
+      if (!voiceId) {
+        return res.status(400).json({ message: "VoiceId is required" });
+      }
+
       const testText = text || "Hello! This is a test of your selected voice.";
       
+      // Generate audio using ElevenLabs
       const audioBuffer = await elevenLabsService.generateSpeech(testText, voiceId);
       
       // Set appropriate headers for audio
@@ -1873,7 +1882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.send(audioBuffer);
     } catch (error) {
-      console.error("Error testing ElevenLabs voice:", error);
+      console.error('Error testing ElevenLabs voice:', error);
       res.status(500).json({ message: "Failed to test voice" });
     }
   });
@@ -2180,70 +2189,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Marketplace API routes
   app.get("/api/marketplace/personalities", async (req, res) => {
     try {
-      // For now, return some sample personalities
-      // In a real implementation, this would fetch from a database
-      const samplePersonalities = [
-        {
-          id: "1",
-          name: "Gaming Guru",
-          description: "Perfect for gaming streams with witty commentary",
-          prompt: "You are a gaming expert with deep knowledge of games. Provide insightful commentary, tips, and reactions to gaming moments. Keep responses engaging and informative.",
-          category: "Gaming",
-          tags: ["gaming", "expert", "commentary"],
-          authorName: "BanterBox Team",
-          isVerified: true,
-          downloads: 1250,
-          upvotes: 89,
-          downvotes: 3,
-          isActive: true,
-          createdAt: "2024-01-15T10:00:00Z",
-          updatedAt: "2024-01-15T10:00:00Z"
-        },
-        {
-          id: "2",
-          name: "Comedy Master",
-          description: "Hilarious responses that keep everyone laughing",
-          prompt: "You are a comedy master who creates hilarious responses. Use clever jokes, puns, and witty observations. Keep the humor clean and entertaining for all ages.",
-          category: "Comedy",
-          tags: ["comedy", "humor", "entertainment"],
-          authorName: "BanterBox Team",
-          isVerified: true,
-          downloads: 2100,
-          upvotes: 156,
-          downvotes: 7,
-          isActive: true,
-          createdAt: "2024-01-10T14:30:00Z",
-          updatedAt: "2024-01-10T14:30:00Z"
-        },
-        {
-          id: "3",
-          name: "Educational Expert",
-          description: "Great for educational content and learning streams",
-          prompt: "You are an educational expert who explains concepts clearly and engagingly. Provide helpful insights, answer questions, and make learning fun and accessible.",
-          category: "Education",
-          tags: ["education", "learning", "helpful"],
-          authorName: "BanterBox Team",
-          isVerified: true,
-          downloads: 890,
-          upvotes: 67,
-          downvotes: 2,
-          isActive: true,
-          createdAt: "2024-01-20T09:15:00Z",
-          updatedAt: "2024-01-20T09:15:00Z"
-        }
-      ];
+      const { category, sortBy, search, limit } = req.query;
+      const { marketplaceService } = await import('./marketplace');
       
-      res.json(samplePersonalities);
+      const personalities = await marketplaceService.getPersonalities({
+        category: category as string,
+        sortBy: sortBy as string,
+        search: search as string,
+        limit: limit ? parseInt(limit as string) : 50,
+        onlyApproved: true // Only show approved items
+      });
+      
+      res.json(personalities);
     } catch (error) {
       console.error('Error getting marketplace personalities:', error);
       res.status(500).json({ message: "Failed to get marketplace personalities" });
     }
   });
 
-  app.post("/api/marketplace/personalities", isAuthenticated, async (req, res) => {
+  // Save personality (private or to marketplace)
+  app.post("/api/personality-builder/save", isAuthenticated, async (req, res) => {
     try {
-      const { name, description, prompt, category, tags, isVerified } = req.body;
+      const { name, description, prompt, category, tags, addToMarketplace } = req.body;
       const userId = req.user.id;
+      
+      console.log('Personality save request:', { userId, name, addToMarketplace }); // Debug log
       
       if (!name || !prompt) {
         return res.status(400).json({ message: "Name and prompt are required" });
@@ -2261,47 +2231,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // In a real implementation, this would save to a marketplace database
-      // For now, we'll just save it to the user's favorites
-      const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
-      
+      // Create the personality object
       const newPersonality = {
         id: randomUUID(),
-        name,
-        prompt,
-        description: description || "",
+        name: name.trim(),
+        prompt: prompt.trim(),
+        description: description ? description.trim() : "",
         category: category || "Custom",
-        tags: tags || ["custom"],
+        tags: tags && tags.length > 0 ? tags : ["custom"],
         authorName: "You",
-        isVerified: isVerified || false,
-        downloads: 0,
-        upvotes: 0,
-        downvotes: 0,
+        isVerified: false,
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       
+      console.log('Created personality object:', newPersonality); // Debug log
+      
+      // Always save to user's favorite personalities (private library)
+      const settings = await storage.getUserSettings(userId);
+      const currentFavorites = settings?.favoritePersonalities || [];
       const updatedFavorites = [...currentFavorites, newPersonality];
+      
+      console.log('Updating user settings with personality:', { 
+        userId, 
+        currentFavoritesCount: currentFavorites.length,
+        updatedFavoritesCount: updatedFavorites.length 
+      }); // Debug log
       
       await storage.updateUserSettings(userId, {
         favoritePersonalities: updatedFavorites
       });
       
-      res.json({ success: true, personality: newPersonality });
+      // If addToMarketplace is true, also save to marketplace
+      if (addToMarketplace) {
+        try {
+          const { marketplaceService } = await import('./marketplace');
+          const marketplacePersonality = await marketplaceService.createPersonality({
+            name: name.trim(),
+            description: description ? description.trim() : "",
+            prompt: prompt.trim(),
+            category: category || "Custom",
+            tags: tags && tags.length > 0 ? tags : ["custom"],
+            authorId: userId,
+            authorName: user?.firstName || user?.email || "Anonymous",
+            moderationStatus: 'pending' // All new items start as pending
+          });
+          console.log('Personality submitted to marketplace:', marketplacePersonality.id);
+        } catch (error) {
+          console.error('Failed to submit personality to marketplace:', error);
+          // Don't fail the whole operation if marketplace submission fails
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        personality: newPersonality,
+        message: addToMarketplace 
+          ? "Personality saved to your library and will be reviewed for marketplace!" 
+          : "Personality saved to your library!"
+      });
     } catch (error) {
-      console.error('Error saving marketplace personality:', error);
+      console.error('Error saving personality:', error);
       res.status(500).json({ message: "Failed to save personality" });
     }
+  });
+
+  // Legacy endpoint - redirect to new one
+  app.post("/api/marketplace/personalities", isAuthenticated, async (req, res) => {
+    // This endpoint is kept for backward compatibility
+    // It now just calls the new endpoint with addToMarketplace = true
+    req.body.addToMarketplace = true;
+    return app._router.handle(
+      Object.assign(req, { url: '/api/personality-builder/save', path: '/api/personality-builder/save' }), 
+      res
+    );
   });
 
   app.post("/api/marketplace/personalities/:personalityId/download", isAuthenticated, async (req, res) => {
     try {
       const { personalityId } = req.params;
       const userId = req.user.id;
+      const { marketplaceService } = await import('./marketplace');
       
-      // Find the personality in the marketplace (using sample data for now)
+      // Get the personality from marketplace
+      const personalityToDownload = await marketplaceService.getPersonality(personalityId);
+      if (!personalityToDownload) {
+        return res.status(404).json({ message: "Personality not found" });
+      }
+      
+      // Check if user already downloaded
+      const alreadyDownloaded = await marketplaceService.hasUserDownloaded(userId, 'personality', personalityId);
+      if (alreadyDownloaded) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Personality already downloaded",
+          personalityId 
+        });
+      }
+      
+      // Add to user's favorites
+      const userSettings = await storage.getUserSettings(userId);
+      const currentFavorites = userSettings?.favoritePersonalities || [];
+      
+      const downloadedPersonality = {
+        id: randomUUID(),
+        name: personalityToDownload.name,
+        description: personalityToDownload.description,
+        prompt: personalityToDownload.prompt,
+        category: personalityToDownload.category,
+        tags: personalityToDownload.tags,
+        authorName: personalityToDownload.authorName,
+        isVerified: personalityToDownload.isVerified,
+        downloadedAt: new Date().toISOString(),
+        originalPersonalityId: personalityId
+      };
+      
+      const updatedFavorites = [...currentFavorites, downloadedPersonality];
+      
+      await storage.updateUserSettings(userId, {
+        favoritePersonalities: updatedFavorites
+      });
+      
+      // Track download
+      await marketplaceService.downloadItem(userId, 'personality', personalityId);
+      
+      console.log(`Personality "${personalityToDownload.name}" downloaded by user ${userId}`);
+      
+      res.json({ 
+        success: true, 
+        message: "Personality downloaded successfully and added to your library",
+        personalityId,
+        personalityName: personalityToDownload.name
+      });
+    } catch (error) {
+      console.error('Error downloading personality:', error);
+      res.status(500).json({ message: "Failed to download personality" });
+    }
+  });
+  
+  // Legacy download endpoint using sample data (remove after migration)
+  app.post("/api/marketplace/personalities/:personalityId/download-sample", isAuthenticated, async (req, res) => {
+    try {
+      const { personalityId } = req.params;
+      const userId = req.user.id;
+      
       const samplePersonalities = [
         {
           id: "1",
@@ -2483,10 +2557,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Voice Marketplace API routes
   app.get("/api/marketplace/voices", async (req, res) => {
     try {
+      const { category, sortBy, search, limit } = req.query;
+      const { marketplaceService } = await import('./marketplace');
+      
+      const voices = await marketplaceService.getVoices({
+        category: category as string,
+        sortBy: sortBy as string,
+        search: search as string,
+        limit: limit ? parseInt(limit as string) : 50,
+        onlyApproved: true // Only show approved items
+      });
+      
+      res.json(voices);
+    } catch (error) {
+      console.error('Error getting marketplace voices:', error);
+      res.status(500).json({ message: "Failed to get marketplace voices" });
+    }
+  });
+  
+  // Legacy sample voices endpoint (for testing)
+  app.get("/api/marketplace/voices/sample", async (req, res) => {
+    try {
       const { category, sortBy, limit } = req.query;
       
-      // For now, return some sample voices
-      // In a real implementation, this would fetch from a database
       const sampleVoices = [
         {
           id: "1",
@@ -2581,8 +2674,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { voiceId } = req.params;
       const userId = req.user.id;
+      const { marketplaceService } = await import('./marketplace');
       
-      // Find the voice in the marketplace (using sample data for now)
+      // Get the voice from marketplace
+      const voiceToDownload = await marketplaceService.getVoice(voiceId);
+      if (!voiceToDownload) {
+        return res.status(404).json({ message: "Voice not found" });
+      }
+      
+      // Check if user already downloaded
+      const alreadyDownloaded = await marketplaceService.hasUserDownloaded(userId, 'voice', voiceId);
+      if (alreadyDownloaded) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Voice already downloaded",
+          voiceId 
+        });
+      }
+      
+      // Add to user's favorites
+      const userSettings = await storage.getUserSettings(userId);
+      const currentFavorites = userSettings?.favoriteVoices || [];
+      
+      const downloadedVoice = {
+        id: randomUUID(),
+        name: voiceToDownload.name,
+        description: voiceToDownload.description,
+        category: voiceToDownload.category,
+        tags: voiceToDownload.tags,
+        voiceId: voiceToDownload.voiceId,
+        baseVoiceId: voiceToDownload.baseVoiceId,
+        settings: voiceToDownload.settings,
+        sampleText: voiceToDownload.sampleText,
+        provider: 'elevenlabs',
+        downloadedAt: new Date().toISOString(),
+        originalVoiceId: voiceId
+      };
+      
+      const updatedFavorites = [...currentFavorites, downloadedVoice];
+      
+      await storage.updateUserSettings(userId, {
+        favoriteVoices: updatedFavorites
+      });
+      
+      // Track download
+      await marketplaceService.downloadItem(userId, 'voice', voiceId);
+      
+      console.log(`Voice "${voiceToDownload.name}" downloaded by user ${userId}`);
+      
+      res.json({ 
+        success: true, 
+        message: "Voice downloaded successfully and added to your library",
+        voiceId,
+        voiceName: voiceToDownload.name
+      });
+    } catch (error) {
+      console.error('Error downloading voice:', error);
+      res.status(500).json({ message: "Failed to download voice" });
+    }
+  });
+  
+  // Legacy download endpoint using sample data (remove after migration)
+  app.post("/api/marketplace/voices/:voiceId/download-sample", isAuthenticated, async (req, res) => {
+    try {
+      const { voiceId } = req.params;
+      const userId = req.user.id;
+      
       const sampleVoices = [
         {
           id: "1",
@@ -2674,7 +2831,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: voiceToDownload.description,
         category: voiceToDownload.category,
         tags: voiceToDownload.tags,
-        baseVoiceId: voiceToDownload.baseVoiceId,
+        voiceId: voiceToDownload.baseVoiceId, // Changed to voiceId to match frontend expectations
+        baseVoiceId: voiceToDownload.baseVoiceId, // Keep for backward compatibility
         settings: voiceToDownload.settings,
         sampleText: voiceToDownload.sampleText,
         provider: 'elevenlabs', // All marketplace voices are ElevenLabs
@@ -2773,7 +2931,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: description ? description.trim() : "",
         category: category || "Custom",
         tags: tags && tags.length > 0 ? tags : ["custom"],
-        baseVoiceId,
+        voiceId: baseVoiceId, // Changed from baseVoiceId to voiceId to match frontend expectations
+        baseVoiceId, // Keep this for backward compatibility
         settings: settings || {},
         sampleText: sampleText || "Sample text for this voice.",
         authorId: userId,
@@ -2783,7 +2942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('Created custom voice object:', customVoice); // Debug log
       
-      // Save to user's favorite voices
+      // Always save to user's favorite voices (private library)
       const userSettings = await storage.getUserSettings(userId);
       const currentFavorites = userSettings?.favoriteVoices || [];
       const updatedFavorites = [...currentFavorites, customVoice];
@@ -2800,11 +2959,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('User settings updated successfully:', !!updatedSettings); // Debug log
       
+      // If addToMarketplace is true, also save to marketplace
+      if (addToMarketplace) {
+        try {
+          const { marketplaceService } = await import('./marketplace');
+          const marketplaceVoice = await marketplaceService.createVoice({
+            name: name.trim(),
+            description: description ? description.trim() : "",
+            category: category || "Custom",
+            tags: tags && tags.length > 0 ? tags : ["custom"],
+            voiceId: baseVoiceId,
+            baseVoiceId,
+            settings: settings || {},
+            sampleText: sampleText || "Sample text for this voice.",
+            authorId: userId,
+            authorName: user?.firstName || user?.email || "Anonymous",
+            moderationStatus: 'pending' // All new items start as pending
+          });
+          console.log('Voice submitted to marketplace:', marketplaceVoice.id);
+        } catch (error) {
+          console.error('Failed to submit voice to marketplace:', error);
+          // Don't fail the whole operation if marketplace submission fails
+        }
+      }
+      
       res.json({ 
         success: true, 
         voice: customVoice,
         message: addToMarketplace 
-          ? "Voice saved and added to marketplace!" 
+          ? "Voice saved to your library and will be reviewed for marketplace!" 
           : "Voice saved to your library!"
       });
     } catch (error) {
@@ -3283,6 +3466,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to create checkout session" });
     }
   });
+
+  // Register marketplace endpoints
+  const { registerMarketplaceEndpoints } = await import('./marketplace-endpoints');
+  registerMarketplaceEndpoints(app);
 
   return httpServer;
         }

@@ -146,12 +146,12 @@ export default function PersonalityBuilderPage() {
         prompt: personalityPrompt.trim(), // Ensure prompt is included
         category: selectedCategory,
         tags: selectedTags.length > 0 ? selectedTags : ['custom'],
-        isVerified: false
+        addToMarketplace: addToMarketplace // Send the marketplace flag
       };
 
       console.log('Saving personality with data:', personalityData); // Debug log
 
-      const response = await apiRequest('POST', '/api/marketplace/personalities', personalityData);
+      const response = await apiRequest('POST', '/api/personality-builder/save', personalityData);
       
       if (!response.ok) {
         const errorData = await response.json();

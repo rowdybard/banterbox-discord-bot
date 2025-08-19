@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type ContextMemory, type InsertContextMemory, type EventType, type EventData, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings, contextMemory } from "@shared/schema";
+import { type User, type InsertUser, type UpsertUser, type BanterItem, type InsertBanterItem, type UserSettings, type InsertUserSettings, type DailyStats, type InsertDailyStats, type TwitchSettings, type InsertTwitchSettings, type DiscordSettings, type InsertDiscordSettings, type LinkCode, type InsertLinkCode, type GuildLink, type InsertGuildLink, type GuildSettings, type InsertGuildSettings, type ContextMemory, type InsertContextMemory, type EventType, type EventData, type MarketplaceVoice, type InsertMarketplaceVoice, type MarketplacePersonality, type InsertMarketplacePersonality, type UserDownload, type InsertUserDownload, type UserRating, type InsertUserRating, type ContentReport, type InsertContentReport, users, banterItems, userSettings, dailyStats, twitchSettings, discordSettings, linkCodes, guildLinks, guildSettings, contextMemory, marketplaceVoices, marketplacePersonalities, userDownloads, userRatings, contentReports } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -72,6 +72,30 @@ export interface IStorage {
   getContextByType(userId: string, eventType: string, guildId?: string, limit?: number): Promise<ContextMemory[]>;
   updateContextResponse(contextId: string, banterResponse: string): Promise<void>;
   cleanExpiredContext(): Promise<number>;
+
+  // Marketplace methods
+  createMarketplaceVoice(voice: InsertMarketplaceVoice): Promise<MarketplaceVoice>;
+  createMarketplacePersonality(personality: InsertMarketplacePersonality): Promise<MarketplacePersonality>;
+  getMarketplaceVoices(filters?: { category?: string; search?: string; sortBy?: string; limit?: number }): Promise<MarketplaceVoice[]>;
+  getMarketplacePersonalities(filters?: { category?: string; search?: string; sortBy?: string; limit?: number }): Promise<MarketplacePersonality[]>;
+  getMarketplaceVoice(id: string): Promise<MarketplaceVoice | undefined>;
+  getMarketplacePersonality(id: string): Promise<MarketplacePersonality | undefined>;
+  updateMarketplaceItem(itemType: 'voice' | 'personality', id: string, updates: any): Promise<void>;
+  
+  // User interactions
+  downloadMarketplaceItem(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<UserDownload>;
+  hasUserDownloaded(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<boolean>;
+  rateMarketplaceItem(userId: string, itemType: 'voice' | 'personality', itemId: string, rating: 1 | -1): Promise<void>;
+  getUserRating(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<number | null>;
+  
+  // Moderation
+  moderateMarketplaceItem(itemType: 'voice' | 'personality', itemId: string, status: 'approved' | 'rejected', moderatorId: string, notes?: string): Promise<void>;
+  getPendingModerationItems(): Promise<{ voices: MarketplaceVoice[]; personalities: MarketplacePersonality[] }>;
+  
+  // Reporting
+  reportContent(report: InsertContentReport): Promise<ContentReport>;
+  getContentReports(status?: string): Promise<ContentReport[]>;
+  reviewReport(reportId: string, reviewerId: string, status: 'resolved' | 'dismissed', notes?: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {

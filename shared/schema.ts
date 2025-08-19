@@ -174,6 +174,96 @@ export const contextMemory = pgTable("context_memory", {
   expiresAt: timestamp("expires_at").notNull(),
 });
 
+// Marketplace Voices - public voice marketplace
+export const marketplaceVoices = pgTable("marketplace_voices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  category: varchar("category").notNull(),
+  tags: text("tags").array().default([]),
+  voiceId: varchar("voice_id").notNull(), // ElevenLabs voice ID
+  baseVoiceId: varchar("base_voice_id"), // For backward compatibility
+  settings: jsonb("settings").notNull(), // Voice settings (stability, similarity, etc.)
+  sampleText: text("sample_text"),
+  sampleAudioUrl: text("sample_audio_url"),
+  authorId: varchar("author_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  authorName: varchar("author_name").notNull(),
+  isVerified: boolean("is_verified").default(false),
+  isActive: boolean("is_active").default(true),
+  downloads: integer("downloads").default(0),
+  upvotes: integer("upvotes").default(0),
+  downvotes: integer("downvotes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  moderationStatus: varchar("moderation_status").default("pending"), // 'pending', 'approved', 'rejected'
+  moderationNotes: text("moderation_notes"),
+  moderatedAt: timestamp("moderated_at"),
+  moderatedBy: varchar("moderated_by").references(() => users.id),
+});
+
+// Marketplace Personalities - public personality marketplace
+export const marketplacePersonalities = pgTable("marketplace_personalities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  prompt: text("prompt").notNull(), // The actual personality prompt
+  category: varchar("category").notNull(),
+  tags: text("tags").array().default([]),
+  authorId: varchar("author_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  authorName: varchar("author_name").notNull(),
+  isVerified: boolean("is_verified").default(false),
+  isActive: boolean("is_active").default(true),
+  downloads: integer("downloads").default(0),
+  upvotes: integer("upvotes").default(0),
+  downvotes: integer("downvotes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  moderationStatus: varchar("moderation_status").default("pending"), // 'pending', 'approved', 'rejected'
+  moderationNotes: text("moderation_notes"),
+  moderatedAt: timestamp("moderated_at"),
+  moderatedBy: varchar("moderated_by").references(() => users.id),
+});
+
+// User Downloads - track what users have downloaded
+export const userDownloads = pgTable("user_downloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(), // ID from marketplace_voices or marketplace_personalities
+  downloadedAt: timestamp("downloaded_at").defaultNow(),
+}, (table) => [
+  index("idx_user_downloads_user").on(table.userId),
+  index("idx_user_downloads_item").on(table.itemType, table.itemId),
+]);
+
+// User Ratings - track user ratings for marketplace items
+export const userRatings = pgTable("user_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(),
+  rating: integer("rating").notNull(), // 1 for upvote, -1 for downvote
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_ratings_unique").on(table.userId, table.itemType, table.itemId),
+]);
+
+// Reports - for flagging inappropriate content
+export const contentReports = pgTable("content_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reporterId: varchar("reporter_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(),
+  reason: varchar("reason").notNull(), // 'inappropriate', 'offensive', 'spam', 'copyright', 'other'
+  description: text("description"),
+  status: varchar("status").default("pending"), // 'pending', 'reviewed', 'resolved', 'dismissed'
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+});
+
 // Legacy Discord settings (will be removed after migration)
 export const discordSettings = pgTable("discord_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -276,6 +366,58 @@ export const insertContextMemorySchema = createInsertSchema(contextMemory).omit(
 
 export type InsertContextMemory = z.infer<typeof insertContextMemorySchema>;
 export type ContextMemory = typeof contextMemory.$inferSelect;
+
+// Marketplace schemas
+export const insertMarketplaceVoiceSchema = createInsertSchema(marketplaceVoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  downloads: true,
+  upvotes: true,
+  downvotes: true,
+});
+
+export const insertMarketplacePersonalitySchema = createInsertSchema(marketplacePersonalities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  downloads: true,
+  upvotes: true,
+  downvotes: true,
+});
+
+export const insertUserDownloadSchema = createInsertSchema(userDownloads).omit({
+  id: true,
+  downloadedAt: true,
+});
+
+export const insertUserRatingSchema = createInsertSchema(userRatings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertContentReportSchema = createInsertSchema(contentReports).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+});
+
+// Marketplace types
+export type InsertMarketplaceVoice = z.infer<typeof insertMarketplaceVoiceSchema>;
+export type MarketplaceVoice = typeof marketplaceVoices.$inferSelect;
+
+export type InsertMarketplacePersonality = z.infer<typeof insertMarketplacePersonalitySchema>;
+export type MarketplacePersonality = typeof marketplacePersonalities.$inferSelect;
+
+export type InsertUserDownload = z.infer<typeof insertUserDownloadSchema>;
+export type UserDownload = typeof userDownloads.$inferSelect;
+
+export type InsertUserRating = z.infer<typeof insertUserRatingSchema>;
+export type UserRating = typeof userRatings.$inferSelect;
+
+export type InsertContentReport = z.infer<typeof insertContentReportSchema>;
+export type ContentReport = typeof contentReports.$inferSelect;
 
 // Legacy Discord types (to be removed)
 export type InsertDiscordSettings = z.infer<typeof insertDiscordSettingsSchema>;

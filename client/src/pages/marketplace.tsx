@@ -21,8 +21,11 @@ import {
   CheckCircle,
   Star,
   Play,
-  Loader2
+  Loader2,
+  Flag
 } from "lucide-react";
+import { RatingButtons } from "@/components/marketplace/rating-buttons";
+import { ReportDialog } from "@/components/marketplace/report-dialog";
 
 const PERSONALITY_CATEGORIES = [
   'All Categories', 'Gaming', 'Music', 'Comedy', 'Education', 'Custom', 'Entertainment', 'Professional'
@@ -69,6 +72,8 @@ export default function MarketplacePage() {
   const [testScenario, setTestScenario] = useState(TEST_SCENARIOS[0]);
   const [testResult, setTestResult] = useState<string>('');
   const [testPersonalityId, setTestPersonalityId] = useState<string>('');
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportItem, setReportItem] = useState<{ id: string; name: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -309,15 +314,24 @@ export default function MarketplacePage() {
                         <Download className="h-3 w-3" />
                         {personality.downloads.toLocaleString()}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Heart className="h-3 w-3" />
-                        {getRating(personality.upvotes, personality.downvotes)}%
-                      </div>
+                      <RatingButtons
+                        itemType="personality"
+                        itemId={personality.id}
+                        upvotes={personality.upvotes}
+                        downvotes={personality.downvotes}
+                        size="sm"
+                      />
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {new Date(personality.createdAt).toLocaleDateString()}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setReportItem({ id: personality.id, name: personality.name });
+                        setReportDialogOpen(true);
+                      }}
+                    >
+                      <Flag className="h-3 w-3" />
+                    </Button>
                   </div>
                   
                   <div className="space-y-2">
@@ -449,6 +463,17 @@ export default function MarketplacePage() {
           </div>
         )}
       </div>
+      
+      {/* Report Dialog */}
+      {reportItem && (
+        <ReportDialog
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          itemType="personality"
+          itemId={reportItem.id}
+          itemName={reportItem.name}
+        />
+      )}
     </div>
   );
 }
