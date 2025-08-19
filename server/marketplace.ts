@@ -6,7 +6,7 @@ import {
   type MarketplacePersonality,
   type UserDownload,
   type ContentReport
-} from "@shared/schema";
+} from "../shared/schema";
 
 export class MarketplaceService {
   // Create a new marketplace voice

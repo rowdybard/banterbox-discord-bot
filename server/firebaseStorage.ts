@@ -6,7 +6,7 @@ import type {
   InsertGuildSettings, ContextMemory, InsertContextMemory, EventType, EventData, 
   MarketplaceVoice, InsertMarketplaceVoice, MarketplacePersonality, InsertMarketplacePersonality, 
   UserDownload, InsertUserDownload, UserRating, InsertUserRating, ContentReport, InsertContentReport 
-} from "@shared/schema";
+} from "../shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {

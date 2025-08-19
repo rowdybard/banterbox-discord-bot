@@ -8,11 +8,11 @@ interface ExtendedWebSocket extends WebSocket {
 }
 import { firebaseStorage } from "./firebaseStorage";
 import { ObjectStorageService } from "./objectStorage";
-import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData } from "@shared/schema";
+import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData } from "../shared/schema";
 import { db } from "./db";
-import { getTierConfig } from "@shared/billing";
-import type { SubscriptionTier } from "@shared/types";
-import { isProUser, getSubscriptionInfo } from "@shared/subscription";
+import { getTierConfig } from "../shared/billing";
+import type { SubscriptionTier } from "../shared/types";
+import { isProUser, getSubscriptionInfo } from "../shared/subscription";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
 import { setupGoogleAuth } from "./googleAuth";
@@ -3462,7 +3462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check plan change limits
       try {
-        const { canChangePlan } = await import('@shared/billing');
+        const { canChangePlan } = await import('../shared/billing');
         const changeResult = canChangePlan(
           currentUser.subscriptionTier as any,
           tier as any,

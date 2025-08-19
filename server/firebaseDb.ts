@@ -1,5 +1,5 @@
 import { getFirestoreDb } from './firebase';
-import type { UserSettings, BanterItem } from '@shared/schema';
+import type { UserSettings, BanterItem } from '../shared/schema';
 
 // Firebase-based database service
 export class FirebaseDatabaseService {
