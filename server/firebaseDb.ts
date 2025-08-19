@@ -80,7 +80,7 @@ export class FirebaseDatabaseService {
       const banterWithId = {
         ...banterItem,
         id: docRef.id,
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       };
       
       await docRef.set(banterWithId);

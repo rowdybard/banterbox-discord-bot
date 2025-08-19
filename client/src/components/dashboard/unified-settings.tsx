@@ -219,7 +219,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
 
   // Voice Settings Handlers
   const handleVoiceProviderChange = (provider: string) => {
-    setVoiceProvider(provider);
+    setVoiceProvider(provider as "openai" | "elevenlabs" | "favorite");
     setHasUnsavedVoiceChanges(true);
     
     // Reset voice ID when switching providers

@@ -196,7 +196,7 @@ export default function SubscriptionUpdater() {
           <h3 className="text-sm font-medium text-gray-300">Downgrade Options</h3>
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-300">Select New Tier</label>
-            <Select value={selectedTier} onValueChange={setSelectedTier}>
+            <Select value={selectedTier} onValueChange={(value) => setSelectedTier(value as "free" | "pro" | "byok" | "enterprise")}>
               <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
                 <SelectValue />
               </SelectTrigger>

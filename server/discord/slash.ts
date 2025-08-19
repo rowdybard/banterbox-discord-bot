@@ -246,6 +246,8 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
         guildId,
         workspaceId: linkCode.workspaceId,
         enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
+        voiceProvider: 'openai',
+        personality: 'witty',
         updatedAt: new Date(),
       });
       console.log(`✅ Guild settings created for ${guildId}`);
@@ -424,7 +426,7 @@ async function handleVoiceConfig(option: string, userSettings: any, workspaceUse
     // Reset to default voice settings
     await firebaseStorage.updateUserSettings(workspaceUserId, {
       voiceProvider: 'openai',
-      voiceId: null
+      voiceId: undefined
     });
     return ephemeral('✅ **Voice Updated!**\n\n🎤 **New Voice:** Default OpenAI Voice\n\n💡 **Test it:** Join a voice channel with `/join` to hear the new voice!');
   } else if (option === 'custom') {

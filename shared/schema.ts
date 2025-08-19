@@ -84,7 +84,7 @@ export interface BanterItem {
 export interface UserSettings {
   id: string;
   userId: string;
-  voiceProvider: 'openai' | 'elevenlabs';
+  voiceProvider: 'openai' | 'elevenlabs' | 'favorite';
   voiceId?: string;
   autoPlay: boolean;
   volume: number;

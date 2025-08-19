@@ -22,7 +22,7 @@ import discordInteractions from "./discord/interactions";
 import { ContextService } from "./contextService";
 import { registerCommands, getBotInviteUrl } from "./discord/commands";
 import TwitchEventSubClient from "./twitch";
-// import { DiscordService } from "./discord";
+import { DiscordService } from "./discord";
 import OpenAI from "openai";
 import { elevenLabsService } from "./elevenlabs";
 import { FirebaseContextService } from "./firebaseContextService";
@@ -270,6 +270,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For direct questions, prioritize factual answers over personality
         const factualPrompt = buildFactualResponsePrompt(originalMessage || '', contextString, eventType, eventData);
         
+        if (!openai) {
+          console.error("OpenAI client not initialized");
+          return "I'm sorry, I can't generate a response right now.";
+        }
         const response = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
@@ -354,6 +358,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`DEBUG: Sending prompt to OpenAI for user ${userId}:`, enhancedPrompt.substring(0, 200) + '...');
       
+      if (!openai) {
+        console.error("OpenAI client not initialized");
+        return "I'm sorry, I can't generate a response right now.";
+      }
       const response = await openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
@@ -496,6 +504,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else {
           // Use OpenAI TTS (default)
+          if (!openai) {
+            console.error("OpenAI client not initialized");
+            return;
+          }
           const response = await openai.audio.speech.create({
             model: "tts-1",
             voice: "alloy",
@@ -512,12 +524,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create banter item in storage
       const banterItem = await firebaseStorage.createBanterItem({
-        userId,
-        eventType,
-        eventData,
-        originalMessage: originalMessage || '',
         banterText,
-        audioUrl: audioUrl || null,
+        eventType,
+        isPlayed: false,
+        userId,
+        originalMessage: originalMessage || '',
+        eventData,
+        audioUrl: audioUrl || undefined,
       });
       
       console.log(`DEBUG: Created banter item for Twitch:`, {
@@ -610,6 +623,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return await elevenLabsService.generateSpeech(enhancedText, elevenLabsService.getDefaultVoice());
       } else {
         // Use OpenAI TTS (default)
+        if (!openai) {
+          console.error("OpenAI client not initialized");
+          return null;
+        }
         const response = await openai.audio.speech.create({
           model: "tts-1",
           voice: "alloy",
@@ -751,6 +768,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } else {
           // Use OpenAI TTS
+          if (!openai) {
+            console.error("OpenAI client not initialized");
+            return;
+          }
           const response = await openai.audio.speech.create({
             model: "tts-1",
             voice: "alloy",
@@ -816,12 +837,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create banter item in storage
       const banterItem = await firebaseStorage.createBanterItem({
-        userId: workspaceUserId,
-        eventType: eventTypeForBanter,
-        eventData,
-        originalMessage: originalMessage || '',
         banterText,
-        audioUrl: audioUrl || null,
+        eventType: eventTypeForBanter,
+        isPlayed: false,
+        userId: workspaceUserId,
+        originalMessage: originalMessage || '',
+        eventData,
+        audioUrl: audioUrl || undefined,
       });
       
       console.log(`DEBUG: Created banter item for Discord:`, {
@@ -914,7 +936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       // Check if this is a Firebase-stored file that was missed
-      if (filePath.startsWith('audio/') && firebaseStorage.isAvailable()) {
+      if (filePath.startsWith('audio/') && await firebaseStorage.isAvailable()) {
         console.log(`Audio file ${filePath} should be served from Firebase, not local storage`);
         return res.status(404).json({ 
           error: "Audio file not found in local storage",
@@ -922,11 +944,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const file = await firebaseStorage.searchPublicObject(filePath);
-      if (!file) {
+      const files = await firebaseStorage.searchPublicObject(filePath);
+      if (!files || files.length === 0) {
         return res.status(404).json({ error: "Audio file not found" });
       }
-      firebaseStorage.downloadObject(file, res);
+      const audioBuffer = await firebaseStorage.downloadObject(files[0]);
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.send(audioBuffer);
     } catch (error) {
       console.error("Error serving audio file:", error);
       return res.status(500).json({ error: "Internal server error" });
@@ -954,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const defaultSettings = await firebaseStorage.createUserSettings({
           userId,
           voiceProvider: 'openai',
-          voiceId: null,
+          voiceId: undefined,
           autoPlay: true,
           volume: 75,
           enabledEvents: ['chat'],
@@ -962,7 +986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           overlayDuration: 5,
           overlayAnimation: 'fade',
           banterPersonality: 'context',
-          customPersonalityPrompt: null,
+          customPersonalityPrompt: undefined,
         });
         return res.json(defaultSettings);
       }
@@ -996,7 +1020,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const newSettings = await firebaseStorage.createUserSettings({
           userId,
           voiceProvider: updates.voiceProvider || 'openai',
-          voiceId: updates.voiceId || null,
+          voiceId: updates.voiceId || undefined,
           autoPlay: updates.autoPlay ?? true,
           volume: updates.volume || 75,
           enabledEvents: updates.enabledEvents || ['chat'],
@@ -1004,7 +1028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           overlayDuration: updates.overlayDuration || 5,
           overlayAnimation: updates.overlayAnimation || 'fade',
                       banterPersonality: updates.banterPersonality || 'context',
-          customPersonalityPrompt: updates.customPersonalityPrompt || null,
+          customPersonalityPrompt: updates.customPersonalityPrompt || undefined,
         });
         updated = newSettings;
       }
@@ -1314,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
   
       // Find all guild links for this workspace
-      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, userId));
+      const allGuildLinks = await firebaseStorage.getAllGuildLinks(userId);
       const activeGuildLinks = allGuildLinks.filter(link => link.active);
       
       // Check actual bot presence if Discord service is available
@@ -1383,7 +1407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentGuilds = globalDiscordService.getCurrentGuilds();
       
       // Get all active guild links from database
-      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.active, true));
+      const allGuildLinks = await firebaseStorage.getAllGuildLinks();
       
       // Calculate connectivity metrics
       const totalLinkedGuilds = allGuildLinks.length;
@@ -1435,7 +1459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find all guild links for this workspace
-      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, userId));
+      const allGuildLinks = await firebaseStorage.getAllGuildLinks(userId);
       const activeGuildLinks = allGuildLinks.filter(link => link.active);
       
       let cleanedUp = 0;
@@ -1863,7 +1887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let totalCleared = 0;
       
       // 1. Clear all guild links for this user
-      const allGuildLinks = await db.select().from(guildLinks).where(eq(guildLinks.workspaceId, authenticatedUserId));
+      const allGuildLinks = await firebaseStorage.getAllGuildLinks(authenticatedUserId);
       for (const link of allGuildLinks) {
         await firebaseStorage.deactivateGuildLink(link.guildId);
         await firebaseStorage.clearCurrentStreamer(link.guildId);
@@ -1872,9 +1896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // 2. Clear all active link codes for this user
-      await db.update(linkCodes)
-        .set({ consumedAt: new Date() })
-        .where(eq(linkCodes.workspaceId, authenticatedUserId));
+      await firebaseStorage.expireAllLinkCodes(authenticatedUserId);
       console.log(`❌ Expired all link codes for user`);
       
       // 3. Clear voice connections from memory if Discord service is available
@@ -1892,13 +1914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // 4. Clear any legacy Discord settings
       try {
-        await db.update(discordSettings)
-          .set({ 
-            isConnected: false, 
-            connectedGuilds: null,
-            updatedAt: new Date()
-          })
-          .where(eq(discordSettings.userId, authenticatedUserId));
+        await firebaseStorage.clearDiscordSettings(authenticatedUserId);
         console.log(`❌ Cleared legacy Discord settings`);
       } catch (error) {
         // Ignore if table doesn't exist or user has no settings
@@ -2367,8 +2383,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await firebaseStorage.upsertTwitchSettings({
           ...settings,
           isConnected: false,
-          accessToken: null,
-          refreshToken: null
+          accessToken: undefined,
+          refreshToken: undefined
         });
       }
 
@@ -3430,10 +3446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get current user data
-      const [currentUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userId));
+      const currentUser = await firebaseStorage.getUser(userId);
 
       if (!currentUser) {
         return res.status(404).json({ message: "User not found" });
@@ -3466,20 +3479,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Allowing plan change due to import failure");
       }
 
-
-
       // Update user's subscription tier in database
-      const [updatedUser] = await db
-        .update(users)
-        .set({ 
-          subscriptionTier: tier,
-          subscriptionStatus: status,
-          lastPlanChangeAt: new Date(),
-          planChangeCount: (currentUser.planChangeCount || 0) + 1,
-          updatedAt: new Date()
-        })
-        .where(eq(users.id, userId))
-        .returning();
+      const updatedUser = await firebaseStorage.updateUser(userId, {
+        subscriptionTier: tier,
+        subscriptionStatus: status,
+        lastPlanChangeAt: new Date(),
+        planChangeCount: (currentUser.planChangeCount || 0) + 1,
+        updatedAt: new Date()
+      });
 
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
@@ -3816,7 +3823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get current user
-      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      const user = await firebaseStorage.getUser(userId);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -3824,12 +3831,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If user has pro tier but inactive status, fix it
       if (user.subscriptionTier === 'pro' && user.subscriptionStatus !== 'active') {
-        await db.update(users)
-          .set({ 
-            subscriptionStatus: 'active',
-            updatedAt: new Date()
-          })
-          .where(eq(users.id, userId));
+        await firebaseStorage.updateUser(userId, {
+          subscriptionStatus: 'active',
+          updatedAt: new Date()
+        });
         
         console.log(`Fixed subscription status for user ${userId}: pro tier now active`);
         
@@ -3863,15 +3868,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // TODO: Integrate with Stripe
       // For now, just update the user's subscription tier directly
-      const [updatedUser] = await db
-        .update(users)
-        .set({ 
-          subscriptionTier: tier,
-          subscriptionStatus: 'active',
-          updatedAt: new Date()
-        })
-        .where(eq(users.id, userId))
-        .returning();
+      await firebaseStorage.updateUser(userId, {
+        subscriptionTier: tier,
+        subscriptionStatus: 'active',
+        updatedAt: new Date()
+      });
+      const updatedUser = await firebaseStorage.getUser(userId);
       
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });

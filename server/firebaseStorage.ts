@@ -14,6 +14,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  updateUser(userId: string, updates: Partial<User>): Promise<User | undefined>;
   completeOnboarding(userId: string): Promise<User>;
   
   // Legacy user methods for backward compatibility
@@ -187,6 +188,25 @@ export class FirebaseStorageService implements IStorage {
     }
   }
 
+  async updateUser(userId: string, updates: Partial<User>): Promise<User | undefined> {
+    try {
+      const docRef = this.db.collection('users').doc(userId);
+      await docRef.update({
+        ...updates,
+        updatedAt: new Date(),
+      });
+      
+      const updatedDoc = await docRef.get();
+      if (updatedDoc.exists) {
+        return updatedDoc.data() as User;
+      }
+      return undefined;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return undefined;
+    }
+  }
+
   async completeOnboarding(userId: string): Promise<User> {
     const user = await this.getUser(userId);
     if (!user) {
@@ -326,7 +346,9 @@ export class FirebaseStorageService implements IStorage {
     const now = new Date();
     const newSettings: UserSettings = {
       ...settings,
-      id: settings.userId,
+      id: settings.userId || '',
+      userId: settings.userId || '',
+      voiceProvider: settings.voiceProvider || 'openai',
       updatedAt: now,
     };
 
@@ -1220,16 +1242,60 @@ export class FirebaseStorageService implements IStorage {
   }
 
   // Audio file storage methods (for compatibility with existing code)
-  async saveAudioFile(userId: string, audioBuffer: Buffer, filename: string): Promise<string> {
+  async saveAudioFile(audioBuffer: Buffer): Promise<string> {
     try {
       // For now, we'll store audio files in Firebase Storage
       // This is a placeholder implementation
-      const audioUrl = `https://storage.googleapis.com/banterbox-audio/${userId}/${filename}`;
+      const filename = `audio-${Date.now()}.mp3`;
+      const audioUrl = `https://storage.googleapis.com/banterbox-audio/${filename}`;
       console.log(`Audio file saved: ${audioUrl}`);
       return audioUrl;
     } catch (error) {
       console.error('Error saving audio file:', error);
       throw error;
+    }
+  }
+
+  // Guild link methods
+  async getAllGuildLinks(userId?: string): Promise<GuildLink[]> {
+    try {
+      let query = this.db.collection('guildLinks');
+      if (userId) {
+        query = query.where('workspaceId', '==', userId);
+      }
+      const snapshot = await query.get();
+      return snapshot.docs.map(doc => doc.data() as GuildLink);
+    } catch (error) {
+      console.error('Error getting guild links:', error);
+      return [];
+    }
+  }
+
+  async expireAllLinkCodes(userId: string): Promise<void> {
+    try {
+      const snapshot = await this.db.collection('linkCodes')
+        .where('workspaceId', '==', userId)
+        .get();
+      
+      const batch = this.db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { consumedAt: new Date() });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error expiring link codes:', error);
+    }
+  }
+
+  async clearDiscordSettings(userId: string): Promise<void> {
+    try {
+      await this.db.collection('discordSettings').doc(userId).update({
+        isConnected: false,
+        connectedGuilds: null,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error('Error clearing Discord settings:', error);
     }
   }
 
