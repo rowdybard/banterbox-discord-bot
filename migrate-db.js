@@ -326,6 +326,24 @@ async function migrate() {
     } else {
       console.log('✅ plan_change_count column already exists');
     }
+
+    // 18. Add response_frequency column to user_settings table
+    const responseFrequencyCheck = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'user_settings' AND column_name = 'response_frequency'
+    `);
+    
+    if (responseFrequencyCheck.rows.length === 0) {
+      console.log('➕ Adding response_frequency column to user_settings table...');
+      await client.query(`
+        ALTER TABLE user_settings 
+        ADD COLUMN response_frequency INTEGER DEFAULT 50
+      `);
+      console.log('✅ response_frequency column added successfully');
+    } else {
+      console.log('✅ response_frequency column already exists');
+    }
     
     console.log('✅ Sessions table configured');
     console.log('🎉 Comprehensive database migration completed successfully!');

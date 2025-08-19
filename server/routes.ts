@@ -362,12 +362,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For Twitch events, we log but don't throw - just skip generation
         return;
       }
+
+      // Check response frequency setting
+      const userSettings = await storage.getUserSettings(userId);
+      const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
+      
+      // Apply response frequency filtering for Twitch events
+      const shouldRespond = applyResponseFrequencyFilter(responseFrequency, 'twitch_event', originalMessage);
+      if (!shouldRespond) {
+        console.log(`Skipping Twitch response due to frequency setting (${responseFrequency}%)`);
+        return;
+      }
       
       // Generate the banter text
       const banterText = await generateBanter(eventType, eventData, originalMessage);
       
-      // Get user settings for voice preferences (web dashboard source of truth)
-      const userSettings = await storage.getUserSettings(userId);
+      // Get voice preferences from user settings
       const voiceProvider = userSettings?.voiceProvider || 'openai';
       const voiceId = userSettings?.voiceId;
       
@@ -590,6 +600,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const usageCheck = await storage.checkAndIncrementDailyUsage(workspaceUserId);
       if (!usageCheck.allowed) {
         console.log(`Daily limit reached for workspace ${workspaceUserId}: ${usageCheck.current}/${usageCheck.limit}`);
+        return;
+      }
+
+      // Check response frequency setting
+      const userSettings = await storage.getUserSettings(workspaceUserId);
+      const responseFrequency = userSettings?.responseFrequency || 50; // Default to 50%
+      
+      // Apply response frequency filtering
+      const shouldRespond = applyResponseFrequencyFilter(responseFrequency, eventData.responseReason, originalMessage);
+      if (!shouldRespond) {
+        console.log(`Skipping response due to frequency setting (${responseFrequency}%) for reason: ${eventData.responseReason}`);
         return;
       }
       
@@ -3801,6 +3822,26 @@ function isDirectQuestion(message: string): boolean {
   
   // Check if message matches any direct question pattern
   return directQuestionPatterns.some(pattern => pattern.test(lowerMessage));
+}
+
+/**
+ * Applies response frequency filtering based on user settings
+ */
+function applyResponseFrequencyFilter(responseFrequency: number, responseReason: string, originalMessage: string): boolean {
+  // Always respond to direct mentions regardless of frequency setting
+  if (responseReason === 'direct mention') {
+    return true;
+  }
+
+  // Generate a random number between 0 and 100
+  const randomValue = Math.random() * 100;
+  
+  // If random value is less than response frequency, allow the response
+  const shouldRespond = randomValue <= responseFrequency;
+  
+  console.log(`Response frequency check: ${randomValue.toFixed(1)} <= ${responseFrequency} = ${shouldRespond} (reason: ${responseReason})`);
+  
+  return shouldRespond;
 }
 
 /**
