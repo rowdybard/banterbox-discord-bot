@@ -86,11 +86,24 @@ export class FirebaseMarketplaceService {
   private db: any;
 
   constructor() {
-    this.db = getFirestoreDb();
+    try {
+      this.db = getFirestoreDb();
+    } catch (error) {
+      console.error('Failed to initialize Firebase marketplace service:', error);
+      this.db = null;
+    }
+  }
+
+  private isAvailable(): boolean {
+    return !!this.db;
   }
 
   // Create a new marketplace voice
   async createVoice(voice: Omit<MarketplaceVoice, 'id' | 'createdAt' | 'updatedAt'>): Promise<MarketplaceVoice> {
+    if (!this.isAvailable()) {
+      throw new Error('Firebase marketplace service is not available');
+    }
+
     const id = randomUUID();
     const now = new Date();
     
@@ -107,12 +120,21 @@ export class FirebaseMarketplaceService {
       moderationStatus: 'approved'
     };
 
-    await this.db.collection('marketplace_voices').doc(id).set(newVoice);
-    return newVoice;
+    try {
+      await this.db.collection('marketplace_voices').doc(id).set(newVoice);
+      return newVoice;
+    } catch (error) {
+      console.error('Error creating voice in Firebase:', error);
+      throw new Error('Failed to create voice in marketplace');
+    }
   }
 
   // Create a new marketplace personality
   async createPersonality(personality: Omit<MarketplacePersonality, 'id' | 'createdAt' | 'updatedAt'>): Promise<MarketplacePersonality> {
+    if (!this.isAvailable()) {
+      throw new Error('Firebase marketplace service is not available');
+    }
+
     const id = randomUUID();
     const now = new Date();
     
@@ -129,8 +151,13 @@ export class FirebaseMarketplaceService {
       moderationStatus: 'approved'
     };
 
-    await this.db.collection('marketplace_personalities').doc(id).set(newPersonality);
-    return newPersonality;
+    try {
+      await this.db.collection('marketplace_personalities').doc(id).set(newPersonality);
+      return newPersonality;
+    } catch (error) {
+      console.error('Error creating personality in Firebase:', error);
+      throw new Error('Failed to create personality in marketplace');
+    }
   }
 
   // Get marketplace voices with filters
@@ -141,7 +168,14 @@ export class FirebaseMarketplaceService {
     limit?: number;
     onlyApproved?: boolean;
   }): Promise<MarketplaceVoice[]> {
-    let query = this.db.collection('marketplace_voices');
+    // If Firebase is not available, return sample data
+    if (!this.isAvailable()) {
+      console.log('Firebase not available, returning sample voices');
+      return this.getSampleVoices();
+    }
+
+    try {
+      let query = this.db.collection('marketplace_voices');
 
     // Apply filters
     if (filters?.onlyApproved !== false) {
@@ -196,7 +230,12 @@ export class FirebaseMarketplaceService {
       );
     }
 
-    return voices;
+      return voices;
+    } catch (error) {
+      console.error('Error getting voices from Firebase:', error);
+      console.log('Falling back to sample voices');
+      return this.getSampleVoices();
+    }
   }
 
   // Get marketplace personalities with filters
@@ -207,7 +246,14 @@ export class FirebaseMarketplaceService {
     limit?: number;
     onlyApproved?: boolean;
   }): Promise<MarketplacePersonality[]> {
-    let query = this.db.collection('marketplace_personalities');
+    // If Firebase is not available, return sample data
+    if (!this.isAvailable()) {
+      console.log('Firebase not available, returning sample personalities');
+      return this.getSamplePersonalities();
+    }
+
+    try {
+      let query = this.db.collection('marketplace_personalities');
 
     // Apply filters
     if (filters?.onlyApproved !== false) {
@@ -260,7 +306,12 @@ export class FirebaseMarketplaceService {
       );
     }
 
-    return personalities;
+      return personalities;
+    } catch (error) {
+      console.error('Error getting personalities from Firebase:', error);
+      console.log('Falling back to sample personalities');
+      return this.getSamplePersonalities();
+    }
   }
 
   // Get a specific voice by ID
@@ -378,6 +429,150 @@ export class FirebaseMarketplaceService {
 
     await this.db.collection('content_reports').doc(id).set(newReport);
     return newReport;
+  }
+
+  // Get sample voices for fallback
+  private getSampleVoices(): MarketplaceVoice[] {
+    return [
+      {
+        id: "1",
+        name: "Gaming Warrior",
+        description: "Perfect for gaming streams with energetic commentary",
+        category: "Gaming",
+        tags: ["gaming", "energetic", "warrior"],
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        baseVoiceId: "21m00Tcm4TlvDq8ikWAM",
+        settings: {
+          stability: 60,
+          similarityBoost: 80,
+          style: 20,
+          useSpeakerBoost: true
+        },
+        sampleText: "Welcome to the stream! Let's dominate this game!",
+        downloads: 850,
+        upvotes: 67,
+        downvotes: 2,
+        createdAt: new Date("2024-01-15T10:00:00Z"),
+        updatedAt: new Date("2024-01-15T10:00:00Z"),
+        authorId: "user1",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        moderationStatus: 'approved'
+      },
+      {
+        id: "2",
+        name: "Chill Vibes",
+        description: "Relaxed and laid-back voice for casual streams",
+        category: "Entertainment",
+        tags: ["chill", "relaxed", "casual"],
+        voiceId: "ErXwobaYiN019PkySvjV",
+        baseVoiceId: "ErXwobaYiN019PkySvjV",
+        settings: {
+          stability: 75,
+          similarityBoost: 70,
+          style: 10,
+          useSpeakerBoost: false
+        },
+        sampleText: "Hey everyone, thanks for hanging out with us today.",
+        downloads: 1200,
+        upvotes: 89,
+        downvotes: 5,
+        createdAt: new Date("2024-01-10T14:30:00Z"),
+        updatedAt: new Date("2024-01-10T14:30:00Z"),
+        authorId: "user2",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        moderationStatus: 'approved'
+      },
+      {
+        id: "3",
+        name: "Professional Narrator",
+        description: "Clear and professional voice for educational content",
+        category: "Education",
+        tags: ["professional", "clear", "educational"],
+        voiceId: "JBFqnCBsd6RMkjVDRZzb",
+        baseVoiceId: "JBFqnCBsd6RMkjVDRZzb",
+        settings: {
+          stability: 85,
+          similarityBoost: 90,
+          style: 5,
+          useSpeakerBoost: true
+        },
+        sampleText: "Today we'll be exploring the fascinating world of science.",
+        downloads: 650,
+        upvotes: 45,
+        downvotes: 1,
+        createdAt: new Date("2024-01-20T09:15:00Z"),
+        updatedAt: new Date("2024-01-20T09:15:00Z"),
+        authorId: "user3",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        moderationStatus: 'approved'
+      }
+    ];
+  }
+
+  // Get sample personalities for fallback
+  private getSamplePersonalities(): MarketplacePersonality[] {
+    return [
+      {
+        id: "1",
+        name: "Gaming Guru",
+        description: "Perfect for gaming streams with witty commentary",
+        prompt: "You are a gaming expert with deep knowledge of games. Provide insightful commentary, tips, and reactions to gaming moments. Keep responses engaging and informative.",
+        category: "Gaming",
+        tags: ["gaming", "expert", "commentary"],
+        authorId: "user1",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        downloads: 1250,
+        upvotes: 89,
+        downvotes: 3,
+        createdAt: new Date("2024-01-15T10:00:00Z"),
+        updatedAt: new Date("2024-01-15T10:00:00Z"),
+        moderationStatus: 'approved'
+      },
+      {
+        id: "2",
+        name: "Comedy Master",
+        description: "Hilarious responses that keep everyone laughing",
+        prompt: "You are a comedy master who creates hilarious responses. Use clever jokes, puns, and witty observations. Keep the humor clean and entertaining for all ages.",
+        category: "Comedy",
+        tags: ["comedy", "humor", "entertainment"],
+        authorId: "user2",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        downloads: 2100,
+        upvotes: 156,
+        downvotes: 7,
+        createdAt: new Date("2024-01-10T14:30:00Z"),
+        updatedAt: new Date("2024-01-10T14:30:00Z"),
+        moderationStatus: 'approved'
+      },
+      {
+        id: "3",
+        name: "Educational Expert",
+        description: "Great for educational content and learning streams",
+        prompt: "You are an educational expert who explains concepts clearly and engagingly. Provide helpful insights, answer questions, and make learning fun and accessible.",
+        category: "Education",
+        tags: ["education", "learning", "helpful"],
+        authorId: "user3",
+        authorName: "BanterBox Team",
+        isVerified: true,
+        isActive: true,
+        downloads: 890,
+        upvotes: 67,
+        downvotes: 2,
+        createdAt: new Date("2024-01-20T09:15:00Z"),
+        updatedAt: new Date("2024-01-20T09:15:00Z"),
+        moderationStatus: 'approved'
+      }
+    ];
   }
 
   // Get user's marketplace items
