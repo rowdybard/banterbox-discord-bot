@@ -1,152 +1,72 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import session from "express-session";
-import type { Express, RequestHandler } from "express";
-import connectPg from "connect-pg-simple";
-import { storage } from "./storage.js";
+import { storage } from "./storage";
 
-export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
-  return session({
-    name: "banterbox.sid", // New session name to clear old sessions
-    secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: sessionTtl,
-    },
-  });
-}
+// Use Firebase storage instead of PostgreSQL
+const conString = process.env.DATABASE_URL || "firebase";
 
-export async function setupGoogleAuth(app: Express) {
-  app.set("trust proxy", 1);
-  app.use(getSession());
-  app.use(passport.initialize());
-  app.use(passport.session());
-
-  // Check if Google OAuth credentials are available
+export function setupGoogleAuth(app: any) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.warn("⚠️  Google OAuth credentials not found. Google authentication will not work.");
-    console.warn("📝 Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.");
+    console.log("⚠️  Google OAuth not configured - skipping Google authentication");
     return;
   }
 
-  console.log("✅ Setting up Google OAuth with credentials");
-
-  // Google OAuth Strategy
   passport.use(
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID!,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        callbackURL: process.env.NODE_ENV === "production" 
+        callbackURL: process.env.NODE_ENV === "production"
           ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/api/auth/google/callback`
-          : "/api/auth/google/callback",
+          : "http://localhost:5000/api/auth/google/callback",
       },
-      async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+      async (accessToken, refreshToken, profile, done) => {
         try {
-          console.log("Google OAuth profile received:", {
-            id: profile.id,
-            email: profile.emails?.[0]?.value,
-            name: profile.displayName
-          });
-
-          // Get user info from Google profile
-          const googleId = profile.id;
           const email = profile.emails?.[0]?.value;
-          const firstName = profile.name?.givenName;
-          const lastName = profile.name?.familyName;
-          const profileImageUrl = profile.photos?.[0]?.value;
+          if (!email) {
+            return done(new Error("No email found in Google profile"));
+          }
 
-          // Check if user already exists by email
-          const existingUser = email ? await storage.getUserByEmail(email) : null;
-          
-          // Create or update user in database
-          const user = await storage.upsertUser({
-            // Use existing ID if user exists, otherwise use Google ID
-            id: existingUser ? existingUser.id : googleId,
-            email: email || null,
-            firstName: firstName || null,
-            lastName: lastName || null,
-            profileImageUrl: profileImageUrl || null,
-          });
+          // Check if user already exists
+          let user = await storage.getUserByEmail(email);
 
-          console.log("User created/updated:", user);
+          if (!user) {
+            // Create new user
+            user = await storage.createUser({
+              email,
+              firstName: profile.name?.givenName,
+              lastName: profile.name?.familyName,
+              profileImageUrl: profile.photos?.[0]?.value,
+              subscriptionTier: "free",
+              subscriptionStatus: "active",
+              hasCompletedOnboarding: false,
+            });
+          } else {
+            // Update existing user with latest profile info
+            user = await storage.upsertUser({
+              ...user,
+              firstName: profile.name?.givenName || user.firstName,
+              lastName: profile.name?.familyName || user.lastName,
+              profileImageUrl: profile.photos?.[0]?.value || user.profileImageUrl,
+            });
+          }
+
           return done(null, user);
         } catch (error) {
-          console.error("Error in Google OAuth callback:", error);
-          return done(error, null);
+          return done(error);
         }
       }
     )
   );
 
-  passport.serializeUser((user: any, done) => {
-    done(null, user.id);
-  });
+  app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
-  passport.deserializeUser(async (id: string, done) => {
-    try {
-      const user = await storage.getUser(id);
-      if (!user) {
-        // User not found, clear session
-        return done(null, false);
-      }
-      done(null, user);
-    } catch (error) {
-      console.error("Deserialize user error:", error);
-      // Clear invalid session
-      done(null, false);
-    }
-  });
-
-  // Auth routes
-  app.get("/api/auth/google", passport.authenticate("google", {
-    scope: ["profile", "email"]
-  }));
-
-  app.get("/api/auth/google/callback", 
-    passport.authenticate("google", { 
-      failureRedirect: "/?error=auth_failed" 
-    }),
+  app.get(
+    "/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login" }),
     (req, res) => {
-      try {
-        console.log("OAuth callback successful, user:", req.user);
-        if (!req.user) {
-          console.error("OAuth callback: No user object after authentication");
-          return res.redirect("/?error=no_user");
-        }
-        res.redirect("/?auth=success");
-      } catch (error) {
-        console.error("OAuth callback error:", error);
-        res.redirect("/?error=callback_error");
-      }
+      // Successful authentication, redirect home
+      res.redirect("/");
     }
   );
-
-  app.get("/api/logout", (req, res) => {
-    req.logout((err) => {
-      if (err) {
-        console.error("Logout error:", err);
-      }
-      res.redirect("/");
-    });
-  });
 }
-
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  return res.status(401).json({ message: "Unauthorized" });
-};

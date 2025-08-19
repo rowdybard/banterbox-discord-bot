@@ -1,10 +1,8 @@
-import type { Express, RequestHandler } from "express";
-import { randomBytes } from "crypto";
 import { storage } from "./storage";
+import { randomBytes } from "crypto";
 
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
-const TWITCH_REDIRECT_URI = process.env.TWITCH_REDIRECT_URI || "http://localhost:5000/api/twitch/callback";
+// Use Firebase storage instead of PostgreSQL
+const conString = process.env.DATABASE_URL || "firebase";
 
 interface TwitchTokenResponse {
   access_token: string;
@@ -29,9 +27,14 @@ interface TwitchUserResponse {
   }>;
 }
 
-export function setupTwitchAuth(app: Express) {
+export function setupTwitchAuth(app: any) {
+  if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+    console.log("⚠️  Twitch OAuth not configured - skipping Twitch authentication");
+    return;
+  }
+
   // Start Twitch OAuth flow
-  app.get("/api/twitch/auth", async (req: any, res) => {
+  app.get("/api/twitch/auth", async (req: any, res: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Must be logged in to connect Twitch" });
     }
@@ -49,8 +52,8 @@ export function setupTwitchAuth(app: Express) {
     ];
 
     const authUrl = new URL("https://id.twitch.tv/oauth2/authorize");
-    authUrl.searchParams.set("client_id", TWITCH_CLIENT_ID);
-    authUrl.searchParams.set("redirect_uri", TWITCH_REDIRECT_URI);
+    authUrl.searchParams.set("client_id", process.env.TWITCH_CLIENT_ID!);
+    authUrl.searchParams.set("redirect_uri", process.env.TWITCH_REDIRECT_URI || "http://localhost:5000/api/twitch/callback");
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", scopes.join(" "));
     authUrl.searchParams.set("state", state);
@@ -59,7 +62,7 @@ export function setupTwitchAuth(app: Express) {
   });
 
   // Handle Twitch OAuth callback
-  app.get("/api/twitch/callback", async (req: any, res) => {
+  app.get("/api/twitch/callback", async (req: any, res: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Must be logged in" });
     }
@@ -78,11 +81,11 @@ export function setupTwitchAuth(app: Express) {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          client_id: TWITCH_CLIENT_ID,
-          client_secret: TWITCH_CLIENT_SECRET,
+          client_id: process.env.TWITCH_CLIENT_ID!,
+          client_secret: process.env.TWITCH_CLIENT_SECRET!,
           code: code as string,
           grant_type: "authorization_code",
-          redirect_uri: TWITCH_REDIRECT_URI,
+          redirect_uri: process.env.TWITCH_REDIRECT_URI || "http://localhost:5000/api/twitch/callback",
         }),
       });
 
@@ -96,7 +99,7 @@ export function setupTwitchAuth(app: Express) {
       const userResponse = await fetch("https://api.twitch.tv/helix/users", {
         headers: {
           "Authorization": `Bearer ${tokens.access_token}`,
-          "Client-Id": TWITCH_CLIENT_ID,
+          "Client-Id": process.env.TWITCH_CLIENT_ID!,
         },
       });
 
@@ -131,7 +134,7 @@ export function setupTwitchAuth(app: Express) {
   });
 
   // Disconnect Twitch
-  app.post("/api/twitch/disconnect", async (req: any, res) => {
+  app.post("/api/twitch/disconnect", async (req: any, res: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -148,7 +151,7 @@ export function setupTwitchAuth(app: Express) {
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
-            client_id: TWITCH_CLIENT_ID,
+            client_id: process.env.TWITCH_CLIENT_ID!,
             token: twitchSettings.accessToken,
           }),
         });
@@ -172,7 +175,7 @@ export function setupTwitchAuth(app: Express) {
   });
 
   // Get Twitch connection status
-  app.get("/api/twitch/status", async (req: any, res) => {
+  app.get("/api/twitch/status", async (req: any, res: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -193,7 +196,7 @@ export function setupTwitchAuth(app: Express) {
   });
 
   // Update Twitch event settings
-  app.put("/api/twitch/settings", async (req: any, res) => {
+  app.put("/api/twitch/settings", async (req: any, res: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -220,8 +223,8 @@ export async function refreshTwitchToken(refreshToken: string): Promise<TwitchTo
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        client_id: TWITCH_CLIENT_ID,
-        client_secret: TWITCH_CLIENT_SECRET,
+        client_id: process.env.TWITCH_CLIENT_ID!,
+        client_secret: process.env.TWITCH_CLIENT_SECRET!,
         grant_type: "refresh_token",
         refresh_token: refreshToken,
       }),

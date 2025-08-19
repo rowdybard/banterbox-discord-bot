@@ -1,114 +1,182 @@
-# Firebase Storage Setup Guide
+# Firebase Setup Guide
 
-This guide will help you set up Firebase Storage for BanterBox audio file storage.
+This guide will help you set up Firebase for your BanterBox application after migrating from PostgreSQL.
 
-## Why Firebase Storage?
+## Prerequisites
 
-- **Persistent**: Unlike Render's filesystem, Firebase Storage keeps your audio files permanently
-- **Free Tier**: 5GB storage and 1GB/day downloads free
-- **Fast**: Global CDN for quick audio delivery
-- **Reliable**: Google's infrastructure
+1. A Google Cloud Project
+2. Firebase project created
+3. Firebase Admin SDK service account key
 
-## Setup Steps
-
-### 1. Create Firebase Project
+## Step 1: Create Firebase Project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Click "Create a project" or select existing project
-3. Name it (e.g., "banterbox-audio")
-4. Disable Google Analytics (not needed)
+2. Click "Create a project" or select an existing project
+3. Follow the setup wizard
+4. Enable Firestore Database
 
-### 2. Enable Storage
+## Step 2: Set up Firestore Database
 
-1. In Firebase Console, click "Storage" in left sidebar
-2. Click "Get started"
-3. Choose "Start in production mode" (we'll make files public)
-4. Select your region (choose closest to your users)
+1. In Firebase Console, go to "Firestore Database"
+2. Click "Create database"
+3. Choose "Start in test mode" (you can secure it later)
+4. Select a location close to your users
 5. Click "Done"
 
-### 3. Configure Storage Rules
+## Step 3: Get Service Account Key
 
-1. Go to Storage → Rules tab
-2. Replace the rules with:
+1. In Firebase Console, go to Project Settings (gear icon)
+2. Go to "Service accounts" tab
+3. Click "Generate new private key"
+4. Download the JSON file
+5. **Keep this file secure - never commit it to version control**
+
+## Step 4: Set Environment Variables
+
+Add these environment variables to your `.env` file:
+
+```bash
+# Firebase Configuration
+FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"your-project-id",...}
+FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+
+# Optional: Google Cloud Storage (if using Firebase Storage)
+GCS_BUCKET=your-project-id.appspot.com
+
+# Remove PostgreSQL URL (optional - keep for migration purposes)
+# DATABASE_URL=postgresql://...
 ```
+
+## Step 5: Install Dependencies
+
+```bash
+npm install
+```
+
+## Step 6: Test Firebase Connection
+
+Start your application:
+
+```bash
+npm run dev
+```
+
+You should see:
+- `✅ Firebase Admin storage and Firestore initialized`
+- `ℹ️  No DATABASE_URL provided - using Firebase Firestore`
+
+## Step 7: Firestore Security Rules
+
+Update your Firestore security rules in the Firebase Console:
+
+```javascript
 rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /audio/{allPaths=**} {
-      allow read: if true;  // Public read for audio files
-      allow write: if false; // Only server can write
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow authenticated users to read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /userSettings/{docId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    match /banterItems/{docId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Allow public read access to marketplace items
+    match /marketplaceVoices/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        resource.data.authorId == request.auth.uid;
+    }
+    
+    match /marketplacePersonalities/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        resource.data.authorId == request.auth.uid;
+    }
+    
+    // Allow authenticated users to manage their downloads and ratings
+    match /userDownloads/{docId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    match /userRatings/{docId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
     }
   }
 }
 ```
-3. Click "Publish"
 
-### 4. Get Service Account Key
+## Step 8: Data Migration (Optional)
 
-1. Go to Project Settings (gear icon) → Service accounts
-2. Click "Generate new private key"
-3. Save the downloaded JSON file
+If you have existing PostgreSQL data, you can migrate it:
 
-### 5. Get Storage Bucket Name
+1. Export your PostgreSQL data
+2. Use the Firebase Admin SDK to import data
+3. Create a migration script if needed
 
-1. Go to Storage in Firebase Console
-2. Copy the bucket name (looks like: `your-project.appspot.com`)
+## Step 9: Verify Everything Works
 
-## Environment Variables
-
-Add these to your Render dashboard environment variables:
-
-```bash
-# Firebase Storage Configuration
-FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-
-# Firebase Service Account Key (paste entire JSON as single line)
-FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"your-project","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
-```
-
-### Important: Format the Service Account Key
-
-The service account JSON must be on a single line. You can use this tool to convert it:
-1. Copy your service account JSON
-2. Go to [JSON Minifier](https://www.jsonformatter.org/json-minify)
-3. Paste and minify
-4. Copy the minified version
-5. Paste as `FIREBASE_SERVICE_ACCOUNT_KEY` value
-
-## Add to Render
-
-1. Go to your [Render Dashboard](https://dashboard.render.com)
-2. Select your BanterBox service
-3. Go to Environment → Environment Variables
-4. Add both variables above
-5. Click "Save Changes"
-6. Deploy will restart automatically
-
-## Testing
-
-After deployment:
-1. Generate a banter in Discord
-2. Check server logs for "Audio saved to Firebase Storage"
-3. Audio URLs will look like: `https://storage.googleapis.com/your-bucket/audio/xxx.mp3`
+Test these features:
+- [ ] User registration and login
+- [ ] User settings management
+- [ ] Banter creation and retrieval
+- [ ] Twitch/Discord integration
+- [ ] Marketplace functionality
+- [ ] File uploads (if using Firebase Storage)
 
 ## Troubleshooting
 
-**"Firebase Storage not configured"**
-- Check both environment variables are set correctly
-- Service account key must be valid JSON (single line)
+### Firebase not initializing
+- Check that `FIREBASE_SERVICE_ACCOUNT_KEY` is properly set
+- Verify the service account key JSON is valid
+- Ensure the Firebase project exists
 
-**"Permission denied" errors**
-- Check Storage Rules are set to allow public read
-- Verify service account has Storage Admin role
+### Permission denied errors
+- Check Firestore security rules
+- Verify the service account has proper permissions
+- Check if you're in the correct Firebase project
 
-**Audio not playing**
-- Check CORS settings in Firebase Storage
-- Verify audio URLs are accessible in browser
+### Authentication issues
+- Ensure session configuration is correct
+- Check that user data is being stored properly
+- Verify passport strategies are configured
 
-## Benefits
+## Environment Variables Reference
 
-✅ Audio files persist between deployments  
-✅ No storage limits on Render  
-✅ Fast global CDN delivery  
-✅ Professional audio hosting  
-✅ Automatic backups and redundancy
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK service account JSON | Yes |
+| `FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket name | Yes |
+| `GCS_BUCKET` | Google Cloud Storage bucket (fallback) | No |
+| `SESSION_SECRET` | Session encryption secret | Yes |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | No |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | No |
+| `DISCORD_CLIENT_ID` | Discord OAuth client ID | No |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth client secret | No |
+| `TWITCH_CLIENT_ID` | Twitch OAuth client ID | No |
+| `TWITCH_CLIENT_SECRET` | Twitch OAuth client secret | No |
+
+## Next Steps
+
+1. Set up Firebase Authentication (optional)
+2. Configure Firebase Storage for file uploads
+3. Set up Firebase Functions for serverless operations
+4. Configure Firebase Hosting for static assets
+5. Set up monitoring and analytics
+
+## Support
+
+If you encounter issues:
+1. Check the Firebase Console for errors
+2. Review the application logs
+3. Verify environment variables
+4. Test with a simple Firebase connection first

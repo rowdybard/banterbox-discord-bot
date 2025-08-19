@@ -1,170 +1,137 @@
-import passport from "passport";
 import session from "express-session";
-import type { Express, RequestHandler } from "express";
-import connectPg from "connect-pg-simple";
-import { storage } from "./storage";
-import bcrypt from "bcrypt";
+import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import bcrypt from "bcrypt";
+import { storage } from "./storage";
 
-export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
-  return session({
-    secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: sessionTtl,
-      sameSite: 'lax' as const,
-    },
-  });
-}
+// Use Firebase storage instead of PostgreSQL
+const conString = process.env.DATABASE_URL || "firebase";
 
-// Local authentication strategy
-passport.use(new LocalStrategy(
-  {
-    usernameField: 'email',
-    passwordField: 'password'
-  },
-  async (email, password, done) => {
-    try {
-      // Check if user exists
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return done(null, false, { message: 'Invalid email or password' });
-      }
+export function setupAuth(app: any) {
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET!,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      },
+    })
+  );
 
-      // Check password
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash as string);
-      if (!isValidPassword) {
-        return done(null, false, { message: 'Invalid email or password' });
-      }
-
-      return done(null, user);
-    } catch (error) {
-      return done(error);
-    }
-  }
-));
-
-passport.serializeUser((user: any, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id: string, done) => {
-  try {
-    const user = await storage.getUser(id);
-    if (!user) {
-      return done(null, false);
-    }
-    done(null, user);
-  } catch (error) {
-    done(error);
-  }
-});
-
-// Authentication middleware
-export const isAuthenticated: RequestHandler = (req, res, next) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).json({ error: 'Not authenticated' });
-};
-
-export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
-  app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Login route
-  app.post('/api/auth/login', passport.authenticate('local'), (req, res) => {
-    res.json({ 
-      success: true, 
-      user: {
-        id: (req.user as any)?.id,
-        email: (req.user as any)?.email,
-        firstName: (req.user as any)?.firstName,
-        lastName: (req.user as any)?.lastName
+  passport.use(
+    new LocalStrategy(
+      {
+        usernameField: "email",
+        passwordField: "password",
+      },
+      async (email: string, password: string, done: any) => {
+        try {
+          const user = await storage.getUserByEmail(email);
+          if (!user) {
+            return done(null, false, { message: "Invalid email or password" });
+          }
+
+          if (!user.passwordHash) {
+            return done(null, false, { message: "Account not set up for password login" });
+          }
+
+          const isValid = await bcrypt.compare(password, user.passwordHash);
+          if (!isValid) {
+            return done(null, false, { message: "Invalid email or password" });
+          }
+
+          return done(null, user);
+        } catch (error) {
+          return done(error);
+        }
       }
-    });
+    )
+  );
+
+  passport.serializeUser((user: any, done) => {
+    done(null, user.id);
   });
 
-  // Register route
-  app.post('/api/auth/register', async (req, res) => {
+  passport.deserializeUser(async (id: string, done) => {
+    try {
+      const user = await storage.getUser(id);
+      done(null, user);
+    } catch (error) {
+      done(error);
+    }
+  });
+
+  app.post("/api/auth/register", async (req, res) => {
     try {
       const { email, password, firstName, lastName } = req.body;
-      
+
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ error: 'User already exists' });
+        return res.status(400).json({ error: "User already exists" });
       }
 
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Create user
-      const user = await storage.upsertUser({
-        id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const user = await storage.createUser({
         email,
+        passwordHash,
         firstName,
         lastName,
-        passwordHash
+        subscriptionTier: "free",
+        subscriptionStatus: "active",
+        hasCompletedOnboarding: false,
       });
 
       // Log in the user
-      req.login(user, (err) => {
+      req.login(user, (err: any) => {
         if (err) {
-          return res.status(500).json({ error: 'Login failed after registration' });
+          return res.status(500).json({ error: "Login failed" });
         }
-        res.json({ 
-          success: true, 
-          user: {
-            id: (req.user as any)?.id,
-            email: (req.user as any)?.email,
-            firstName: (req.user as any)?.firstName,
-            lastName: (req.user as any)?.lastName
-          }
-        });
+        res.json({ user });
       });
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({ error: 'Registration failed' });
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
     }
   });
 
-  // Logout route
-  app.post('/api/auth/logout', (req, res) => {
+  app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
+    res.json({ user: req.user });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
     req.logout((err) => {
       if (err) {
-        return res.status(500).json({ error: 'Logout failed' });
+        return res.status(500).json({ error: "Logout failed" });
       }
-      res.json({ success: true });
+      res.json({ message: "Logged out successfully" });
     });
   });
 
-  // Get current user
-  app.get('/api/auth/me', (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: 'Not authenticated' });
+  app.get("/api/auth/me", (req, res) => {
+    if (req.isAuthenticated()) {
+      res.json({ user: req.user });
+    } else {
+      res.status(401).json({ error: "Not authenticated" });
     }
-    res.json({
-      user: {
-        id: (req.user as any)?.id,
-        email: (req.user as any)?.email,
-        firstName: (req.user as any)?.firstName,
-        lastName: (req.user as any)?.lastName
-      }
-    });
   });
+}
+
+export function isAuthenticated(req: any, res: any, next: any) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: "Authentication required" });
 }
