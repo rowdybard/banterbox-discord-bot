@@ -7,8 +7,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock, Clock, Calendar } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { getTierOrder, isDowngrade as checkIsDowngrade, canChangePlan, getPlanChangeInfo } from "@shared/billing";
-import type { SubscriptionTier } from "@shared/types";
+import { getTierOrder, isDowngrade as checkIsDowngrade, canChangePlan, getPlanChangeInfo } from "../../../../shared/billing";
+import type { SubscriptionTier } from "../../../../shared/types";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();

@@ -24,8 +24,8 @@ import {
   BarChart3,
   Settings
 } from "lucide-react";
-import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, getPlanChangeInfo, isDowngrade } from "@shared/billing";
-import type { SubscriptionTier } from "@shared/types";
+import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, getPlanChangeInfo, isDowngrade } from "../../../shared/billing";
+import type { SubscriptionTier } from "../../../shared/types";
 
 export default function PricingPage() {
   const { user } = useAuth();

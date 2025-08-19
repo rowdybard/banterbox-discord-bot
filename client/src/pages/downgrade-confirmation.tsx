@@ -30,8 +30,8 @@ import {
 import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { getTierConfig, formatPrice } from "@shared/billing";
-import type { SubscriptionTier } from "@shared/types";
+import { getTierConfig, formatPrice } from "../../../shared/billing";
+import type { SubscriptionTier } from "../../../shared/types";
 
 export default function DowngradeConfirmationPage() {
   const { user } = useAuth();

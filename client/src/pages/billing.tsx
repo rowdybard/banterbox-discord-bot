@@ -20,8 +20,8 @@ import {
   EyeOff
 } from "lucide-react";
 import { Link } from "wouter";
-import { BILLING_CONFIG, getTierConfig, formatPrice } from "@shared/billing";
-import type { SubscriptionTier } from "@shared/types";
+import { BILLING_CONFIG, getTierConfig, formatPrice } from "../../../shared/billing";
+import type { SubscriptionTier } from "../../../shared/types";
 import { useToast } from "@/hooks/use-toast";
 
 export default function BillingPage() {
