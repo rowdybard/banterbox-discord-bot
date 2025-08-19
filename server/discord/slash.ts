@@ -1,7 +1,5 @@
 import { firebaseStorage } from '../firebaseStorage';
-import { db } from '../db';
-import { guildLinks } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+
 import { randomBytes } from 'crypto';
 
 // Discord permission constants
@@ -204,22 +202,20 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
       } else {
         // Reactivate existing inactive link with new workspace
         console.log(`Reactivating existing guild link for workspace: ${linkCode.workspaceId}`);
-        try {
-          // Update the existing link instead of creating a new one
-          await db.update(guildLinks)
-            .set({
-              workspaceId: linkCode.workspaceId,
-              linkedByUserId: userId,
-              active: true,
-              // Reset created date to now for the new link
-              createdAt: new Date()
-            })
-            .where(eq(guildLinks.guildId, guildId));
-          console.log(`✅ Guild link reactivated successfully`);
-        } catch (updateError) {
-          console.error('❌ Failed to reactivate guild link:', updateError);
-          throw updateError;
-        }
+                 try {
+           // Update the existing link instead of creating a new one
+           await firebaseStorage.updateGuildLink(guildId, {
+             workspaceId: linkCode.workspaceId,
+             linkedByUserId: userId,
+             active: true,
+             // Reset created date to now for the new link
+             createdAt: new Date()
+           });
+           console.log(`✅ Guild link reactivated successfully`);
+         } catch (updateError) {
+           console.error('❌ Failed to reactivate guild link:', updateError);
+           throw updateError;
+         }
       }
     } else {
       // Create new guild link

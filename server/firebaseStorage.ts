@@ -585,6 +585,15 @@ export class FirebaseStorageService implements IStorage {
     return newGuildLink;
   }
 
+  async updateGuildLink(guildId: string, updates: Partial<GuildLink>): Promise<void> {
+    try {
+      await this.db.collection('guildLinks').doc(guildId).update(updates);
+    } catch (error) {
+      console.error('Error updating guild link:', error);
+      throw error;
+    }
+  }
+
   async deactivateGuildLink(guildId: string): Promise<void> {
     try {
       await this.db.collection('guildLinks').doc(guildId).update({

@@ -1,7 +1,7 @@
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-import connectPg from "connect-pg-simple";
+
 import { firebaseStorage } from "./firebaseStorage";
 import bcrypt from "bcrypt";
 import { Strategy as LocalStrategy } from "passport-local";
