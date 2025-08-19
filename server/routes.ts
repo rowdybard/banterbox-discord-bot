@@ -2445,7 +2445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tags: tags && tags.length > 0 ? tags : ["custom"],
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
-            moderationStatus: 'approved' // Temporarily auto-approve for testing
+            moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Personality submitted to marketplace:', marketplacePersonality.id);
         } catch (error) {
@@ -2458,7 +2458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true, 
         personality: newPersonality,
         message: addToMarketplace 
-          ? "Personality saved to your library and will be reviewed for marketplace!" 
+          ? "Personality saved to your library and added to marketplace!" 
           : "Personality saved to your library!"
       });
     } catch (error) {
@@ -3214,7 +3214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sampleText: sampleText || "Sample text for this voice.",
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
-            moderationStatus: 'approved' // Temporarily auto-approve for testing
+            moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Voice submitted to marketplace:', marketplaceVoice.id);
         } catch (error) {
@@ -3227,7 +3227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true, 
         voice: customVoice,
         message: addToMarketplace 
-          ? "Voice saved to your library and will be reviewed for marketplace!" 
+          ? "Voice saved to your library and added to marketplace!" 
           : "Voice saved to your library!"
       });
     } catch (error) {

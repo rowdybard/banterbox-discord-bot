@@ -167,7 +167,7 @@ export default function PersonalityBuilderPage() {
       toast({
         title: addToMarketplace ? "Personality Saved & Added to Marketplace!" : "Personality Saved!",
         description: addToMarketplace 
-          ? `Custom personality "${personalityName}" has been saved and added to the marketplace for review.`
+          ? `Custom personality "${personalityName}" has been saved and added to the marketplace!`
           : `Custom personality "${personalityName}" has been saved to your library.`,
       });
       
@@ -480,7 +480,7 @@ export default function PersonalityBuilderPage() {
               
               {addToMarketplace && (
                 <p className="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">
-                  Your personality will be reviewed before appearing in the marketplace
+                  Your personality will be immediately available in the marketplace
                 </p>
               )}
             </CardContent>

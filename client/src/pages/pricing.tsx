@@ -24,13 +24,19 @@ import {
   BarChart3,
   Settings
 } from "lucide-react";
-import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings } from "@shared/billing";
+import { BILLING_CONFIG, getTierConfig, formatPrice, calculateYearlySavings, getPlanChangeInfo, isDowngrade } from "@shared/billing";
 import type { SubscriptionTier } from "@shared/types";
 
 export default function PricingPage() {
   const { user } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('pro');
+
+  // Get plan change information to check cooldown restrictions
+  const planChangeInfo = getPlanChangeInfo(
+    user?.lastPlanChangeAt ? new Date(user.lastPlanChangeAt) : null,
+    user?.planChangeCount || 0
+  );
 
   const handlePlanChange = (tier: SubscriptionTier) => {
     setSelectedTier(tier);
@@ -98,11 +104,8 @@ export default function PricingPage() {
   };
 
   const canDowngrade = (tier: SubscriptionTier) => {
-    const currentTier = getCurrentTier();
-    const tierOrder = ['free', 'pro', 'byok', 'enterprise'];
-    const currentIndex = tierOrder.indexOf(currentTier);
-    const targetIndex = tierOrder.indexOf(tier);
-    return targetIndex < currentIndex;
+    const currentTier = getCurrentTier() as SubscriptionTier;
+    return isDowngrade(currentTier, tier);
   };
 
   // Check if user is already Pro or higher
@@ -136,6 +139,24 @@ export default function PricingPage() {
                   You're currently on the {getCurrentTier()} plan
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Show cooldown warning */}
+          {!planChangeInfo.canChangeNow && (
+            <div className="bg-gradient-to-r from-red-500/10 to-red-600/10 rounded-lg p-4 border border-red-500/30 mb-8">
+              <div className="flex items-center justify-center space-x-2">
+                <Clock className="w-5 h-5 text-red-400" />
+                <span className="text-red-400 font-medium">
+                  Plan Changes Restricted
+                </span>
+              </div>
+              <p className="text-red-300 text-sm text-center mt-1">
+                {planChangeInfo.reason}
+                {planChangeInfo.daysUntilNextChange && (
+                  <span> • Next change allowed in {planChangeInfo.daysUntilNextChange} days</span>
+                )}
+              </p>
             </div>
           )}
 
@@ -262,20 +283,36 @@ export default function PricingPage() {
                                          ) : canUpgrade(tier.id) ? (
                        <Button 
                          className={`w-full ${
-                           tier.popular 
-                             ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80' 
-                             : 'bg-gray-600 hover:bg-gray-500'
+                           !planChangeInfo.canChangeNow
+                             ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                             : tier.popular 
+                               ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80' 
+                               : 'bg-gray-600 hover:bg-gray-500'
                          } text-white font-semibold`}
                          onClick={() => handlePlanChange(tier.id)}
+                         disabled={!planChangeInfo.canChangeNow}
                        >
-                         {tier.id === 'enterprise' ? 'Contact Sales' : 'Upgrade Now'}
+                         {!planChangeInfo.canChangeNow 
+                           ? `Restricted (${planChangeInfo.daysUntilNextChange ? `${planChangeInfo.daysUntilNextChange}d` : 'Limit'})`
+                           : tier.id === 'enterprise' 
+                             ? 'Contact Sales' 
+                             : 'Upgrade Now'
+                         }
                        </Button>
                      ) : canDowngrade(tier.id) ? (
                        <Button 
-                         className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold"
+                         className={`w-full ${
+                           !planChangeInfo.canChangeNow
+                             ? 'bg-gray-500 cursor-not-allowed opacity-50'
+                             : 'bg-red-600 hover:bg-red-700'
+                         } text-white font-semibold`}
                          onClick={() => handlePlanChange(tier.id)}
+                         disabled={!planChangeInfo.canChangeNow}
                        >
-                         Downgrade
+                         {!planChangeInfo.canChangeNow 
+                           ? `Restricted (${planChangeInfo.daysUntilNextChange ? `${planChangeInfo.daysUntilNextChange}d` : 'Limit'})`
+                           : 'Downgrade'
+                         }
                        </Button>
                      ) : (
                        <Button 
