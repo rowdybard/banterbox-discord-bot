@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["client/src/**/*", "shared/**/*"],
+  "exclude": ["server/**/*", "node_modules", "build", "dist", "**/*.test.ts"],
+  "compilerOptions": {
+    "types": ["node", "vite/client"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  }
+}
