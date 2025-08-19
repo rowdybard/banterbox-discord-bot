@@ -9,7 +9,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UserSettings, User } from "@shared/schema";
 import { Crown } from "lucide-react";
-import VoiceSettings from "./voice-settings";
 import UnifiedSettings from "./unified-settings";
 
 interface ControlPanelProps {
@@ -72,24 +71,7 @@ export default function ControlPanel({ userId, user }: ControlPanelProps) {
         </p>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="voice" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-800">
-            <TabsTrigger value="voice" className="data-[state=active]:bg-primary">
-              Voice Settings
-            </TabsTrigger>
-            <TabsTrigger value="personality" className="data-[state=active]:bg-primary">
-              Personality & Style
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="voice" className="mt-6">
-            <VoiceSettings userId={userId} settings={settings} user={user} />
-          </TabsContent>
-          
-          <TabsContent value="personality" className="mt-6">
-            <UnifiedSettings userId={userId} settings={settings} user={user} />
-          </TabsContent>
-        </Tabs>
+        <UnifiedSettings userId={userId} settings={settings} user={user} />
       </CardContent>
     </Card>
   );

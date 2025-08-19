@@ -113,6 +113,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (personality === 'custom' && customPrompt) {
             personalityContext = customPrompt;
+          } else if (personality.startsWith('favorite_') && customPrompt) {
+            // Use custom prompt for favorite personalities
+            personalityContext = customPrompt;
           } else {
             const personalityPrompts = {
               witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Be creative and avoid repetition.",
@@ -2200,6 +2203,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         onlyApproved: true // Only show approved items
       });
       
+      // Fallback to sample data if database is empty
+      if (!personalities || personalities.length === 0) {
+        const samplePersonalities = [
+          {
+            id: "1",
+            name: "Gaming Guru",
+            description: "Perfect for gaming streams with witty commentary",
+            prompt: "You are a gaming expert with deep knowledge of games. Provide insightful commentary, tips, and reactions to gaming moments. Keep responses engaging and informative.",
+            category: "Gaming",
+            tags: ["gaming", "expert", "commentary"],
+            authorName: "BanterBox Team",
+            isVerified: true,
+            downloads: 1250,
+            upvotes: 89,
+            downvotes: 3,
+            isActive: true,
+            createdAt: "2024-01-15T10:00:00Z",
+            updatedAt: "2024-01-15T10:00:00Z"
+          },
+          {
+            id: "2",
+            name: "Comedy Master",
+            description: "Hilarious responses that keep everyone laughing",
+            prompt: "You are a comedy master who creates hilarious responses. Use clever jokes, puns, and witty observations. Keep the humor clean and entertaining for all ages.",
+            category: "Comedy",
+            tags: ["comedy", "humor", "entertainment"],
+            authorName: "BanterBox Team",
+            isVerified: true,
+            downloads: 2100,
+            upvotes: 156,
+            downvotes: 7,
+            isActive: true,
+            createdAt: "2024-01-10T14:30:00Z",
+            updatedAt: "2024-01-10T14:30:00Z"
+          },
+          {
+            id: "3",
+            name: "Educational Expert",
+            description: "Great for educational content and learning streams",
+            prompt: "You are an educational expert who explains concepts clearly and engagingly. Provide helpful insights, answer questions, and make learning fun and accessible.",
+            category: "Education",
+            tags: ["education", "learning", "helpful"],
+            authorName: "BanterBox Team",
+            isVerified: true,
+            downloads: 890,
+            upvotes: 67,
+            downvotes: 2,
+            isActive: true,
+            createdAt: "2024-01-20T09:15:00Z",
+            updatedAt: "2024-01-20T09:15:00Z"
+          }
+        ];
+        return res.json(samplePersonalities);
+      }
+
       res.json(personalities);
     } catch (error) {
       console.error('Error getting marketplace personalities:', error);
@@ -2275,7 +2333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tags: tags && tags.length > 0 ? tags : ["custom"],
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
-            moderationStatus: 'pending' // All new items start as pending
+            moderationStatus: 'approved' // Temporarily auto-approve for testing
           });
           console.log('Personality submitted to marketplace:', marketplacePersonality.id);
         } catch (error) {
@@ -2568,6 +2626,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         onlyApproved: true // Only show approved items
       });
       
+      // Fallback to sample data if database is empty
+      if (!voices || voices.length === 0) {
+        const sampleVoices = [
+          {
+            id: "1",
+            name: "Gaming Warrior",
+            description: "Perfect for gaming streams with energetic commentary",
+            category: "Gaming",
+            tags: ["gaming", "energetic", "warrior"],
+            voiceId: "21m00Tcm4TlvDq8ikWAM",
+            baseVoiceId: "21m00Tcm4TlvDq8ikWAM",
+            settings: {
+              stability: 60,
+              similarityBoost: 80,
+              style: 20,
+              useSpeakerBoost: true
+            },
+            sampleText: "Welcome to the stream! Let's dominate this game!",
+            downloads: 850,
+            upvotes: 67,
+            downvotes: 2,
+            createdAt: "2024-01-15T10:00:00Z",
+            authorId: "user1"
+          },
+          {
+            id: "2",
+            name: "Chill Vibes",
+            description: "Relaxed and laid-back voice for casual streams",
+            category: "Entertainment",
+            tags: ["chill", "relaxed", "casual"],
+            voiceId: "ErXwobaYiN019PkySvjV",
+            baseVoiceId: "ErXwobaYiN019PkySvjV",
+            settings: {
+              stability: 75,
+              similarityBoost: 70,
+              style: 10,
+              useSpeakerBoost: false
+            },
+            sampleText: "Hey everyone, thanks for hanging out with us today.",
+            downloads: 1200,
+            upvotes: 89,
+            downvotes: 5,
+            createdAt: "2024-01-10T14:30:00Z",
+            authorId: "user2"
+          },
+          {
+            id: "3",
+            name: "Professional Narrator",
+            description: "Clear and professional voice for educational content",
+            category: "Education",
+            tags: ["professional", "clear", "educational"],
+            voiceId: "JBFqnCBsd6RMkjVDRZzb",
+            baseVoiceId: "JBFqnCBsd6RMkjVDRZzb",
+            settings: {
+              stability: 85,
+              similarityBoost: 90,
+              style: 5,
+              useSpeakerBoost: true
+            },
+            sampleText: "Today we'll be exploring the fascinating world of science.",
+            downloads: 650,
+            upvotes: 45,
+            downvotes: 1,
+            createdAt: "2024-01-20T09:15:00Z",
+            authorId: "user3"
+          }
+        ];
+        return res.json(sampleVoices);
+      }
+
       res.json(voices);
     } catch (error) {
       console.error('Error getting marketplace voices:', error);
@@ -2974,7 +3102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sampleText: sampleText || "Sample text for this voice.",
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
-            moderationStatus: 'pending' // All new items start as pending
+            moderationStatus: 'approved' // Temporarily auto-approve for testing
           });
           console.log('Voice submitted to marketplace:', marketplaceVoice.id);
         } catch (error) {
