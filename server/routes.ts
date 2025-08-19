@@ -2315,6 +2315,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         onlyApproved: true // Only show approved items
       });
       
+      console.log('Marketplace personalities query result:', {
+        count: personalities?.length || 0,
+        personalities: personalities?.map(p => ({ id: p.id, name: p.name, isActive: p.isActive, moderationStatus: p.moderationStatus }))
+      });
+      
       // Fallback to sample data if database is empty
       if (!personalities || personalities.length === 0) {
         const samplePersonalities = [
@@ -2445,6 +2450,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tags: tags && tags.length > 0 ? tags : ["custom"],
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
+            isActive: true,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Personality submitted to marketplace:', marketplacePersonality.id);
@@ -2736,6 +2742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         search: search as string,
         limit: limit ? parseInt(limit as string) : 50,
         onlyApproved: true // Only show approved items
+      });
+      
+      console.log('Marketplace voices query result:', {
+        count: voices?.length || 0,
+        voices: voices?.map(v => ({ id: v.id, name: v.name, isActive: v.isActive, moderationStatus: v.moderationStatus }))
       });
       
       // Fallback to sample data if database is empty
@@ -3214,6 +3225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sampleText: sampleText || "Sample text for this voice.",
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
+            isActive: true,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Voice submitted to marketplace:', marketplaceVoice.id);

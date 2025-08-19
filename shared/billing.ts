@@ -288,7 +288,13 @@ export function canChangePlan(
     return { allowed: false, reason: "You're already on this plan" };
   }
 
-  // Check cooldown period FIRST (applies to all plan changes)
+  // Enterprise users are never restricted from changing plans
+  // This ensures enterprise customers have full flexibility
+  if (currentTier === 'enterprise' || targetTier === 'enterprise') {
+    return { allowed: true };
+  }
+
+  // Check cooldown period FIRST (applies to all plan changes except enterprise)
   if (lastPlanChangeAt) {
     const cooldownMs = BILLING_CONFIG.planSwitching.cooldownDays * 24 * 60 * 60 * 1000;
     const nextAllowedDate = new Date(lastPlanChangeAt.getTime() + cooldownMs);
@@ -302,7 +308,7 @@ export function canChangePlan(
     }
   }
 
-  // Check monthly limit SECOND (applies to all plan changes)
+  // Check monthly limit SECOND (applies to all plan changes except enterprise)
   if (planChangeCount >= BILLING_CONFIG.planSwitching.maxChangesPerMonth) {
     return { 
       allowed: false, 
@@ -326,7 +332,8 @@ export function canChangePlan(
 
 export function getPlanChangeInfo(
   lastPlanChangeAt?: Date | null,
-  planChangeCount: number = 0
+  planChangeCount: number = 0,
+  currentTier?: SubscriptionTier
 ): {
   changesThisMonth: number;
   maxChangesPerMonth: number;
@@ -340,6 +347,17 @@ export function getPlanChangeInfo(
   let daysUntilNextChange: number | null = null;
   let canChangeNow = true;
   let reason: string | undefined;
+
+  // Enterprise users are never restricted from changing plans
+  if (currentTier === 'enterprise') {
+    return {
+      changesThisMonth: planChangeCount,
+      maxChangesPerMonth: maxChanges,
+      daysUntilNextChange: null,
+      canChangeNow: true,
+      reason: undefined
+    };
+  }
 
   // Check cooldown period
   if (lastPlanChangeAt) {

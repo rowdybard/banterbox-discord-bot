@@ -82,7 +82,8 @@ export default function SubscriptionUpdater() {
   // Get plan change information
   const planChangeInfo = getPlanChangeInfo(
     user?.lastPlanChangeAt ? new Date(user.lastPlanChangeAt) : null,
-    user?.planChangeCount || 0
+    user?.planChangeCount || 0,
+    user?.subscriptionTier as SubscriptionTier
   );
 
   const canDowngradeTo = (targetTier: string) => {
@@ -162,21 +163,33 @@ export default function SubscriptionUpdater() {
         </div>
 
         {/* Plan Change Limits */}
-        <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <div className="flex items-center space-x-2 mb-2">
-            <Calendar className="w-4 h-4 text-blue-400" />
-            <span className="text-sm font-medium text-blue-400">Plan Change Limits</span>
+        {user?.subscriptionTier === 'enterprise' ? (
+          <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+            <div className="flex items-center space-x-2 mb-2">
+              <Building className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-purple-400">Enterprise - Unlimited Changes</span>
+            </div>
+            <div className="text-xs text-purple-300 space-y-1">
+              <p>Enterprise users can change plans at any time without restrictions</p>
+            </div>
           </div>
-          <div className="text-xs text-blue-300 space-y-1">
-            <p>Changes this month: {planChangeInfo.changesThisMonth}/{planChangeInfo.maxChangesPerMonth}</p>
-            {planChangeInfo.daysUntilNextChange && (
-              <p>Next change allowed in: {planChangeInfo.daysUntilNextChange} days</p>
-            )}
-            {!planChangeInfo.canChangeNow && planChangeInfo.reason && (
-              <p className="text-yellow-300 font-medium">⚠️ {planChangeInfo.reason}</p>
-            )}
+        ) : (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="flex items-center space-x-2 mb-2">
+              <Calendar className="w-4 h-4 text-blue-400" />
+              <span className="text-sm font-medium text-blue-400">Plan Change Limits</span>
+            </div>
+            <div className="text-xs text-blue-300 space-y-1">
+              <p>Changes this month: {planChangeInfo.changesThisMonth}/{planChangeInfo.maxChangesPerMonth}</p>
+              {planChangeInfo.daysUntilNextChange && (
+                <p>Next change allowed in: {planChangeInfo.daysUntilNextChange} days</p>
+              )}
+              {!planChangeInfo.canChangeNow && planChangeInfo.reason && (
+                <p className="text-yellow-300 font-medium">⚠️ {planChangeInfo.reason}</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Downgrade Section */}
         <div className="space-y-3">
@@ -260,12 +273,12 @@ export default function SubscriptionUpdater() {
             updateSubscriptionMutation.isPending || 
             selectedTier === user?.subscriptionTier || 
             isRestrictedTier(selectedTier) ||
-            !planChangeInfo.canChangeNow
+            (!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise')
           }
           className="w-full bg-gray-600 hover:bg-gray-500 text-white"
         >
           {updateSubscriptionMutation.isPending ? "Updating..." : 
-           !planChangeInfo.canChangeNow ? `Plan Changes Restricted (${planChangeInfo.reason?.split('.')[0]})` :
+           (!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise') ? `Plan Changes Restricted (${planChangeInfo.reason?.split('.')[0]})` :
            "Downgrade Subscription"}
         </Button>
 

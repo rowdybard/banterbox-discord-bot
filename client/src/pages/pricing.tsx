@@ -35,7 +35,8 @@ export default function PricingPage() {
   // Get plan change information to check cooldown restrictions
   const planChangeInfo = getPlanChangeInfo(
     user?.lastPlanChangeAt ? new Date(user.lastPlanChangeAt) : null,
-    user?.planChangeCount || 0
+    user?.planChangeCount || 0,
+    user?.subscriptionTier as SubscriptionTier
   );
 
   const handlePlanChange = (tier: SubscriptionTier) => {
@@ -143,7 +144,7 @@ export default function PricingPage() {
           )}
 
           {/* Show cooldown warning */}
-          {!planChangeInfo.canChangeNow && (
+          {!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise' && (
             <div className="bg-gradient-to-r from-red-500/10 to-red-600/10 rounded-lg p-4 border border-red-500/30 mb-8">
               <div className="flex items-center justify-center space-x-2">
                 <Clock className="w-5 h-5 text-red-400" />
@@ -156,6 +157,21 @@ export default function PricingPage() {
                 {planChangeInfo.daysUntilNextChange && (
                   <span> • Next change allowed in {planChangeInfo.daysUntilNextChange} days</span>
                 )}
+              </p>
+            </div>
+          )}
+
+          {/* Show enterprise unlimited changes notice */}
+          {user?.subscriptionTier === 'enterprise' && (
+            <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/10 rounded-lg p-4 border border-purple-500/30 mb-8">
+              <div className="flex items-center justify-center space-x-2">
+                <Building className="w-5 h-5 text-purple-400" />
+                <span className="text-purple-400 font-medium">
+                  Enterprise Plan - Unlimited Changes
+                </span>
+              </div>
+              <p className="text-purple-300 text-sm text-center mt-1">
+                Enterprise users can change plans at any time without restrictions
               </p>
             </div>
           )}
@@ -283,16 +299,16 @@ export default function PricingPage() {
                                          ) : canUpgrade(tier.id) ? (
                        <Button 
                          className={`w-full ${
-                           !planChangeInfo.canChangeNow
+                           !planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'
                              ? 'bg-gray-500 cursor-not-allowed opacity-50'
                              : tier.popular 
                                ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary/80 hover:to-secondary/80' 
                                : 'bg-gray-600 hover:bg-gray-500'
                          } text-white font-semibold`}
                          onClick={() => handlePlanChange(tier.id)}
-                         disabled={!planChangeInfo.canChangeNow}
+                         disabled={!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'}
                        >
-                         {!planChangeInfo.canChangeNow 
+                         {!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'
                            ? `Restricted (${planChangeInfo.daysUntilNextChange ? `${planChangeInfo.daysUntilNextChange}d` : 'Limit'})`
                            : tier.id === 'enterprise' 
                              ? 'Contact Sales' 
@@ -302,14 +318,14 @@ export default function PricingPage() {
                      ) : canDowngrade(tier.id) ? (
                        <Button 
                          className={`w-full ${
-                           !planChangeInfo.canChangeNow
+                           !planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'
                              ? 'bg-gray-500 cursor-not-allowed opacity-50'
                              : 'bg-red-600 hover:bg-red-700'
                          } text-white font-semibold`}
                          onClick={() => handlePlanChange(tier.id)}
-                         disabled={!planChangeInfo.canChangeNow}
+                         disabled={!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'}
                        >
-                         {!planChangeInfo.canChangeNow 
+                         {!planChangeInfo.canChangeNow && user?.subscriptionTier !== 'enterprise'
                            ? `Restricted (${planChangeInfo.daysUntilNextChange ? `${planChangeInfo.daysUntilNextChange}d` : 'Limit'})`
                            : 'Downgrade'
                          }
