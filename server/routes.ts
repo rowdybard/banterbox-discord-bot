@@ -125,8 +125,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const customPrompt = settings?.customPersonalityPrompt;
 
           if (personality === 'custom' && customPrompt) {
-            personalityContext = customPrompt;
-            console.log(`DEBUG: Using custom personality prompt for user ${userId}`);
+            // Enhance short custom prompts to be more descriptive
+            if (customPrompt.length < 50) {
+              // If it's a short prompt like "college bro", expand it
+              if (customPrompt.toLowerCase().includes('college bro') || customPrompt.toLowerCase().includes('gig economy')) {
+                personalityContext = "You're a typical college bro who's knowledgeable about the gig economy. Be casual, confident, and use modern slang. Talk about side hustles, delivery apps, freelancing, and student life. Keep responses under 25 words. Be energetic and relatable to young people. Use phrases like 'bro', 'dude', 'that's fire', 'no cap', etc. naturally.";
+                console.log(`DEBUG: Enhanced short custom prompt for user ${userId}`);
+              } else {
+                personalityContext = customPrompt;
+                console.log(`DEBUG: Using custom personality prompt for user ${userId}`);
+              }
+            } else {
+              personalityContext = customPrompt;
+              console.log(`DEBUG: Using custom personality prompt for user ${userId}`);
+            }
           } else if (personality.startsWith('favorite_') && customPrompt) {
             // Use custom prompt for favorite personalities
             personalityContext = customPrompt;
@@ -192,7 +204,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`DEBUG: Final personality context for user ${userId}:`, personalityContext.substring(0, 100) + '...');
-      console.log(`DEBUG: Personality type: ${settings?.banterPersonality || 'default'}, Custom prompt length: ${settings?.customPersonalityPrompt?.length || 0}`);
       
       // Check if this is a direct question about what just happened or what BanterBox said
       const isDirectQuestionResult = originalMessage ? isDirectQuestion(originalMessage) : false;
@@ -284,6 +295,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      console.log(`DEBUG: Sending prompt to OpenAI for user ${userId}:`, enhancedPrompt.substring(0, 200) + '...');
+      
       const response = await openai.chat.completions.create({
         model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
@@ -302,7 +315,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         frequency_penalty: 0.5, // Penalize frequent words
       });
 
-      const banterResponse = response.choices[0].message.content || "Thanks for the interaction!";
+      console.log(`DEBUG: OpenAI response for user ${userId}:`, {
+        hasResponse: !!response.choices[0],
+        responseContent: response.choices[0]?.message?.content?.substring(0, 100) + '...',
+        responseLength: response.choices[0]?.message?.content?.length || 0
+      });
+
+      const banterResponse = response.choices[0]?.message?.content || "Thanks for the interaction!";
       
       // Record the AI's response for future context
       if (contextId) {
