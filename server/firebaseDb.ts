@@ -62,7 +62,7 @@ export class FirebaseDatabaseService {
         .limit(limit)
         .get();
 
-      return snapshot.docs.map(doc => doc.data() as BanterItem);
+      return snapshot.docs.map((doc: any) => doc.data() as BanterItem);
     } catch (error) {
       console.error('Error getting banter items from Firebase:', error);
       return [];

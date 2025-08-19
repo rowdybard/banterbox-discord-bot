@@ -449,7 +449,7 @@ export class DiscordService {
       const connection = joinVoiceChannel({
         channelId: channelId,
         guildId: guildId,
-        adapterCreator: guild.voiceAdapterCreator,
+        adapterCreator: guild.voiceAdapterCreator as any, // Type assertion to resolve version incompatibility
         selfDeaf: false, // Allow bot to be undeafened for proper audio playback
         selfMute: false,
         // Add connection stability options

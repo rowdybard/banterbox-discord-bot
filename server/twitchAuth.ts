@@ -158,6 +158,7 @@ export function setupTwitchAuth(app: Express) {
       await firebaseStorage.upsertTwitchSettings({
         userId,
         isConnected: false,
+        enabledEvents: [],
         accessToken: undefined,
         refreshToken: undefined,
         twitchUsername: undefined,

@@ -139,7 +139,7 @@ export class FirebaseStorageService implements IStorage {
       return undefined;
     } catch (error) {
       console.error('Error getting user by email:', error);
-      return undefined;
+    return undefined;
     }
   }
 
@@ -212,7 +212,7 @@ export class FirebaseStorageService implements IStorage {
     if (!user) {
       throw new Error('User not found');
     }
-
+    
     const updatedUser = {
       ...user,
       hasCompletedOnboarding: true,
@@ -249,7 +249,7 @@ export class FirebaseStorageService implements IStorage {
         .limit(limit)
         .get();
 
-      return snapshot.docs.map(doc => doc.data() as BanterItem);
+      return snapshot.docs.map((doc: any) => doc.data() as BanterItem);
     } catch (error) {
       console.error('Error getting banter items by user:', error);
       return [];
@@ -270,12 +270,12 @@ export class FirebaseStorageService implements IStorage {
         .limit(limit)
         .get();
 
-      const banters = results.docs.map(doc => doc.data() as BanterItem);
+      const banters = results.docs.map((doc: any) => doc.data() as BanterItem);
       
       // Client-side search since Firebase doesn't support full-text search
       if (query) {
         const searchTerm = query.toLowerCase();
-        return banters.filter(banter => 
+        return banters.filter((banter: any) => 
           banter.banterText.toLowerCase().includes(searchTerm) ||
           banter.originalMessage?.toLowerCase().includes(searchTerm)
         );
@@ -349,6 +349,16 @@ export class FirebaseStorageService implements IStorage {
       id: settings.userId || '',
       userId: settings.userId || '',
       voiceProvider: settings.voiceProvider || 'openai',
+      autoPlay: settings.autoPlay ?? true,
+      volume: settings.volume ?? 75,
+      responseFrequency: settings.responseFrequency ?? 50,
+      enabledEvents: settings.enabledEvents ?? ['chat', 'subscription', 'donation'],
+      overlayPosition: settings.overlayPosition ?? 'top-right',
+      overlayDuration: settings.overlayDuration ?? 5000,
+      overlayAnimation: settings.overlayAnimation ?? 'fade',
+      banterPersonality: settings.banterPersonality ?? 'witty',
+      favoritePersonalities: settings.favoritePersonalities ?? [],
+      favoriteVoices: settings.favoriteVoices ?? [],
       updatedAt: now,
     };
 
@@ -367,11 +377,11 @@ export class FirebaseStorageService implements IStorage {
       const updatedDoc = await docRef.get();
       if (updatedDoc.exists) {
         return updatedDoc.data() as UserSettings;
-      }
-      return undefined;
+    }
+    return undefined;
     } catch (error) {
       console.error('Error updating user settings:', error);
-      return undefined;
+    return undefined;
     }
   }
 
@@ -385,7 +395,7 @@ export class FirebaseStorageService implements IStorage {
       return undefined;
     } catch (error) {
       console.error('Error getting daily stats:', error);
-      return undefined;
+    return undefined;
     }
   }
 
@@ -457,7 +467,7 @@ export class FirebaseStorageService implements IStorage {
       return undefined;
     } catch (error) {
       console.error('Error getting Twitch settings:', error);
-      return undefined;
+    return undefined;
     }
   }
 
@@ -639,10 +649,10 @@ export class FirebaseStorageService implements IStorage {
         .where('active', '==', true)
         .get();
 
-      return snapshot.docs.map(doc => doc.data() as GuildLink);
+      return snapshot.docs.map((doc: any) => doc.data() as GuildLink);
     } catch (error) {
       console.error('Error getting active guild links:', error);
-      return [];
+    return [];
     }
   }
 
@@ -697,7 +707,7 @@ export class FirebaseStorageService implements IStorage {
         .where('isActive', '==', true)
         .get();
 
-      return snapshot.docs.map(doc => doc.data());
+      return snapshot.docs.map((doc: any) => doc.data());
     } catch (error) {
       console.error('Error getting user API keys:', error);
       return [];
@@ -712,7 +722,7 @@ export class FirebaseStorageService implements IStorage {
         .get();
 
       const batch = this.db.batch();
-      snapshot.docs.forEach(doc => {
+      snapshot.docs.forEach((doc: any) => {
         batch.delete(doc.ref);
       });
       await batch.commit();
@@ -811,7 +821,7 @@ export class FirebaseStorageService implements IStorage {
       }
 
       const snapshot = await query.limit(limit).get();
-      return snapshot.docs.map(doc => doc.data() as ContextMemory);
+      return snapshot.docs.map((doc: any) => doc.data() as ContextMemory);
     } catch (error) {
       console.error('Error getting recent context:', error);
       return [];
@@ -831,7 +841,7 @@ export class FirebaseStorageService implements IStorage {
       }
 
       const snapshot = await query.limit(limit).get();
-      return snapshot.docs.map(doc => doc.data() as ContextMemory);
+      return snapshot.docs.map((doc: any) => doc.data() as ContextMemory);
     } catch (error) {
       console.error('Error getting context by type:', error);
       return [];
@@ -855,7 +865,7 @@ export class FirebaseStorageService implements IStorage {
         .get();
 
       const batch = this.db.batch();
-      snapshot.docs.forEach(doc => {
+      snapshot.docs.forEach((doc: any) => {
         batch.delete(doc.ref);
       });
       await batch.commit();
@@ -874,6 +884,7 @@ export class FirebaseStorageService implements IStorage {
     const newVoice: MarketplaceVoice = {
       ...voice,
       id,
+      settings: voice.settings || {}, // Ensure settings is always provided
       createdAt: now,
       updatedAt: now,
       downloads: 0,
@@ -913,12 +924,12 @@ export class FirebaseStorageService implements IStorage {
       }
 
       const snapshot = await query.get();
-      let voices = snapshot.docs.map(doc => doc.data() as MarketplaceVoice);
+      let voices = snapshot.docs.map((doc: any) => doc.data() as MarketplaceVoice);
 
       // Client-side search
       if (filters?.search) {
         const searchTerm = filters.search.toLowerCase();
-        voices = voices.filter(voice =>
+        voices = voices.filter((voice: any) =>
           voice.name.toLowerCase().includes(searchTerm) ||
           voice.description?.toLowerCase().includes(searchTerm)
         );
@@ -928,17 +939,17 @@ export class FirebaseStorageService implements IStorage {
       if (filters?.sortBy) {
         switch (filters.sortBy) {
           case 'newest':
-            voices.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            voices.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
             break;
           case 'downloads':
-            voices.sort((a, b) => b.downloads - a.downloads);
+            voices.sort((a: any, b: any) => b.downloads - a.downloads);
             break;
           case 'rating':
-            voices.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+            voices.sort((a: any, b: any) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
             break;
           default:
             // Popular: combination of downloads and rating
-            voices.sort((a, b) => 
+            voices.sort((a: any, b: any) => 
               (b.downloads + (b.upvotes - b.downvotes) * 10) - 
               (a.downloads + (a.upvotes - a.downvotes) * 10)
             );
@@ -967,12 +978,12 @@ export class FirebaseStorageService implements IStorage {
       }
 
       const snapshot = await query.get();
-      let personalities = snapshot.docs.map(doc => doc.data() as MarketplacePersonality);
+      let personalities = snapshot.docs.map((doc: any) => doc.data() as MarketplacePersonality);
 
       // Client-side search
       if (filters?.search) {
         const searchTerm = filters.search.toLowerCase();
-        personalities = personalities.filter(personality =>
+        personalities = personalities.filter((personality: any) =>
           personality.name.toLowerCase().includes(searchTerm) ||
           personality.description?.toLowerCase().includes(searchTerm)
         );
@@ -982,17 +993,17 @@ export class FirebaseStorageService implements IStorage {
       if (filters?.sortBy) {
         switch (filters.sortBy) {
           case 'newest':
-            personalities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            personalities.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
             break;
           case 'downloads':
-            personalities.sort((a, b) => b.downloads - a.downloads);
+            personalities.sort((a: any, b: any) => b.downloads - a.downloads);
             break;
           case 'rating':
-            personalities.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+            personalities.sort((a: any, b: any) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
             break;
           default:
             // Popular: combination of downloads and rating
-            personalities.sort((a, b) => 
+            personalities.sort((a: any, b: any) => 
               (b.downloads + (b.upvotes - b.downvotes) * 10) - 
               (a.downloads + (a.upvotes - a.downvotes) * 10)
             );
@@ -1188,8 +1199,8 @@ export class FirebaseStorageService implements IStorage {
         .get();
 
       return {
-        voices: voicesSnapshot.docs.map(doc => doc.data() as MarketplaceVoice),
-        personalities: personalitiesSnapshot.docs.map(doc => doc.data() as MarketplacePersonality),
+        voices: voicesSnapshot.docs.map((doc: any) => doc.data() as MarketplaceVoice),
+        personalities: personalitiesSnapshot.docs.map((doc: any) => doc.data() as MarketplacePersonality),
       };
     } catch (error) {
       console.error('Error getting pending moderation items:', error);
@@ -1221,7 +1232,7 @@ export class FirebaseStorageService implements IStorage {
       }
 
       const snapshot = await query.orderBy('createdAt', 'desc').get();
-      return snapshot.docs.map(doc => doc.data() as ContentReport);
+      return snapshot.docs.map((doc: any) => doc.data() as ContentReport);
     } catch (error) {
       console.error('Error getting content reports:', error);
       return [];
@@ -1264,7 +1275,7 @@ export class FirebaseStorageService implements IStorage {
         query = query.where('workspaceId', '==', userId);
       }
       const snapshot = await query.get();
-      return snapshot.docs.map(doc => doc.data() as GuildLink);
+      return snapshot.docs.map((doc: any) => doc.data() as GuildLink);
     } catch (error) {
       console.error('Error getting guild links:', error);
       return [];
@@ -1278,7 +1289,7 @@ export class FirebaseStorageService implements IStorage {
         .get();
       
       const batch = this.db.batch();
-      snapshot.docs.forEach(doc => {
+      snapshot.docs.forEach((doc: any) => {
         batch.update(doc.ref, { consumedAt: new Date() });
       });
       await batch.commit();

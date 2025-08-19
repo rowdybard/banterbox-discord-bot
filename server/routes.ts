@@ -1352,7 +1352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (isActuallyInGuild) {
             // Get guild info from Discord
             const discordGuilds = globalDiscordService.getCurrentGuilds();
-            const guildInfo = discordGuilds.find(g => g.id === link.guildId);
+            const guildInfo = discordGuilds.find((g: any) => g.id === link.guildId);
             
             verifiedGuilds.push({
               guildId: link.guildId,
@@ -1412,11 +1412,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate connectivity metrics
       const totalLinkedGuilds = allGuildLinks.length;
       const actuallyConnectedGuilds = currentGuilds.length;
-      const connectedButNotLinked = currentGuilds.filter(guild => 
+      const connectedButNotLinked = currentGuilds.filter((guild: any) => 
         !allGuildLinks.some(link => link.guildId === guild.id)
       ).length;
       const linkedButNotConnected = allGuildLinks.filter(link => 
-        !currentGuilds.some(guild => guild.id === link.guildId)
+        !currentGuilds.some((guild: any) => guild.id === link.guildId)
       ).length;
 
       res.json({
@@ -2852,6 +2852,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testMessage = message || "Hey banterbox, test the personality!";
       
       // Generate test response using OpenAI
+      if (!openai) {
+        return res.status(500).json({ message: "OpenAI client not initialized" });
+      }
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
