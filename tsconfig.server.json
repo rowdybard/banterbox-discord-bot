@@ -13,8 +13,7 @@
     "paths": {
       "@shared/*": ["shared/*"]
     },
-    "outDir": "dist",
-    "rootDirs": ["server", "shared"]
+    "outDir": "dist"
   },
   "include": ["server/**/*", "shared/**/*"]
 }
