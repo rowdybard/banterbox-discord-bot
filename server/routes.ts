@@ -116,6 +116,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             voiceId: settings?.voiceId
           });
           
+          // Log the actual custom prompt content for debugging
+          if (settings?.customPersonalityPrompt) {
+            console.log(`DEBUG: Custom personality prompt content: "${settings.customPersonalityPrompt.substring(0, 200)}..."`);
+          }
+          
           const personality = settings?.banterPersonality || 'context';
           const customPrompt = settings?.customPersonalityPrompt;
 
@@ -187,6 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`DEBUG: Final personality context for user ${userId}:`, personalityContext.substring(0, 100) + '...');
+      console.log(`DEBUG: Personality type: ${settings?.banterPersonality || 'default'}, Custom prompt length: ${settings?.customPersonalityPrompt?.length || 0}`);
       
       // Check if this is a direct question about what just happened or what BanterBox said
       const isDirectQuestionResult = originalMessage ? isDirectQuestion(originalMessage) : false;

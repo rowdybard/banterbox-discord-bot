@@ -159,31 +159,42 @@ export class FirebaseContextService {
       
       let contextString = '';
       
-      // Revolutionary Context Formatting - More natural and less overwhelming
+      // Smart Context Formatting - Less repetitive and more varied
       if (combinedContext.length > 0) {
-        contextString += 'Recent chat:\n';
-        combinedContext.reverse().forEach((ctx: any, index: number) => {
-          if (ctx.originalMessage && index < 2) { // Only show last 2 messages
-            contextString += `- "${ctx.originalMessage}"\n`;
-          }
-        });
-        contextString += '\n';
+        // Only include context if it's recent and varied
+        const recentMessages = combinedContext
+          .filter((ctx: any) => ctx.originalMessage && ctx.originalMessage.length > 5)
+          .slice(0, 3); // Take up to 3 recent messages
+        
+        if (recentMessages.length > 0) {
+          contextString += 'Recent conversation:\n';
+          recentMessages.forEach((ctx: any, index: number) => {
+            const message = ctx.originalMessage.substring(0, 100); // Limit message length
+            contextString += `- ${message}\n`;
+          });
+          contextString += '\n';
+        }
       }
       
-      // Only add similar context if it's truly relevant and not overwhelming
-      if (similarContext.length > 0 && combinedContext.length > 0 && Math.random() < 0.3) {
-        contextString += `Similar responses you've used:\n`;
-        similarContext.slice(0, 1).forEach((ctx: any) => { // Only show 1 similar response
-          if (ctx.banterResponse) {
-            contextString += `- "${ctx.banterResponse}"\n`;
-          }
-        });
-        contextString += '\n';
+      // Only add similar context occasionally and with variety
+      if (similarContext.length > 0 && Math.random() < 0.2) { // Reduced from 0.3 to 0.2
+        const uniqueResponses = similarContext
+          .filter((ctx: any) => ctx.banterResponse && ctx.banterResponse.length > 10)
+          .slice(0, 1); // Only show 1 similar response
+        
+        if (uniqueResponses.length > 0) {
+          contextString += `Previous response example:\n`;
+          uniqueResponses.forEach((ctx: any) => {
+            const response = ctx.banterResponse.substring(0, 80); // Limit response length
+            contextString += `- "${response}"\n`;
+          });
+          contextString += '\n';
+        }
       }
       
-      // Revolutionary Context Instruction - Much more natural
+      // Smart Context Instruction - Encourage variety
       if (contextString) {
-        contextString += 'Use this context naturally. Only reference past conversations if it feels organic. Don\'t force connections - keep responses fresh and varied.';
+        contextString += 'Use this context for natural conversation flow, but keep responses fresh and varied. Don\'t repeat the same phrases or references too often.';
       }
       
       return contextString;
