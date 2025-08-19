@@ -26,22 +26,32 @@ const commands = [
   },
   {
     name: 'config',
-    description: 'Configure BanterBox settings for this server (personality & voice managed in web dashboard)',
+    description: 'Quick switch between personalities and voices',
     options: [
       {
-        name: 'key',
-        description: 'Setting to configure (events)',
+        name: 'type',
+        description: 'What to configure',
         type: 3, // STRING
         required: true,
         choices: [
-          { name: 'events', value: 'events' }
+          { name: 'personality', value: 'personality' },
+          { name: 'voice', value: 'voice' }
         ]
       },
       {
-        name: 'value',
-        description: 'New value for the setting',
+        name: 'option',
+        description: 'Which option to use',
         type: 3, // STRING
-        required: true
+        required: true,
+        choices: [
+          { name: 'witty', value: 'witty' },
+          { name: 'friendly', value: 'friendly' },
+          { name: 'sarcastic', value: 'sarcastic' },
+          { name: 'hype', value: 'hype' },
+          { name: 'chill', value: 'chill' },
+          { name: 'custom', value: 'custom' },
+          { name: 'default', value: 'default' }
+        ]
       }
     ]
   },

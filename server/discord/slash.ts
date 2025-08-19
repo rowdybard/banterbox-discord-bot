@@ -333,47 +333,113 @@ async function handleStatusCommand(guildId: string) {
 }
 
 /**
- * Handles /config key value command
+ * Handles /config command for personality and voice switching
  */
 async function handleConfigCommand(body: any, guildId: string) {
   const guildLink = await storage.getGuildLink(guildId);
+  const userId = body.member?.user?.id || body.user?.id;
   
   if (!guildLink || !guildLink.active) {
     return ephemeral('❌ This server must be linked to BanterBox before configuring settings. Use `/link <code>` first.');
   }
 
-  const key = body.data.options?.find((o: any) => o.name === 'key')?.value;
-  const value = body.data.options?.find((o: any) => o.name === 'value')?.value;
-
-  if (!key || !value) {
-    return ephemeral('❌ Please provide both key and value. Usage: `/config key:<setting> value:<new_value>`\n\nAvailable settings:\n• `events` - Enable/disable specific Discord events\n\n💡 **Personality & Voice settings are now managed in the web dashboard at banterbox.ai**');
+  // Check user permissions for configuration
+  const hasPermission = await checkStreamingPermission(body, guildId, userId);
+  if (!hasPermission.allowed) {
+    return ephemeral(`🚫 **Configuration Access Denied**\n\n${hasPermission.reason}\n\n**To get configuration access:**\n• Ask an admin to give you the "Streamer" or "BanterBox Streamer" role\n• Or ask for "Manage Server" permission\n• Server admins always have configuration access`);
   }
 
-  let settings = await storage.getGuildSettings(guildId);
-  if (!settings) {
-    // Auto-create missing settings to recover from any issues
-    console.log(`Auto-creating missing guild settings for ${guildId}`);
-    try {
-      settings = await storage.upsertGuildSettings({
-        guildId,
-        workspaceId: guildLink.workspaceId,
-        enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
-        updatedAt: new Date(),
-      });
-    } catch (error) {
-      console.error('Failed to auto-create guild settings:', error);
-      return ephemeral('❌ Guild settings error. Please try unlinking and linking again.');
+  const type = body.data.options?.find((o: any) => o.name === 'type')?.value;
+  const option = body.data.options?.find((o: any) => o.name === 'option')?.value;
+
+  if (!type || !option) {
+    return ephemeral(`🎛️ **BanterBox Configuration**\n\nUsage: \`/config type:<personality|voice> option:<choice>\`\n\n**Available Options:**\n\n🎭 **Personalities:**\n• \`witty\` - Smart wordplay and humor\n• \`friendly\` - Warm and encouraging\n• \`sarcastic\` - Playful sarcasm\n• \`hype\` - High energy excitement\n• \`chill\` - Relaxed and laid-back\n• \`custom\` - Use your last custom personality\n\n🎤 **Voices:**\n• \`default\` - Standard voice\n• \`custom\` - Use your last custom voice\n\n💡 **For more options, visit:** banterbox.ai/dashboard`);
+  }
+
+  // Get user settings from the workspace
+  const workspaceUserId = guildLink.workspaceId;
+  const userSettings = await storage.getUserSettings(workspaceUserId);
+  
+  if (!userSettings) {
+    return ephemeral('❌ User settings not found. Please visit banterbox.ai/dashboard to set up your account first.');
+  }
+
+  try {
+    if (type === 'personality') {
+      return await handlePersonalityConfig(option, userSettings, workspaceUserId);
+    } else if (type === 'voice') {
+      return await handleVoiceConfig(option, userSettings, workspaceUserId);
+    } else {
+      return ephemeral('❌ Invalid type. Use \`personality\` or \`voice\`.');
     }
+  } catch (error) {
+    console.error('Error in handleConfigCommand:', error);
+    return ephemeral('❌ An error occurred while updating settings. Please try again.');
+  }
+}
+
+/**
+ * Handles personality configuration
+ */
+async function handlePersonalityConfig(option: string, userSettings: any, workspaceUserId: string) {
+  const personalityPrompts = {
+    witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Be creative and avoid repetition.",
+    friendly: "Be warm and encouraging with positive energy. Respond naturally and supportively. Show genuine interest and vary your responses.",
+    sarcastic: "Be playfully sarcastic but fun, not mean. Use clever sarcasm and natural comebacks. Mix up your sarcastic style.",
+    hype: "BE HIGH-ENERGY! Use caps and exclamation points! GET EVERYONE PUMPED UP! Vary your hype energy levels.",
+    chill: "Stay relaxed and laid-back. Keep responses natural, zen, and easygoing. Mix up your chill vibes.",
+    context: "Be context-aware and reference conversation history naturally. Use previous interactions and ongoing topics to create more relevant responses. Keep responses under 25 words. Make connections to past events when appropriate.",
+    roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Vary your roasting style."
+  };
+
+  let newPersonality = option;
+  let newCustomPrompt = null;
+
+  if (option === 'custom') {
+    // Use the last custom personality if available
+    if (userSettings.customPersonalityPrompt) {
+      newPersonality = 'custom';
+      newCustomPrompt = userSettings.customPersonalityPrompt;
+    } else {
+      return ephemeral('❌ No custom personality found. Please create one in the web dashboard first: banterbox.ai/dashboard');
+    }
+  } else if (personalityPrompts[option as keyof typeof personalityPrompts]) {
+    // Valid preset personality
+    newPersonality = option;
+  } else {
+    return ephemeral(`❌ Invalid personality option. Available: witty, friendly, sarcastic, hype, chill, custom`);
   }
 
-  // Validate and update settings
-  switch (key.toLowerCase()) {
-    case 'events':
-      // Handle event configuration (future feature)
-      return ephemeral('🎛️ **Event configuration coming soon!**\n\nFor now, all Discord events are enabled by default.\n\n💡 **Personality & Voice settings are managed in the web dashboard at banterbox.ai**');
+  // Update settings
+  await storage.updateUserSettings(workspaceUserId, {
+    banterPersonality: newPersonality,
+    customPersonalityPrompt: newCustomPrompt
+  });
 
-    default:
-      return ephemeral('❌ Invalid setting key. Available settings:\n• `events` - Enable/disable specific Discord events\n\n💡 **Personality & Voice settings are now managed in the web dashboard at banterbox.ai**');
+  const personalityName = option === 'custom' ? 'Custom Personality' : option.charAt(0).toUpperCase() + option.slice(1);
+  return ephemeral(`✅ **Personality Updated!**\n\n🎭 **New Personality:** ${personalityName}\n\n${option === 'custom' ? 'Using your custom personality from the dashboard.' : `Using the ${option} personality preset.`}\n\n💡 **Test it:** Send a message in any channel to see the new personality in action!`);
+}
+
+/**
+ * Handles voice configuration
+ */
+async function handleVoiceConfig(option: string, userSettings: any, workspaceUserId: string) {
+  if (option === 'default') {
+    // Reset to default voice settings
+    await storage.updateUserSettings(workspaceUserId, {
+      voiceProvider: 'openai',
+      voiceId: null
+    });
+    return ephemeral('✅ **Voice Updated!**\n\n🎤 **New Voice:** Default OpenAI Voice\n\n💡 **Test it:** Join a voice channel with `/join` to hear the new voice!');
+  } else if (option === 'custom') {
+    // Use the last custom voice if available
+    if (userSettings.voiceProvider && userSettings.voiceId) {
+      return ephemeral(`✅ **Voice Updated!**\n\n🎤 **New Voice:** ${userSettings.voiceProvider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'} Voice\n\n💡 **Test it:** Join a voice channel with \`/join\` to hear the new voice!`);
+    } else {
+      return ephemeral('❌ No custom voice found. Please set one in the web dashboard first: banterbox.ai/dashboard');
+    }
+  } else {
+    return ephemeral('❌ Invalid voice option. Available: default, custom');
   }
 }
 
