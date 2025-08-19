@@ -22,7 +22,10 @@ export function getSubscriptionInfo(user: User | null | undefined): Subscription
   const status = (user.subscriptionStatus as SubscriptionStatus) || 'active';
   const isPro = tier === 'pro' || tier === 'byok' || tier === 'enterprise';
   const isTrialing = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
-  const isActive = status === 'active';
+  
+  // Fix: If user has pro tier, they should be considered active regardless of status
+  // This prevents the "pro but inactive" issue
+  const isActive = isPro || status === 'active' || isTrialing;
 
   return {
     tier,
@@ -80,4 +83,36 @@ export function isTrialing(user: User | null | undefined): boolean {
  */
 export function isSubscriptionActive(user: User | null | undefined): boolean {
   return getSubscriptionInfo(user).isActive;
+}
+
+/**
+ * Check if user has already used a free trial
+ */
+export function hasUsedFreeTrial(user: User | null | undefined): boolean {
+  if (!user) return false;
+  
+  // Check if user has ever had a trial (trialEndsAt field exists and is in the past)
+  if (user.trialEndsAt) {
+    const trialEndDate = new Date(user.trialEndsAt);
+    return trialEndDate < new Date(); // Trial has ended
+  }
+  
+  // Check if user has ever been on a paid tier (indicates they've used trial before)
+  const hasBeenPaid = user.subscriptionTier === 'pro' || user.subscriptionTier === 'byok' || user.subscriptionTier === 'enterprise';
+  
+  return hasBeenPaid;
+}
+
+/**
+ * Check if user can start a new free trial
+ */
+export function canStartFreeTrial(user: User | null | undefined): boolean {
+  if (!user) return false;
+  
+  // Can't start trial if already on paid tier
+  const isPaid = user.subscriptionTier === 'pro' || user.subscriptionTier === 'byok' || user.subscriptionTier === 'enterprise';
+  if (isPaid) return false;
+  
+  // Can't start trial if already used one
+  return !hasUsedFreeTrial(user);
 }

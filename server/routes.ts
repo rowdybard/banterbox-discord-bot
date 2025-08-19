@@ -3667,6 +3667,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fix subscription status for pro users
+  app.post("/api/billing/fix-subscription", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      
+      // Get current user
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // If user has pro tier but inactive status, fix it
+      if (user.subscriptionTier === 'pro' && user.subscriptionStatus !== 'active') {
+        await db.update(users)
+          .set({ 
+            subscriptionStatus: 'active',
+            updatedAt: new Date()
+          })
+          .where(eq(users.id, userId));
+        
+        console.log(`Fixed subscription status for user ${userId}: pro tier now active`);
+        
+        res.json({ 
+          message: "Subscription status fixed",
+          subscriptionTier: 'pro',
+          subscriptionStatus: 'active'
+        });
+      } else {
+        res.json({ 
+          message: "No fix needed",
+          subscriptionTier: user.subscriptionTier,
+          subscriptionStatus: user.subscriptionStatus
+        });
+      }
+    } catch (error) {
+      console.error("Error fixing subscription:", error);
+      res.status(500).json({ message: "Failed to fix subscription" });
+    }
+  });
+
   // Create Stripe checkout session for subscription upgrades
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     try {
