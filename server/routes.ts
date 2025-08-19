@@ -109,14 +109,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userId) {
         try {
           const settings = await storage.getUserSettings(userId);
+          console.log(`DEBUG: Fetched settings for user ${userId}:`, {
+            banterPersonality: settings?.banterPersonality,
+            customPersonalityPrompt: settings?.customPersonalityPrompt ? 'Has custom prompt' : 'No custom prompt',
+            voiceProvider: settings?.voiceProvider,
+            voiceId: settings?.voiceId
+          });
+          
           const personality = settings?.banterPersonality || 'context';
           const customPrompt = settings?.customPersonalityPrompt;
 
           if (personality === 'custom' && customPrompt) {
             personalityContext = customPrompt;
+            console.log(`DEBUG: Using custom personality prompt for user ${userId}`);
           } else if (personality.startsWith('favorite_') && customPrompt) {
             // Use custom prompt for favorite personalities
             personalityContext = customPrompt;
+            console.log(`DEBUG: Using favorite personality prompt for user ${userId}`);
           } else {
             const personalityPrompts = {
               witty: "Be witty and clever with natural wordplay and humor. Keep responses under 25 words. Be creative and avoid repetition.",
@@ -128,11 +137,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               roast: "Be playfully roasting and teasing. Use clever burns that are funny, not hurtful. Vary your roasting style."
             };
             personalityContext = personalityPrompts[personality as keyof typeof personalityPrompts] || personalityPrompts.context;
+            console.log(`DEBUG: Using preset personality: ${personality} for user ${userId}`);
           }
           console.log(`Using web dashboard personality: ${personality} for user ${userId}`);
         } catch (error) {
-          console.log('Could not load user settings, using default personality');
+          console.log('Could not load user settings, using default personality:', error);
         }
+      } else {
+        console.log('DEBUG: No userId provided to generateBanter, using default personality');
       }
 
       // Record this interaction in context memory FIRST
@@ -492,6 +504,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const guildLink = await storage.getGuildLink(eventData.guildId);
       const workspaceUserId = guildLink?.workspaceId;
+      console.log(`DEBUG: Discord event - Guild: ${eventData.guildId}, Workspace User: ${workspaceUserId}`);
+      
       if (!workspaceUserId) {
         console.log('No workspace user ID found for guild, skipping banter generation');
         return;
@@ -827,6 +841,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'settings_updated',
         userId,
         settings: updated
+      });
+      
+      console.log(`DEBUG: Settings updated for user ${userId}:`, {
+        banterPersonality: updated?.banterPersonality,
+        customPersonalityPrompt: updated?.customPersonalityPrompt ? 'Has custom prompt' : 'No custom prompt',
+        voiceProvider: updated?.voiceProvider,
+        voiceId: updated?.voiceId
       });
       
       res.json(updated);
