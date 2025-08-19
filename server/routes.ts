@@ -8,8 +8,7 @@ interface ExtendedWebSocket extends WebSocket {
 }
 import { firebaseStorage } from "./firebaseStorage";
 import { ObjectStorageService } from "./objectStorage";
-import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData } from "@shared/schema";
 import { db } from "./db";
 import { getTierConfig } from "@shared/billing";
 import type { SubscriptionTier } from "@shared/types";

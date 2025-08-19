@@ -333,7 +333,7 @@ export const insertUserSchema = userSchema.omit({
   updatedAt: true,
 });
 
-export const upsertUserSchema = userSchema.omit({
+export const upsertUserSchema = userSchema.partial().omit({
   createdAt: true,
   updatedAt: true,
 });
@@ -343,7 +343,7 @@ export const insertBanterItemSchema = banterItemSchema.omit({
   createdAt: true,
 });
 
-export const insertUserSettingsSchema = userSettingsSchema.omit({
+export const insertUserSettingsSchema = userSettingsSchema.partial().omit({
   id: true,
   updatedAt: true,
 });

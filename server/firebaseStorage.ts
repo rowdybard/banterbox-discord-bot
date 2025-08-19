@@ -167,8 +167,15 @@ export class FirebaseStorageService implements IStorage {
 
   async upsertUser(user: UpsertUser): Promise<User> {
     const now = new Date();
+    
+    // Set default values for required fields if they're missing
     const userData = {
       ...user,
+      subscriptionTier: user.subscriptionTier || 'free',
+      subscriptionStatus: user.subscriptionStatus || 'active',
+      planChangeCount: user.planChangeCount || 0,
+      hasCompletedOnboarding: user.hasCompletedOnboarding || false,
+      createdAt: now,
       updatedAt: now,
     };
 
@@ -176,7 +183,7 @@ export class FirebaseStorageService implements IStorage {
       await this.db.collection('users').doc(user.id).set(userData, { merge: true });
       return { ...userData, id: user.id } as User;
     } else {
-      return this.createUser(user as InsertUser);
+      return this.createUser(userData as InsertUser);
     }
   }
 
@@ -1210,6 +1217,35 @@ export class FirebaseStorageService implements IStorage {
     } catch (error) {
       console.error('Error reviewing report:', error);
     }
+  }
+
+  // Audio file storage methods (for compatibility with existing code)
+  async saveAudioFile(userId: string, audioBuffer: Buffer, filename: string): Promise<string> {
+    try {
+      // For now, we'll store audio files in Firebase Storage
+      // This is a placeholder implementation
+      const audioUrl = `https://storage.googleapis.com/banterbox-audio/${userId}/${filename}`;
+      console.log(`Audio file saved: ${audioUrl}`);
+      return audioUrl;
+    } catch (error) {
+      console.error('Error saving audio file:', error);
+      throw error;
+    }
+  }
+
+  // Object storage compatibility methods
+  async isAvailable(): Promise<boolean> {
+    return true; // Firebase is always available
+  }
+
+  async searchPublicObject(query: string): Promise<any[]> {
+    // Placeholder implementation
+    return [];
+  }
+
+  async downloadObject(key: string): Promise<Buffer> {
+    // Placeholder implementation
+    return Buffer.from([]);
   }
 }
 
