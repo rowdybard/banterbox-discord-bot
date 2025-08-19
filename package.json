@@ -5,9 +5,9 @@
   "main": "server/index.ts",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
-    "start": "tsx server/index.ts",
+    "start": "node dist/server/index.js",
     "server": "tsx server/index.ts",
     "server:dev": "tsx watch server/index.ts"
   },
