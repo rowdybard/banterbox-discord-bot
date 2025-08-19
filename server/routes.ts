@@ -8,6 +8,7 @@ import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { getTierConfig } from "@shared/billing";
+import { isProUser, getSubscriptionInfo } from "@shared/subscription";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
 import { setupGoogleAuth } from "./googleAuth";
@@ -316,11 +317,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Favorite voice generation debug:', {
             voiceProvider,
             selectedVoiceId,
-            favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+            favoriteVoices: Array.isArray(favoriteVoices) ? favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })) : [],
             settings: userSettings
           });
           
-          if (selectedVoiceId && favoriteVoices.length > 0) {
+          if (selectedVoiceId && Array.isArray(favoriteVoices) && favoriteVoices.length > 0) {
             // Find the selected voice in favorites
             const selectedVoice = favoriteVoices.find((voice: any) => 
               voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
@@ -663,9 +664,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       console.log(`Successfully generated and broadcast banter for Discord ${eventType} event`);
-    } catch (error) {
-      console.error("Error generating banter from Discord event:", error);
-    }
+          } catch (error) {
+        console.error("Error generating banter from Discord event:", error as Error);
+      }
   }
 
   // API Routes
@@ -820,6 +821,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         updated = newSettings;
       }
+      
+      // Broadcast settings update to connected clients
+      broadcast({
+        type: 'settings_updated',
+        userId,
+        settings: updated
+      });
       
       res.json(updated);
     } catch (error) {
@@ -1061,9 +1069,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discord Bot API endpoints
   
   // Generate a link code for Discord bot linking
-  app.post("/api/discord/link-code", isAuthenticated, async (req, res) => {
+  app.post("/api/discord/link-code", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1101,10 +1109,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get Discord bot connection status
-  app.get("/api/discord/status/:userId", isAuthenticated, async (req, res) => {
+  app.get("/api/discord/status/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = req.user?.id;
       
       // Ensure user can only access their own data
       if (userId !== authenticatedUserId) {

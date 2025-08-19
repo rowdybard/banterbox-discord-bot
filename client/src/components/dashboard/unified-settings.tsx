@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-import { Save, Brain, Plus, Star, Crown } from "lucide-react";
+import { useAudio } from "@/hooks/use-audio";
+import { Save, Brain, Plus, Star, Crown, Mic, Play, Volume2 } from "lucide-react";
 import type { UserSettings, User } from "@shared/schema";
 import { isProUser } from "@shared/subscription";
 
@@ -52,9 +52,14 @@ interface UnifiedSettingsProps {
 export default function UnifiedSettings({ userId, settings, user }: UnifiedSettingsProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { updateVolume } = useAudio();
 
-  
-
+  // Voice Settings State
+  const [voiceProvider, setVoiceProvider] = useState(settings?.voiceProvider || 'openai');
+  const [voiceId, setVoiceId] = useState(settings?.voiceId || '');
+  const [volume, setVolume] = useState(settings?.volume || 75);
+  const [autoPlay, setAutoPlay] = useState(settings?.autoPlay ?? true);
+  const [hasUnsavedVoiceChanges, setHasUnsavedVoiceChanges] = useState(false);
 
   // Personality Settings State
   const [selectedPersonality, setSelectedPersonality] = useState(settings?.banterPersonality || 'witty');
@@ -70,6 +75,13 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
   // Update local state when settings change
   useEffect(() => {
     if (settings) {
+      // Voice settings
+      setVoiceProvider(settings.voiceProvider || 'openai');
+      setVoiceId(settings.voiceId || '');
+      setVolume(settings.volume || 75);
+      setAutoPlay(settings.autoPlay ?? true);
+      setHasUnsavedVoiceChanges(false);
+
       // Personality settings
       setSelectedPersonality(settings.banterPersonality || 'witty');
       setCustomPrompt(settings.customPersonalityPrompt || '');
@@ -77,9 +89,23 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     }
   }, [settings]);
 
+  // Fetch ElevenLabs voices for Pro users
+  const { data: elevenLabsVoices } = useQuery({
+    queryKey: ['/api/elevenlabs/voices'],
+    enabled: Boolean((user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && voiceProvider === 'elevenlabs'),
+    retry: false,
+  });
+
   // Fetch favorite personalities
   const { data: favoritePersonalities } = useQuery({
     queryKey: ['/api/favorites/personalities'],
+    enabled: true,
+    retry: false,
+  });
+
+  // Fetch favorite voices
+  const { data: favoriteVoices } = useQuery({
+    queryKey: ['/api/favorites/voices'],
     enabled: true,
     retry: false,
   });
@@ -93,7 +119,14 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/settings', userId] });
       
-      if (variables.banterPersonality !== undefined || variables.customPersonalityPrompt !== undefined) {
+      // Determine which section was updated
+      if (variables.voiceProvider !== undefined || variables.volume !== undefined || variables.autoPlay !== undefined) {
+        setHasUnsavedVoiceChanges(false);
+        toast({
+          title: "Voice settings saved",
+          description: "Your voice preferences have been updated.",
+        });
+      } else if (variables.banterPersonality !== undefined || variables.customPersonalityPrompt !== undefined) {
         setHasUnsavedPersonalityChanges(false);
         toast({
           title: "Personality settings saved",
@@ -105,6 +138,35 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       toast({
         title: "Error",
         description: "Failed to save settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Test voice mutation
+  const testVoiceMutation = useMutation({
+    mutationFn: async ({ voiceId, text }: { voiceId: string; text?: string }) => {
+      const response = await apiRequest("POST", "/api/elevenlabs/test-voice", {
+        voiceId,
+        text: text || "Hello! This is a test of your selected voice."
+      });
+      return response.arrayBuffer();
+    },
+    onSuccess: (audioBuffer) => {
+      // Play the audio
+      const audio = new Audio(URL.createObjectURL(new Blob([audioBuffer], { type: 'audio/mpeg' })));
+      audio.volume = volume / 100;
+      audio.play();
+      
+      toast({
+        title: "Voice preview",
+        description: "Playing voice sample...",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to play voice preview.",
         variant: "destructive",
       });
     },
@@ -141,9 +203,63 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     },
   });
 
+  // Voice Settings Handlers
+  const handleVoiceProviderChange = (provider: string) => {
+    setVoiceProvider(provider);
+    setHasUnsavedVoiceChanges(true);
+    
+    // Reset voice ID when switching providers
+    if (provider === 'openai') {
+      setVoiceId('');
+    } else if (provider === 'elevenlabs' && !voiceId) {
+      setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
+    } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
+      // Check if current voiceId is already a valid favorite voice
+      const currentVoiceIsFavorite = favoriteVoices.voices.some((voice: any) => 
+        voice.baseVoiceId === voiceId || voice.voiceId === voiceId
+      );
+      
+      if (!currentVoiceIsFavorite) {
+        // Set to first favorite voice if current voice is not a favorite
+        setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
+      }
+      // If current voice is already a favorite, keep it
+    }
+  };
 
+  const handleVoiceIdChange = (id: string) => {
+    setVoiceId(id);
+    setHasUnsavedVoiceChanges(true);
+  };
 
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    setHasUnsavedVoiceChanges(true);
+    
+    // Update overlay volume in real-time
+    updateVolume(newVolume / 100);
+    // Store in localStorage for immediate audio control
+    localStorage.setItem('banterbox-volume', newVolume.toString());
+    localStorage.setItem('banterbox-muted', 'false');
+  };
 
+  const handleAutoPlayChange = (checked: boolean) => {
+    setAutoPlay(checked);
+    setHasUnsavedVoiceChanges(true);
+  };
+
+  // Test current voice
+  const handleTestVoice = () => {
+    if ((voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') && voiceId) {
+      testVoiceMutation.mutate({ voiceId });
+    } else {
+      toast({
+        title: "No voice to test",
+        description: "Please select a voice first.",
+      });
+    }
+  };
 
   // Personality Settings Handlers
   const handlePersonalityChange = (personality: string) => {
@@ -188,7 +304,17 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     });
   };
 
-
+  // Save handlers
+  const handleSaveVoiceSettings = () => {
+    const updates: Partial<UserSettings> = {
+      voiceProvider,
+      voiceId: (voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') ? voiceId : undefined,
+      volume,
+      autoPlay,
+    };
+    
+    updateSettingsMutation.mutate(updates);
+  };
 
   const handleSavePersonalitySettings = () => {
     const updates: Partial<UserSettings> = {
@@ -199,10 +325,201 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
     updateSettingsMutation.mutate(updates);
   };
 
-
-
   return (
     <div className="space-y-6">
+      {/* Voice Settings */}
+      <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Mic className="h-5 w-5 text-primary" />
+              <CardTitle className="text-white">Voice Settings</CardTitle>
+            </div>
+            {(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (
+              <div className="flex items-center space-x-2 text-yellow-400">
+                <Crown className="w-4 h-4" />
+                <span className="text-sm">Pro Feature</span>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          
+          {/* Voice Provider Selection */}
+          <div>
+            <Label className="text-sm font-medium text-gray-300 mb-2 block">
+              Voice Provider
+            </Label>
+            <Select 
+              value={voiceProvider}
+              onValueChange={handleVoiceProviderChange}
+              data-testid="select-voice-provider"
+            >
+              <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="openai">OpenAI TTS (Free)</SelectItem>
+                <SelectItem value="elevenlabs" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise')}>
+                  ElevenLabs Premium {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'}
+                </SelectItem>
+                <SelectItem value="custom" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise')}>
+                  Custom Voice Clone {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'}
+                </SelectItem>
+                <SelectItem value="favorite" disabled={!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') || !(favoriteVoices as any)?.voices?.length}>
+                  Saved Voices {!(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && '(Pro Required)'} {(!(favoriteVoices as any)?.voices?.length) && '(No saved voices)'}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-400 mt-1">
+              Choose your preferred text-to-speech provider
+            </p>
+          </div>
+
+          {/* ElevenLabs Voice Selection */}
+          {voiceProvider === 'elevenlabs' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (
+            <div>
+              <Label className="text-sm font-medium text-gray-300 mb-2 block">
+                ElevenLabs Voice
+              </Label>
+              <Select 
+                value={voiceId}
+                onValueChange={handleVoiceIdChange}
+                data-testid="select-elevenlabs-voice"
+              >
+                <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="Select a voice..." />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  {/* Available ElevenLabs Voices */}
+                  {(Array.isArray(elevenLabsVoices) ? elevenLabsVoices : [])?.map((voice: any) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name} - {voice.description}
+                    </SelectItem>
+                  ))}
+                  
+                  {/* Favorite Voices */}
+                  {favoriteVoices?.voices?.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-medium text-gray-400 border-b border-gray-600 mt-2">
+                        Saved Voices
+                      </div>
+                      {favoriteVoices.voices.map((voice: any) => (
+                        <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
+                          <div className="flex items-center space-x-2">
+                            <Star className="h-3 w-3 text-yellow-400" />
+                            <span>{voice.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Favorite Voice Selection */}
+          {voiceProvider === 'favorite' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && favoriteVoices?.voices?.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium text-gray-300 mb-2 block">
+                Saved Voice
+              </Label>
+              <Select 
+                value={voiceId}
+                onValueChange={handleVoiceIdChange}
+                data-testid="select-favorite-voice"
+              >
+                <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="Select a saved voice..." />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  {favoriteVoices.voices.map((voice: any) => (
+                    <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
+                      <div className="flex items-center space-x-2">
+                        <Star className="h-3 w-3 text-yellow-400" />
+                        <span>{voice.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Volume Control */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-medium text-gray-300">
+                Volume
+              </Label>
+              <span className="text-sm text-gray-400">{volume}%</span>
+            </div>
+            <Slider
+              value={[volume]}
+              onValueChange={handleVolumeChange}
+              max={100}
+              min={0}
+              step={1}
+              className="w-full"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Adjust the volume of voice responses
+            </p>
+          </div>
+
+          {/* Auto-play Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-medium text-gray-300">
+                Auto-play Voice
+              </Label>
+              <p className="text-xs text-gray-400">
+                Automatically play voice responses when they're generated
+              </p>
+            </div>
+            <Switch
+              checked={autoPlay}
+              onCheckedChange={handleAutoPlayChange}
+              className="data-[state=checked]:bg-primary"
+            />
+          </div>
+
+          {/* Voice Action Buttons */}
+          <div className="flex items-center space-x-3 pt-4 border-t border-gray-700">
+            <Button
+              onClick={handleSaveVoiceSettings}
+              disabled={!hasUnsavedVoiceChanges || updateSettingsMutation.isPending}
+              className="bg-primary hover:bg-primary/90 text-white"
+              data-testid="button-save-voice-settings"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {updateSettingsMutation.isPending ? "Saving..." : "Save Voice Settings"}
+            </Button>
+            
+            {(voiceProvider === 'elevenlabs' || voiceProvider === 'favorite') && voiceId && (
+              <Button
+                onClick={handleTestVoice}
+                disabled={testVoiceMutation.isPending}
+                variant="outline"
+                className="bg-gray-800 hover:bg-gray-700 text-white border-gray-700"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                {testVoiceMutation.isPending ? "Testing..." : "Test Voice"}
+              </Button>
+            )}
+          </div>
+
+          {/* Voice Unsaved Changes Indicator */}
+          {hasUnsavedVoiceChanges && (
+            <div className="text-xs text-yellow-400 flex items-center space-x-1">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+              <span>You have unsaved voice changes</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Personality Settings */}
       <Card className="bg-dark-lighter/50 backdrop-blur-lg border-gray-800">
         <CardHeader>
