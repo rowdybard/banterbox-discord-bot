@@ -1,6 +1,6 @@
 import { Express } from 'express';
 import { isAuthenticated } from './localAuth';
-import { marketplaceService } from './marketplace';
+import { firebaseMarketplaceService } from './firebaseMarketplace';
 
 export function registerMarketplaceEndpoints(app: Express) {
   // Rating endpoints
@@ -18,7 +18,7 @@ export function registerMarketplaceEndpoints(app: Express) {
         return res.status(400).json({ message: "Rating must be 1 (upvote) or -1 (downvote)" });
       }
       
-      await marketplaceService.rateItem(userId, itemType as 'voice' | 'personality', itemId, rating);
+      await firebaseMarketplaceService.rateItem(userId, itemType as 'voice' | 'personality', itemId, rating);
       
       res.json({ 
         success: true, 
@@ -40,7 +40,7 @@ export function registerMarketplaceEndpoints(app: Express) {
         return res.status(400).json({ message: "Invalid item type" });
       }
       
-      const rating = await marketplaceService.getUserRating(
+      const rating = await firebaseMarketplaceService.getUserRating(
         userId, 
         itemType as 'voice' | 'personality', 
         itemId
@@ -71,7 +71,7 @@ export function registerMarketplaceEndpoints(app: Express) {
         });
       }
       
-      const report = await marketplaceService.reportContent({
+      const report = await firebaseMarketplaceService.reportContent({
         reporterId,
         itemType: itemType as 'voice' | 'personality',
         itemId,
@@ -94,7 +94,7 @@ export function registerMarketplaceEndpoints(app: Express) {
   app.get("/api/marketplace/my-items", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const items = await marketplaceService.getUserMarketplaceItems(userId);
+      const items = await firebaseMarketplaceService.getUserMarketplaceItems(userId);
       
       res.json(items);
     } catch (error) {

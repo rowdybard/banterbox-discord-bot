@@ -2305,9 +2305,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/marketplace/personalities", async (req, res) => {
     try {
       const { category, sortBy, search, limit } = req.query;
-      const { marketplaceService } = await import('./marketplace');
+      const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
-      const personalities = await marketplaceService.getPersonalities({
+      const personalities = await firebaseMarketplaceService.getPersonalities({
         category: category as string,
         sortBy: sortBy as string,
         search: search as string,
@@ -2441,8 +2441,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If addToMarketplace is true, also save to marketplace
       if (addToMarketplace) {
         try {
-          const { marketplaceService } = await import('./marketplace');
-          const marketplacePersonality = await marketplaceService.createPersonality({
+                  const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
+        const marketplacePersonality = await firebaseMarketplaceService.createPersonality({
             name: name.trim(),
             description: description ? description.trim() : "",
             prompt: prompt.trim(),
@@ -2488,16 +2488,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personalityId } = req.params;
       const userId = req.user.id;
-      const { marketplaceService } = await import('./marketplace');
+      const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the personality from marketplace
-      const personalityToDownload = await marketplaceService.getPersonality(personalityId);
+      const personalityToDownload = await firebaseMarketplaceService.getPersonality(personalityId);
       if (!personalityToDownload) {
         return res.status(404).json({ message: "Personality not found" });
       }
       
       // Check if user already downloaded
-      const alreadyDownloaded = await marketplaceService.hasUserDownloaded(userId, 'personality', personalityId);
+      const alreadyDownloaded = await firebaseMarketplaceService.hasUserDownloaded(userId, 'personality', personalityId);
       if (alreadyDownloaded) {
         return res.status(400).json({ 
           success: false,
@@ -2530,7 +2530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Track download
-      await marketplaceService.downloadItem(userId, 'personality', personalityId);
+      await firebaseMarketplaceService.downloadItem(userId, 'personality', personalityId);
       
       console.log(`Personality "${personalityToDownload.name}" downloaded by user ${userId}`);
       
@@ -2734,9 +2734,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/marketplace/voices", async (req, res) => {
     try {
       const { category, sortBy, search, limit } = req.query;
-      const { marketplaceService } = await import('./marketplace');
+      const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
-      const voices = await marketplaceService.getVoices({
+      const voices = await firebaseMarketplaceService.getVoices({
         category: category as string,
         sortBy: sortBy as string,
         search: search as string,
@@ -2925,16 +2925,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { voiceId } = req.params;
       const userId = req.user.id;
-      const { marketplaceService } = await import('./marketplace');
+      const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the voice from marketplace
-      const voiceToDownload = await marketplaceService.getVoice(voiceId);
+      const voiceToDownload = await firebaseMarketplaceService.getVoice(voiceId);
       if (!voiceToDownload) {
         return res.status(404).json({ message: "Voice not found" });
       }
       
       // Check if user already downloaded
-      const alreadyDownloaded = await marketplaceService.hasUserDownloaded(userId, 'voice', voiceId);
+      const alreadyDownloaded = await firebaseMarketplaceService.hasUserDownloaded(userId, 'voice', voiceId);
       if (alreadyDownloaded) {
         return res.status(400).json({ 
           success: false,
@@ -2969,7 +2969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Track download
-      await marketplaceService.downloadItem(userId, 'voice', voiceId);
+      await firebaseMarketplaceService.downloadItem(userId, 'voice', voiceId);
       
       console.log(`Voice "${voiceToDownload.name}" downloaded by user ${userId}`);
       
@@ -3213,8 +3213,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If addToMarketplace is true, also save to marketplace
       if (addToMarketplace) {
         try {
-          const { marketplaceService } = await import('./marketplace');
-          const marketplaceVoice = await marketplaceService.createVoice({
+                  const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
+        const marketplaceVoice = await firebaseMarketplaceService.createVoice({
             name: name.trim(),
             description: description ? description.trim() : "",
             category: category || "Custom",
