@@ -61,8 +61,8 @@ export function useAudio() {
       currentAudioRef.current = null;
       
       // Add user notification for audio errors
-      if (typeof window !== 'undefined' && window.toast) {
-        window.toast({
+      if (typeof window !== 'undefined' && (window as any).toast) {
+        (window as any).toast({
           title: "Audio Error",
           description: "Failed to play audio. Please try again.",
           variant: "destructive"

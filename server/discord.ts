@@ -39,16 +39,12 @@ export class DiscordService {
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
       ],
-      // Add connection stability options
       ws: {
-        properties: {
-          browser: 'Discord iOS'
-        }
+        // Remove properties field as it's not supported
       }
     });
 
@@ -86,8 +82,8 @@ export class DiscordService {
     });
 
     // Handle disconnection events
-    this.client.on(Events.Disconnect, (event) => {
-      console.log(`Discord bot disconnected: ${event.reason} (code: ${event.code})`);
+    this.client.on('disconnect', (event) => {
+      console.log('Discord bot disconnected:', event);
       this.stopHeartbeat();
       this.attemptReconnect();
     });
@@ -172,7 +168,7 @@ export class DiscordService {
         
         // Clean up old message entries (older than 1 minute)
         const oneMinuteAgo = now - 60000;
-        for (const [msgId, timestamp] of this.recentMessages.entries()) {
+        for (const [msgId, timestamp] of Array.from(this.recentMessages.entries())) {
           if (timestamp < oneMinuteAgo) {
             this.recentMessages.delete(msgId);
           }
@@ -401,7 +397,7 @@ export class DiscordService {
     this.stopAutoReconnect();
     
     // Clean up all voice connections
-    for (const [guildId, connection] of this.voiceConnections.entries()) {
+    for (const [guildId, connection] of Array.from(this.voiceConnections.entries())) {
       try {
         connection.destroy();
       } catch (error) {
@@ -594,7 +590,7 @@ export class DiscordService {
         const testResponse = await fetch(publicAudioUrl);
         console.log(`Audio URL test - Status: ${testResponse.status}, Accessible: ${testResponse.ok}`);
       } catch (error) {
-        console.log(`Audio URL not accessible:`, error.message);
+        console.log(`Audio URL not accessible:`, error instanceof Error ? error.message : 'Unknown error');
       }
       
       // Create resource with public URL
@@ -852,7 +848,7 @@ export class DiscordService {
    * Check for orphaned voice connections (connection exists but bot not in channel)
    */
   private checkOrphanedVoiceConnections() {
-    for (const [guildId, connection] of this.voiceConnections.entries()) {
+    for (const [guildId, connection] of Array.from(this.voiceConnections.entries())) {
       const guild = this.client.guilds.cache.get(guildId);
       if (!guild) {
         console.log(`Guild ${guildId} not found, cleaning up orphaned voice connection`);

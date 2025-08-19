@@ -607,6 +607,112 @@ export class FirebaseMarketplaceService {
 
     return { voices, personalities };
   }
+
+  // Get pending moderation items (admin only)
+  async getPendingModerationItems(): Promise<{ voices: MarketplaceVoice[], personalities: MarketplacePersonality[] }> {
+    if (!this.isAvailable()) {
+      return { voices: [], personalities: [] };
+    }
+
+    const [voicesSnapshot, personalitiesSnapshot] = await Promise.all([
+      this.db.collection('marketplace_voices').where('moderationStatus', '==', 'pending').get(),
+      this.db.collection('marketplace_personalities').where('moderationStatus', '==', 'pending').get()
+    ]);
+
+    const voices: MarketplaceVoice[] = [];
+    const personalities: MarketplacePersonality[] = [];
+
+    voicesSnapshot.forEach((doc: any) => {
+      const data = doc.data();
+      voices.push({
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        moderatedAt: data.moderatedAt?.toDate(),
+      });
+    });
+
+    personalitiesSnapshot.forEach((doc: any) => {
+      const data = doc.data();
+      personalities.push({
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        moderatedAt: data.moderatedAt?.toDate(),
+      });
+    });
+
+    return { voices, personalities };
+  }
+
+  // Moderate an item (admin only)
+  async moderateItem(
+    itemType: 'voice' | 'personality',
+    itemId: string,
+    status: 'approved' | 'rejected',
+    moderatorId: string,
+    notes?: string
+  ): Promise<void> {
+    if (!this.isAvailable()) {
+      console.warn('Firebase not available for moderation');
+      return;
+    }
+
+    const collection = itemType === 'voice' ? 'marketplace_voices' : 'marketplace_personalities';
+    
+    await this.db.collection(collection).doc(itemId).update({
+      moderationStatus: status,
+      moderationNotes: notes,
+      moderatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      moderatedBy: moderatorId
+    });
+  }
+
+  // Get content reports (admin only)
+  async getContentReports(status?: string): Promise<ContentReport[]> {
+    if (!this.isAvailable()) {
+      return [];
+    }
+
+    let query = this.db.collection('content_reports');
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const snapshot = await query.get();
+    const reports: ContentReport[] = [];
+
+    snapshot.forEach((doc: any) => {
+      const data = doc.data();
+      reports.push({
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        reviewedAt: data.reviewedAt?.toDate(),
+      });
+    });
+
+    return reports;
+  }
+
+  // Review a content report (admin only)
+  async reviewReport(
+    reportId: string,
+    reviewerId: string,
+    status: 'resolved' | 'dismissed',
+    notes?: string
+  ): Promise<void> {
+    if (!this.isAvailable()) {
+      console.warn('Firebase not available for report review');
+      return;
+    }
+
+    await this.db.collection('content_reports').doc(reportId).update({
+      status,
+      reviewNotes: notes,
+      reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: reviewerId
+    });
+  }
 }
 
 // Export singleton instance

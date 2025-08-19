@@ -227,17 +227,14 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
       setVoiceId('');
     } else if (provider === 'elevenlabs' && !voiceId) {
       setVoiceId('21m00Tcm4TlvDq8ikWAM'); // Default ElevenLabs voice
-    } else if (provider === 'favorite' && favoriteVoices?.voices?.length > 0) {
-      // Check if current voiceId is already a valid favorite voice
-      const currentVoiceIsFavorite = favoriteVoices.voices.some((voice: any) => 
+    } else if (provider === 'favorite' && (favoriteVoices as any)?.voices?.length > 0) {
+      const currentVoiceIsFavorite = (favoriteVoices as any).voices.some((voice: any) =>
         voice.baseVoiceId === voiceId || voice.voiceId === voiceId
       );
       
       if (!currentVoiceIsFavorite) {
-        // Set to first favorite voice if current voice is not a favorite
-        setVoiceId(favoriteVoices.voices[0].baseVoiceId || favoriteVoices.voices[0].voiceId);
+        setVoiceId((favoriteVoices as any).voices[0].baseVoiceId || (favoriteVoices as any).voices[0].voiceId);
       }
-      // If current voice is already a favorite, keep it
     }
   };
 
@@ -428,12 +425,12 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                   ))}
                   
                   {/* Favorite Voices */}
-                  {favoriteVoices?.voices?.length > 0 && (
+                  {(favoriteVoices as any)?.voices?.length > 0 && (
                     <>
                       <div className="px-2 py-1.5 text-xs font-medium text-gray-400 border-b border-gray-600 mt-2">
                         Saved Voices
                       </div>
-                      {favoriteVoices.voices.map((voice: any) => (
+                      {(favoriteVoices as any).voices.map((voice: any) => (
                         <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
                           <div className="flex items-center space-x-2">
                             <Star className="h-3 w-3 text-yellow-400" />
@@ -449,7 +446,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
           )}
 
           {/* Favorite Voice Selection */}
-          {voiceProvider === 'favorite' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && favoriteVoices?.voices?.length > 0 && (
+          {voiceProvider === 'favorite' && (user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'byok' || user?.subscriptionTier === 'enterprise') && (favoriteVoices as any)?.voices?.length > 0 && (
             <div>
               <Label className="text-sm font-medium text-gray-300 mb-2 block">
                 Saved Voice
@@ -463,7 +460,7 @@ export default function UnifiedSettings({ userId, settings, user }: UnifiedSetti
                   <SelectValue placeholder="Select a saved voice..." />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  {favoriteVoices.voices.map((voice: any) => (
+                  {(favoriteVoices as any).voices.map((voice: any) => (
                     <SelectItem key={voice.id} value={voice.baseVoiceId || voice.voiceId}>
                       <div className="flex items-center space-x-2">
                         <Star className="h-3 w-3 text-yellow-400" />

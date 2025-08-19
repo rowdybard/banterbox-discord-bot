@@ -7,7 +7,8 @@ import { firebaseStorage } from "./firebase";
 import { insertBanterItemSchema, insertUserSettingsSchema, type EventType, type EventData, guildLinks, linkCodes, discordSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { getTierConfig, SubscriptionTier } from "@shared/billing";
+import { getTierConfig } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 import { isProUser, getSubscriptionInfo } from "@shared/subscription";
 import { randomUUID } from "node:crypto";
 import { setupAuth, isAuthenticated } from "./localAuth";
@@ -529,11 +530,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Favorite voice generation debug:', {
           voiceProvider,
           selectedVoiceId,
-          favoriteVoices: favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })),
+          favoriteVoices: Array.isArray(favoriteVoices) ? favoriteVoices.map((v: any) => ({ id: v.id, name: v.name, baseVoiceId: v.baseVoiceId, voiceId: v.voiceId })) : [],
           settings: settings
         });
         
-        if (selectedVoiceId && favoriteVoices.length > 0) {
+        if (selectedVoiceId && Array.isArray(favoriteVoices) && favoriteVoices.length > 0) {
           // Find the selected voice in favorites
           const selectedVoice = favoriteVoices.find((voice: any) => 
             voice.baseVoiceId === selectedVoiceId || voice.voiceId === selectedVoiceId
@@ -1363,7 +1364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/discord/cleanup-stale", isAuthenticated, async (req, res) => {
     try {
       const { userId } = req.body;
-      const authenticatedUserId = req.user?.id;
+      const authenticatedUserId = (req.user as any)?.id;
       if (!authenticatedUserId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1409,7 +1410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Emergency Discord bot restart (admin only)
   app.post("/api/discord/restart", isAuthenticated, async (req, res) => {
     try {
-      const authenticatedUserId = req.user?.id;
+      const authenticatedUserId = (req.user as any)?.id;
       if (!authenticatedUserId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1466,7 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
       const { name, prompt, description } = req.body;
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1518,7 +1519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/favorites/personalities", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1535,7 +1536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/favorites/personalities/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1595,7 +1596,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/favorites/voices", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const settings = await storage.getUserSettings(userId);
       const favorites = settings?.favoriteVoices || [];
       
@@ -1609,10 +1613,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/favorites/voices/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(settings?.favoriteVoices) ? settings.favoriteVoices as any[] : [];
       const updatedFavorites = currentFavorites.filter((v: any) => v.id !== id);
       
       await storage.updateUserSettings(userId, {
@@ -1680,10 +1687,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test Discord database operations
   app.post("/api/discord/test-db", isAuthenticated, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       console.log(`🧪 Testing Discord DB operations for user: ${userId}`);
       
-      const results = {
+      const results: {
+        tests: Array<{ name: string; status: string; data: any }>;
+        success: boolean;
+        errors: Array<{ test: string; error: string; stack?: string }>;
+      } = {
         tests: [],
         success: true,
         errors: []
@@ -1770,8 +1781,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         results.success = false;
         results.errors.push({
           test: 'database_operations',
-          error: error.message,
-          stack: error.stack
+                  error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
         });
         console.error('Database test error:', error);
       }
@@ -1781,8 +1792,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Test endpoint error:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message,
-        stack: error.stack 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined 
       });
     }
   });
@@ -1790,7 +1801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clear ALL Discord cache/connections for fresh start
   app.post("/api/discord/clear-cache", isAuthenticated, async (req, res) => {
     try {
-      const authenticatedUserId = req.user.id;
+      const authenticatedUserId = (req.user as any)?.id;
       console.log(`🧹 Clearing ALL Discord cache for user ${authenticatedUserId}`);
       
       let totalCleared = 0;
@@ -2493,7 +2504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Always save to user's favorite personalities (private library)
       const settings = await storage.getUserSettings(userId);
-      const currentFavorites = settings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(settings?.favoritePersonalities) ? settings.favoritePersonalities : [];
       const updatedFavorites = [...currentFavorites, newPersonality];
       
       console.log('Updating user settings with personality:', { 
@@ -2519,6 +2530,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
             isActive: true,
+            isVerified: false,
+            downloads: 0,
+            upvotes: 0,
+            downvotes: 0,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Personality submitted to marketplace:', marketplacePersonality.id);
@@ -2576,7 +2591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add to user's favorites
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       
       const downloadedPersonality = {
         id: randomUUID(),
@@ -2678,7 +2693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user already has this personality
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoritePersonalities || [];
+      const currentFavorites = Array.isArray(userSettings?.favoritePersonalities) ? userSettings.favoritePersonalities : [];
       const alreadyDownloaded = currentFavorites.some((personality: any) => 
         personality.name === personalityToDownload.name && 
         personality.prompt === personalityToDownload.prompt
@@ -2793,7 +2808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error testing personality:', error);
       res.status(500).json({ 
         success: false, 
-        error: error.message 
+        error: error instanceof Error ? error.message : 'Unknown error' 
       });
     }
   });
@@ -3294,6 +3309,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             authorId: userId,
             authorName: user?.firstName || user?.email || "Anonymous",
             isActive: true,
+            isVerified: false,
+            downloads: 0,
+            upvotes: 0,
+            downvotes: 0,
             moderationStatus: 'approved' // Auto-approve all marketplace uploads
           });
           console.log('Voice submitted to marketplace:', marketplaceVoice.id);

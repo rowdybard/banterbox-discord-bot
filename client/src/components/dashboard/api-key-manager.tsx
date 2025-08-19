@@ -117,20 +117,20 @@ export default function ApiKeyManager() {
   const handleSave = () => {
     if (!validateForm()) return;
     
-    const keysToSave: Partial<ApiKeyForm> = {};
-    if (formData.openai) keysToSave.openai = formData.openai;
-    if (formData.elevenlabs) keysToSave.elevenlabs = formData.elevenlabs;
-    
+    const keysToSave: ApiKeyForm = {
+      openai: formData.openai || '',
+      elevenlabs: formData.elevenlabs || ''
+    };
     saveKeysMutation.mutate(keysToSave);
   };
 
   const handleTest = () => {
     if (!validateForm()) return;
     
-    const keysToTest: Partial<ApiKeyForm> = {};
-    if (formData.openai) keysToTest.openai = formData.openai;
-    if (formData.elevenlabs) keysToTest.elevenlabs = formData.elevenlabs;
-    
+    const keysToTest: ApiKeyForm = {
+      openai: formData.openai || '',
+      elevenlabs: formData.elevenlabs || ''
+    };
     testKeysMutation.mutate(keysToTest);
   };
 

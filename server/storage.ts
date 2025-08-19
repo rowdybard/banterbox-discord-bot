@@ -113,15 +113,23 @@ export class MemStorage implements IStorage {
   constructor() {
     // Create a demo user for Replit Auth compatibility
     const demoUser: User = {
-      id: "demo-user",
-      email: "demo@example.com",
-      firstName: "Demo",
-      lastName: "Streamer",
+      id: 'demo-user-id',
+      email: 'demo@banterbox.com',
+      firstName: 'Demo',
+      lastName: 'User',
       profileImageUrl: null,
-      subscriptionTier: 'pro', // Give demo user pro access
+      subscriptionTier: 'free',
       hasCompletedOnboarding: true,
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Add missing properties with null values
+      passwordHash: null,
+      subscriptionStatus: null,
+      subscriptionId: null,
+      trialEndsAt: null,
+      currentPeriodEnd: null,
+      planChangeCount: null,
+      lastPlanChangeAt: null
     };
     this.users.set(demoUser.id, demoUser);
 
@@ -196,6 +204,13 @@ export class MemStorage implements IStorage {
         hasCompletedOnboarding: userData.hasCompletedOnboarding ?? false,
         createdAt: new Date(),
         updatedAt: new Date(),
+        // Add missing properties with null values
+        subscriptionStatus: null,
+        subscriptionId: null,
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        planChangeCount: null,
+        lastPlanChangeAt: null
       };
       this.users.set(newUser.id, newUser);
       return newUser;
@@ -216,10 +231,18 @@ export class MemStorage implements IStorage {
       firstName: insertUser.firstName || null,
       lastName: insertUser.lastName || null,
       profileImageUrl: insertUser.profileImageUrl || null,
-              subscriptionTier: insertUser.subscriptionTier || 'free',
+      subscriptionTier: insertUser.subscriptionTier || 'free',
       hasCompletedOnboarding: insertUser.hasCompletedOnboarding ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Add missing properties with null values
+      passwordHash: null,
+      subscriptionStatus: null,
+      subscriptionId: null,
+      trialEndsAt: null,
+      currentPeriodEnd: null,
+      planChangeCount: null,
+      lastPlanChangeAt: null
     };
     this.users.set(id, user);
     return user;
@@ -662,7 +685,7 @@ export class MemStorage implements IStorage {
     const now = new Date();
     let cleanedCount = 0;
     
-    for (const [id, context] of this.contextMemory.entries()) {
+    for (const [id, context] of Array.from(this.contextMemory.entries())) {
       if (context.expiresAt < now) {
         this.contextMemory.delete(id);
         cleanedCount++;
@@ -670,6 +693,73 @@ export class MemStorage implements IStorage {
     }
     
     return cleanedCount;
+  }
+
+  // Marketplace methods (stubs for MemStorage)
+  async createMarketplaceVoice(voice: any): Promise<any> {
+    console.log('MemStorage: createMarketplaceVoice not implemented');
+    return { id: randomUUID(), ...voice };
+  }
+
+  async createMarketplacePersonality(personality: any): Promise<any> {
+    console.log('MemStorage: createMarketplacePersonality not implemented');
+    return { id: randomUUID(), ...personality };
+  }
+
+  async getMarketplaceVoices(filters?: any): Promise<any[]> {
+    console.log('MemStorage: getMarketplaceVoices not implemented');
+    return [];
+  }
+
+  async getMarketplacePersonalities(filters?: any): Promise<any[]> {
+    console.log('MemStorage: getMarketplacePersonalities not implemented');
+    return [];
+  }
+
+  async getMarketplaceVoice(id: string): Promise<any> {
+    console.log('MemStorage: getMarketplaceVoice not implemented');
+    return null;
+  }
+
+  async getMarketplacePersonality(id: string): Promise<any> {
+    console.log('MemStorage: getMarketplacePersonality not implemented');
+    return null;
+  }
+
+  async updateMarketplaceVoice(id: string, updates: any): Promise<any> {
+    console.log('MemStorage: updateMarketplaceVoice not implemented');
+    return null;
+  }
+
+  async updateMarketplacePersonality(id: string, updates: any): Promise<any> {
+    console.log('MemStorage: updateMarketplacePersonality not implemented');
+    return null;
+  }
+
+  async deleteMarketplaceVoice(id: string): Promise<void> {
+    console.log('MemStorage: deleteMarketplaceVoice not implemented');
+  }
+
+  async deleteMarketplacePersonality(id: string): Promise<void> {
+    console.log('MemStorage: deleteMarketplacePersonality not implemented');
+  }
+
+  async downloadMarketplaceItem(userId: string, itemType: string, itemId: string): Promise<void> {
+    console.log('MemStorage: downloadMarketplaceItem not implemented');
+  }
+
+  async rateMarketplaceItem(userId: string, itemType: string, itemId: string, rating: number): Promise<void> {
+    console.log('MemStorage: rateMarketplaceItem not implemented');
+  }
+
+  async reportMarketplaceContent(report: any): Promise<any> {
+    console.log('MemStorage: reportMarketplaceContent not implemented');
+    return { id: randomUUID(), ...report };
+  }
+
+  async getMarketplaceReports(status?: string): Promise<any[]> {
+    console.log('MemStorage: getMarketplaceReports not implemented');
+    return [];
   }
 }
 
@@ -741,14 +831,14 @@ export class DatabaseStorage implements IStorage {
     let queryBuilder = db.select().from(banterItems);
     
     if (eventType && eventType !== 'all') {
-      queryBuilder = queryBuilder.where(
+      (queryBuilder as any) = queryBuilder.where(
         and(
           eq(banterItems.userId, userId),
           eq(banterItems.eventType, eventType)
         )
       );
     } else {
-      queryBuilder = queryBuilder.where(eq(banterItems.userId, userId));
+      (queryBuilder as any) = queryBuilder.where(eq(banterItems.userId, userId));
     }
 
     return await queryBuilder
@@ -1107,6 +1197,73 @@ export class DatabaseStorage implements IStorage {
       .delete(contextMemory)
       .where(sql`${contextMemory.expiresAt} < NOW()`);
     return result.rowCount || 0;
+  }
+
+  // Marketplace methods (stubs for DatabaseStorage)
+  async createMarketplaceVoice(voice: any): Promise<any> {
+    console.log('DatabaseStorage: createMarketplaceVoice not implemented');
+    return { id: randomUUID(), ...voice };
+  }
+
+  async createMarketplacePersonality(personality: any): Promise<any> {
+    console.log('DatabaseStorage: createMarketplacePersonality not implemented');
+    return { id: randomUUID(), ...personality };
+  }
+
+  async getMarketplaceVoices(filters?: any): Promise<any[]> {
+    console.log('DatabaseStorage: getMarketplaceVoices not implemented');
+    return [];
+  }
+
+  async getMarketplacePersonalities(filters?: any): Promise<any[]> {
+    console.log('DatabaseStorage: getMarketplacePersonalities not implemented');
+    return [];
+  }
+
+  async getMarketplaceVoice(id: string): Promise<any> {
+    console.log('DatabaseStorage: getMarketplaceVoice not implemented');
+    return null;
+  }
+
+  async getMarketplacePersonality(id: string): Promise<any> {
+    console.log('DatabaseStorage: getMarketplacePersonality not implemented');
+    return null;
+  }
+
+  async updateMarketplaceVoice(id: string, updates: any): Promise<any> {
+    console.log('DatabaseStorage: updateMarketplaceVoice not implemented');
+    return null;
+  }
+
+  async updateMarketplacePersonality(id: string, updates: any): Promise<any> {
+    console.log('DatabaseStorage: updateMarketplacePersonality not implemented');
+    return null;
+  }
+
+  async deleteMarketplaceVoice(id: string): Promise<void> {
+    console.log('DatabaseStorage: deleteMarketplaceVoice not implemented');
+  }
+
+  async deleteMarketplacePersonality(id: string): Promise<void> {
+    console.log('DatabaseStorage: deleteMarketplacePersonality not implemented');
+  }
+
+  async downloadMarketplaceItem(userId: string, itemType: string, itemId: string): Promise<void> {
+    console.log('DatabaseStorage: downloadMarketplaceItem not implemented');
+  }
+
+  async rateMarketplaceItem(userId: string, itemType: string, itemId: string, rating: number): Promise<void> {
+    console.log('DatabaseStorage: rateMarketplaceItem not implemented');
+  }
+
+  async reportMarketplaceContent(report: any): Promise<any> {
+    console.log('DatabaseStorage: reportMarketplaceContent not implemented');
+    return { id: randomUUID(), ...report };
+  }
+
+  async getMarketplaceReports(status?: string): Promise<any[]> {
+    console.log('DatabaseStorage: getMarketplaceReports not implemented');
+    return [];
   }
 }
 
