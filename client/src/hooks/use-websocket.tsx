@@ -36,24 +36,21 @@ export function useWebSocket(onMessage?: (data: any) => void) {
           reconnectTimeoutRef.current = null;
         }
         
-        // Start client-side ping interval
+        // Start health check interval - only monitor server pings
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
         }
         pingIntervalRef.current = setInterval(() => {
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            // Check if we haven't received a pong in the last 120 seconds
-            const timeSinceLastPong = Date.now() - lastPongRef.current;
-            if (timeSinceLastPong > 120000) {
-              console.log("No pong received for 120 seconds, closing connection");
+            // Check if we haven't received a ping from server in the last 120 seconds
+            const timeSinceLastPing = Date.now() - lastPongRef.current;
+            if (timeSinceLastPing > 120000) {
+              console.log("No server ping received for 120 seconds, closing connection");
               wsRef.current.close();
               return;
             }
-            
-            // Send ping to keep connection alive
-            wsRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
           }
-        }, 60000); // Send ping every 60 seconds to reduce frequency
+        }, 30000); // Check health every 30 seconds
       };
       
       wsRef.current.onmessage = (event) => {
@@ -64,9 +61,12 @@ export function useWebSocket(onMessage?: (data: any) => void) {
             console.log("WebSocket message received:", data);
           }
           
-          // Handle pong messages for connection health
-          if (data.type === 'pong') {
-            lastPongRef.current = Date.now();
+          // Handle ping messages from server - respond with pong
+          if (data.type === 'ping') {
+            lastPongRef.current = Date.now(); // Update last ping time
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            }
           }
           
           lastMessageRef.current = data;
@@ -96,18 +96,34 @@ export function useWebSocket(onMessage?: (data: any) => void) {
           reconnectTimeoutRef.current = null;
         }
         
-        // Only attempt to reconnect if it wasn't a normal closure and we haven't exceeded max attempts
-        if (event.code !== 1000 && event.code !== 1001 && reconnectAttemptsRef.current < maxReconnectAttempts) {
+        // Handle different close codes appropriately
+        if (event.code === 1000 || event.code === 1001) {
+          console.log("WebSocket closed normally, not attempting to reconnect.");
+        } else if (event.code === 1006 || event.code === 1005) {
+          // These are common on free hosting platforms like Render.com
+          console.log(`WebSocket closed abnormally (code ${event.code}). This is common on free hosting platforms.`);
+          
+          if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+            reconnectAttemptsRef.current++;
+            // Use more aggressive reconnection for platform-specific issues
+            const delay = Math.min(2000 * reconnectAttemptsRef.current, 15000); // Slightly longer delays
+            console.log(`Attempting to reconnect WebSocket (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}) in ${delay}ms...`);
+            reconnectTimeoutRef.current = setTimeout(() => {
+              connect();
+            }, delay);
+          } else {
+            console.log("Max reconnection attempts reached. The server may be experiencing issues.");
+          }
+        } else if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          // Other error codes
           reconnectAttemptsRef.current++;
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000); // Exponential backoff, max 10s
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
           console.log(`Attempting to reconnect WebSocket (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}) in ${delay}ms...`);
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, delay);
-        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        } else {
           console.log("Max reconnection attempts reached. Stopping reconnection attempts.");
-        } else if (event.code === 1000 || event.code === 1001) {
-          console.log("WebSocket closed normally, not attempting to reconnect.");
         }
       };
       
@@ -151,7 +167,7 @@ export function useWebSocket(onMessage?: (data: any) => void) {
         wsRef.current = null;
       }
     };
-  }, [connect]);
+  }, []); // Remove dependency on connect to prevent unnecessary reconnections
 
   return {
     lastMessage,
