@@ -345,10 +345,15 @@ export class MemStorage implements IStorage {
       voiceId: insertSettings.voiceId ?? null,
       autoPlay: insertSettings.autoPlay ?? true,
       volume: insertSettings.volume ?? 75,
+      responseFrequency: insertSettings.responseFrequency ?? 50,
       enabledEvents: insertSettings.enabledEvents ?? ['chat'],
       overlayPosition: insertSettings.overlayPosition ?? "bottom-center",
       overlayDuration: insertSettings.overlayDuration ?? 5,
       overlayAnimation: insertSettings.overlayAnimation ?? "fade",
+      banterPersonality: insertSettings.banterPersonality ?? "context",
+      customPersonalityPrompt: insertSettings.customPersonalityPrompt ?? null,
+      favoritePersonalities: insertSettings.favoritePersonalities ?? [],
+      favoriteVoices: insertSettings.favoriteVoices ?? [],
       updatedAt: new Date(),
     };
     this.userSettings.set(insertSettings.userId!, settings);
@@ -376,9 +381,11 @@ export class MemStorage implements IStorage {
       id,
       userId: insertStats.userId ?? null,
       bantersGenerated: insertStats.bantersGenerated ?? 0,
+      bantersPlayed: insertStats.bantersPlayed ?? 0,
       chatResponses: insertStats.chatResponses ?? 0,
       audioGenerated: insertStats.audioGenerated ?? 0,
-      viewerEngagement: insertStats.viewerEngagement ?? 0
+      viewerEngagement: insertStats.viewerEngagement ?? 0,
+      peakHour: insertStats.peakHour ?? 0
     };
     this.dailyStats.set(`${insertStats.userId}-${insertStats.date}`, stats);
     return stats;
@@ -541,6 +548,7 @@ export class MemStorage implements IStorage {
     const guildLink: GuildLink = {
       ...insertGuildLink,
       id,
+      active: insertGuildLink.active ?? true,
       createdAt: new Date(),
     };
     this.guildLinks.set(insertGuildLink.guildId, guildLink);
@@ -567,7 +575,10 @@ export class MemStorage implements IStorage {
     const existing = this.guildSettings.get(settings.guildId);
     const guildSettings: GuildSettings = {
       ...settings,
-      currentStreamer: settings.currentStreamer || null,
+      voiceProvider: settings.voiceProvider ?? null,
+      enabledEvents: settings.enabledEvents ?? null,
+      personality: settings.personality ?? null,
+      currentStreamer: settings.currentStreamer ?? null,
       updatedAt: new Date(),
     };
     this.guildSettings.set(settings.guildId, guildSettings);
@@ -633,6 +644,13 @@ export class MemStorage implements IStorage {
     const contextMemory: ContextMemory = {
       ...context,
       id,
+      userId: context.userId ?? null,
+      originalMessage: context.originalMessage ?? null,
+      guildId: context.guildId ?? null,
+      banterResponse: context.banterResponse ?? null,
+      importance: context.importance ?? null,
+      participants: context.participants ?? null,
+      eventData: context.eventData ?? {},
       createdAt: new Date(),
     };
     this.contextMemory.set(id, contextMemory);
@@ -744,8 +762,15 @@ export class MemStorage implements IStorage {
     console.log('MemStorage: deleteMarketplacePersonality not implemented');
   }
 
-  async downloadMarketplaceItem(userId: string, itemType: string, itemId: string): Promise<void> {
+  async downloadMarketplaceItem(userId: string, itemType: "personality" | "voice", itemId: string): Promise<{ id: string; userId: string; itemType: string; itemId: string; downloadedAt: Date | null }> {
     console.log('MemStorage: downloadMarketplaceItem not implemented');
+    return {
+      id: randomUUID(),
+      userId,
+      itemType,
+      itemId,
+      downloadedAt: new Date()
+    };
   }
 
   async rateMarketplaceItem(userId: string, itemType: string, itemId: string, rating: number): Promise<void> {
@@ -760,6 +785,44 @@ export class MemStorage implements IStorage {
   async getMarketplaceReports(status?: string): Promise<any[]> {
     console.log('MemStorage: getMarketplaceReports not implemented');
     return [];
+  }
+
+  // Missing interface methods
+  async updateMarketplaceItem(itemType: 'voice' | 'personality', id: string, updates: any): Promise<void> {
+    console.log('MemStorage: updateMarketplaceItem not implemented');
+  }
+
+  async hasUserDownloaded(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<boolean> {
+    console.log('MemStorage: hasUserDownloaded not implemented');
+    return false;
+  }
+
+  async getUserRating(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<number | null> {
+    console.log('MemStorage: getUserRating not implemented');
+    return null;
+  }
+
+  async moderateMarketplaceItem(itemType: 'voice' | 'personality', itemId: string, status: 'approved' | 'rejected', moderatorId: string, notes?: string): Promise<void> {
+    console.log('MemStorage: moderateMarketplaceItem not implemented');
+  }
+
+  async getPendingModerationItems(): Promise<{ voices: any[]; personalities: any[] }> {
+    console.log('MemStorage: getPendingModerationItems not implemented');
+    return { voices: [], personalities: [] };
+  }
+
+  async reportContent(report: any): Promise<any> {
+    console.log('MemStorage: reportContent not implemented');
+    return { id: randomUUID(), ...report };
+  }
+
+  async getContentReports(status?: string): Promise<any[]> {
+    console.log('MemStorage: getContentReports not implemented');
+    return [];
+  }
+
+  async reviewReport(reportId: string, reviewerId: string, status: 'resolved' | 'dismissed', notes?: string): Promise<void> {
+    console.log('MemStorage: reviewReport not implemented');
   }
 }
 
@@ -1248,8 +1311,15 @@ export class DatabaseStorage implements IStorage {
     console.log('DatabaseStorage: deleteMarketplacePersonality not implemented');
   }
 
-  async downloadMarketplaceItem(userId: string, itemType: string, itemId: string): Promise<void> {
+  async downloadMarketplaceItem(userId: string, itemType: "personality" | "voice", itemId: string): Promise<{ id: string; userId: string; itemType: string; itemId: string; downloadedAt: Date | null }> {
     console.log('DatabaseStorage: downloadMarketplaceItem not implemented');
+    return {
+      id: randomUUID(),
+      userId,
+      itemType,
+      itemId,
+      downloadedAt: new Date()
+    };
   }
 
   async rateMarketplaceItem(userId: string, itemType: string, itemId: string, rating: number): Promise<void> {
@@ -1264,6 +1334,44 @@ export class DatabaseStorage implements IStorage {
   async getMarketplaceReports(status?: string): Promise<any[]> {
     console.log('DatabaseStorage: getMarketplaceReports not implemented');
     return [];
+  }
+
+  // Missing interface methods
+  async updateMarketplaceItem(itemType: 'voice' | 'personality', id: string, updates: any): Promise<void> {
+    console.log('DatabaseStorage: updateMarketplaceItem not implemented');
+  }
+
+  async hasUserDownloaded(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<boolean> {
+    console.log('DatabaseStorage: hasUserDownloaded not implemented');
+    return false;
+  }
+
+  async getUserRating(userId: string, itemType: 'voice' | 'personality', itemId: string): Promise<number | null> {
+    console.log('DatabaseStorage: getUserRating not implemented');
+    return null;
+  }
+
+  async moderateMarketplaceItem(itemType: 'voice' | 'personality', itemId: string, status: 'approved' | 'rejected', moderatorId: string, notes?: string): Promise<void> {
+    console.log('DatabaseStorage: moderateMarketplaceItem not implemented');
+  }
+
+  async getPendingModerationItems(): Promise<{ voices: any[]; personalities: any[] }> {
+    console.log('DatabaseStorage: getPendingModerationItems not implemented');
+    return { voices: [], personalities: [] };
+  }
+
+  async reportContent(report: any): Promise<any> {
+    console.log('DatabaseStorage: reportContent not implemented');
+    return { id: randomUUID(), ...report };
+  }
+
+  async getContentReports(status?: string): Promise<any[]> {
+    console.log('DatabaseStorage: getContentReports not implemented');
+    return [];
+  }
+
+  async reviewReport(reportId: string, reviewerId: string, status: 'resolved' | 'dismissed', notes?: string): Promise<void> {
+    console.log('DatabaseStorage: reviewReport not implemented');
   }
 }
 

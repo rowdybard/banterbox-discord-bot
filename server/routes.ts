@@ -811,7 +811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete onboarding endpoint
   app.post('/api/user/complete-onboarding', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -826,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search banters endpoint
   app.get('/api/banter/search', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1057,7 +1057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/play", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -1088,7 +1088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/banter/:id/replay", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Verify the banter belongs to the authenticated user
       const banter = await storage.getBanterItem(id);
@@ -1209,7 +1209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a link code for Discord bot linking
   app.post("/api/discord/link-code", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
@@ -1560,7 +1560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/favorites/voices", isAuthenticated, async (req, res) => {
     try {
       const { name, voiceId, provider, description } = req.body;
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -1637,7 +1637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/test-personality", isAuthenticated, async (req, res) => {
     try {
       const { personality, message } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log(`🧪 Testing personality: ${personality} for user: ${userId}`);
       
@@ -1959,7 +1959,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/simulate/chat", isAuthenticated, async (req: any, res) => {
     try {
       const { username, message } = req.body;
-      const userId = req.user.id; // Use authenticated user ID
+      const userId = (req.user as any)?.id; // Use authenticated user ID
       
       // Check daily usage limits
       const usageCheck = await storage.checkAndIncrementDailyUsage(userId);
@@ -2013,7 +2013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -2025,7 +2025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get ElevenLabs voices (Pro users only)
   app.get('/api/elevenlabs/voices', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
       const isPro = subscriptionTier === 'pro' || subscriptionTier === 'byok' || subscriptionTier === 'enterprise';
@@ -2046,7 +2046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/elevenlabs/test-voice', isAuthenticated, async (req: any, res) => {
     try {
       const { voiceId, text } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
@@ -2465,7 +2465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/personality-builder/save", isAuthenticated, async (req, res) => {
     try {
       const { name, description, prompt, category, tags, addToMarketplace } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log('Personality save request:', { userId, name, addToMarketplace }); // Debug log
       
@@ -2570,7 +2570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/personalities/:personalityId/download", isAuthenticated, async (req, res) => {
     try {
       const { personalityId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the personality from marketplace
@@ -2633,7 +2633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/personalities/:personalityId/download-sample", isAuthenticated, async (req, res) => {
     try {
       const { personalityId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const samplePersonalities = [
         {
@@ -2744,7 +2744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/personality/test", isAuthenticated, async (req, res) => {
     try {
       const { personality, prompt, message } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       // Check subscription tier - personality builder requires Pro or higher
       const user = await storage.getUser(userId);
@@ -3007,7 +3007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/voices/:voiceId/download", isAuthenticated, async (req, res) => {
     try {
       const { voiceId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { firebaseMarketplaceService } = await import('./firebaseMarketplace');
       
       // Get the voice from marketplace
@@ -3028,7 +3028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add to user's favorites
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       
       const downloadedVoice = {
         id: randomUUID(),
@@ -3072,7 +3072,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/marketplace/voices/:voiceId/download-sample", isAuthenticated, async (req, res) => {
     try {
       const { voiceId } = req.params;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const sampleVoices = [
         {
@@ -3144,7 +3144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user already has this voice
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const alreadyDownloaded = currentFavorites.some((voice: any) => 
         voice.baseVoiceId === voiceToDownload.baseVoiceId && 
         voice.name === voiceToDownload.name
@@ -3198,7 +3198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice-builder/preview", isAuthenticated, async (req, res) => {
     try {
       const { text, baseVoiceId, settings } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       if (!text || !baseVoiceId) {
         return res.status(400).json({ message: "Text and baseVoiceId are required" });
@@ -3235,7 +3235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/voice-builder/save", isAuthenticated, async (req, res) => {
     try {
       const { name, description, category, tags, baseVoiceId, settings, addToMarketplace, sampleText } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       console.log('Voice save request:', { userId, name, baseVoiceId, addToMarketplace }); // Debug log
       
@@ -3278,7 +3278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Always save to user's favorite voices (private library)
       const userSettings = await storage.getUserSettings(userId);
-      const currentFavorites = userSettings?.favoriteVoices || [];
+      const currentFavorites = Array.isArray(userSettings?.favoriteVoices) ? userSettings.favoriteVoices : [];
       const updatedFavorites = [...currentFavorites, customVoice];
       
       console.log('Updating user settings with voice:', { 
@@ -3340,7 +3340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's subscription status
   app.get("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -3366,7 +3366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update user's subscription tier (for testing/admin purposes)
   app.put("/api/billing/subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { tier, status = 'active' } = req.body;
       
       if (!tier || !['free', 'pro', 'byok', 'enterprise'].includes(tier)) {
@@ -3451,7 +3451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/billing/create-checkout", isAuthenticated, async (req: any, res) => {
     try {
       const { tier, interval } = req.body; // interval: 'month' or 'year'
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
 
       // TODO: Implement Stripe checkout session creation
       // For now, return a mock checkout URL
@@ -3472,7 +3472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's API keys
   app.get("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       
       if (!user || user.subscriptionTier !== 'byok') {
@@ -3500,7 +3500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save API keys
   app.post("/api/billing/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
       const user = await storage.getUser(userId);
       
@@ -3542,7 +3542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test API keys
   app.post("/api/billing/test-api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { openai, elevenlabs } = req.body;
       const user = await storage.getUser(userId);
       
@@ -3595,7 +3595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete API key
   app.delete("/api/billing/api-keys/:provider", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { provider } = req.params;
       const user = await storage.getUser(userId);
       
@@ -3615,7 +3615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get usage statistics
   app.get("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
 
@@ -3651,7 +3651,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update usage tracking
   app.post("/api/billing/usage", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { bantersGenerated, openaiTokensUsed, elevenlabsCharactersUsed, audioMinutesGenerated } = req.body;
       
       await storage.updateUsageTracking(userId, {
@@ -3692,7 +3692,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/elevenlabs/generate", isAuthenticated, async (req: any, res) => {
     try {
       const { text, voiceId } = req.body;
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       
       const user = await storage.getUser(userId);
       const subscriptionTier = user?.subscriptionTier || 'free';
@@ -3720,7 +3720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Store API keys for BYOK users
   app.post("/api/settings/api-keys", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -3754,7 +3754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fix subscription status for pro users
   app.post("/api/billing/fix-subscription", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
@@ -3798,7 +3798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create Stripe checkout session for subscription upgrades
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as any)?.id;
       const { tier, setupMode } = req.body;
       
       if (!tier || !['pro', 'byok'].includes(tier)) {
