@@ -225,7 +225,7 @@ export class FirebaseContextService {
   }
 
   /**
-   * Revolutionary Smart Context Logic - Determines when to use context
+   * Smart Context Logic - Determines when to use context
    */
   static shouldUseContextForEvent(eventType: EventType, contextCount: number): boolean {
     // Don't use context if we have too much (overwhelming)
@@ -236,26 +236,23 @@ export class FirebaseContextService {
     // Always use context for these event types (they benefit from continuity)
     const alwaysUseContext = ['discord_message', 'chat'];
     if (alwaysUseContext.includes(eventType)) {
-      // But only 70% of the time to prevent over-reliance
-      return Math.random() < 0.7;
+      return true; // Always use context for messages
     }
     
     // Sometimes use context for these event types
     const sometimesUseContext = ['subscription', 'donation', 'raid', 'discord_member_join'];
     if (sometimesUseContext.includes(eventType)) {
-      // 40% chance to use context
-      return Math.random() < 0.4;
+      return contextCount > 0; // Use context if we have any
     }
     
     // Rarely use context for these event types (keep them fresh)
     const rarelyUseContext = ['discord_reaction', 'follow', 'cheer'];
     if (rarelyUseContext.includes(eventType)) {
-      // 20% chance to use context
-      return Math.random() < 0.2;
+      return contextCount > 5; // Only use context if we have significant history
     }
     
-    // Default: 30% chance
-    return Math.random() < 0.3;
+    // Default: use context if available
+    return contextCount > 0;
   }
 
   /**

@@ -180,9 +180,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add context to prompt if available - make it feel more natural
       if (contextString) {
         prompt = `${personalityContext}\n\n${contextString}\n\n`;
+        console.log(`DEBUG: Using personality + context for user ${userId}`);
       } else {
         prompt = `${personalityContext}\n\n`;
+        console.log(`DEBUG: Using personality only (no context) for user ${userId}`);
       }
+      
+      console.log(`DEBUG: Final personality context for user ${userId}:`, personalityContext.substring(0, 100) + '...');
       
       switch (eventType) {
         case 'chat':
