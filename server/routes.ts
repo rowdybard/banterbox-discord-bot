@@ -188,6 +188,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`DEBUG: Final personality context for user ${userId}:`, personalityContext.substring(0, 100) + '...');
       
+      // Check if this is a direct question about what just happened or what BanterBox said
+      const isDirectQuestionResult = originalMessage ? isDirectQuestion(originalMessage) : false;
+      
+      if (isDirectQuestionResult) {
+        console.log(`DEBUG: Detected direct question: "${originalMessage}" - will provide factual answer`);
+        // For direct questions, prioritize factual answers over personality
+        const factualPrompt = buildFactualResponsePrompt(originalMessage || '', contextString, eventType, eventData);
+        
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful assistant that provides factual answers about recent events and conversations. When asked about what just happened or what was said, provide accurate information based on the context provided. Be direct and honest - if you don't have enough information, say so. Keep responses under 50 words and be conversational but factual."
+            },
+            {
+              role: "user",
+              content: factualPrompt
+            }
+          ],
+          max_tokens: 150,
+          temperature: 0.3, // Lower temperature for more factual responses
+        });
+        
+        const factualResponse = response.choices[0].message.content || "I don't have enough context to answer that question.";
+        
+        // Record the factual response for future context
+        if (contextId) {
+          try {
+            await ContextService.updateContextResponse(contextId, factualResponse);
+          } catch (contextError) {
+            console.error('Error updating context response:', contextError);
+          }
+        }
+        
+        return factualResponse;
+      }
+      
       switch (eventType) {
         case 'chat':
         case 'discord_message':
@@ -3649,4 +3687,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMarketplaceEndpoints(app);
 
   return httpServer;
-        }
+}
+
+/**
+ * Detects if a message is a direct question about recent events or what BanterBox said
+ */
+function isDirectQuestion(message: string): boolean {
+  if (!message) return false;
+  
+  const lowerMessage = message.toLowerCase();
+  
+  // Direct question patterns about recent events
+  const directQuestionPatterns = [
+    /what just happened/i,
+    /what happened/i,
+    /what did you say/i,
+    /what did banterbox say/i,
+    /what was that/i,
+    /what did i miss/i,
+    /what's going on/i,
+    /what's happening/i,
+    /can you repeat that/i,
+    /what did you mean/i,
+    /what was the last thing/i,
+    /what did we just talk about/i,
+    /what was the conversation about/i,
+    /what did someone say/i,
+    /who said what/i,
+    /what was the message/i,
+    /what did they say/i,
+    /what was the response/i,
+    /what did you respond/i,
+    /what was your answer/i
+  ];
+  
+  // Check if message matches any direct question pattern
+  return directQuestionPatterns.some(pattern => pattern.test(lowerMessage));
+}
+
+/**
+ * Builds a factual response prompt for direct questions
+ */
+function buildFactualResponsePrompt(
+  question: string,
+  contextString: string,
+  eventType: EventType,
+  eventData: EventData
+): string {
+  let prompt = `Question: "${question}"\n\n`;
+  
+  if (contextString) {
+    prompt += `Recent context:\n${contextString}\n\n`;
+  }
+  
+  prompt += `Current event: ${eventType}`;
+  if (eventData.username) {
+    prompt += ` from ${eventData.username}`;
+  }
+  if (eventData.message) {
+    prompt += ` - "${eventData.message}"`;
+  }
+  if (eventData.messageContent) {
+    prompt += ` - "${eventData.messageContent}"`;
+  }
+  
+  prompt += `\n\nPlease provide a factual answer to the question based on the context and current event. If you don't have enough information, say so.`;
+  
+  return prompt;
+}
