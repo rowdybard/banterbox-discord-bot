@@ -7,8 +7,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Crown, Zap, Key, Building, RefreshCw, AlertTriangle, ExternalLink, Lock, Clock, Calendar } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { getTierOrder, isDowngrade as checkIsDowngrade, canChangePlan, getPlanChangeInfo } from "../../../../shared/billing";
-import type { SubscriptionTier } from "../../../../shared/types";
+import { getTierOrder, isDowngrade as checkIsDowngrade, canChangePlan, getPlanChangeInfo } from "@shared/billing";
+import type { SubscriptionTier } from "@shared/types";
 
 export default function SubscriptionUpdater() {
   const { user } = useAuth();
@@ -196,7 +196,7 @@ export default function SubscriptionUpdater() {
           <h3 className="text-sm font-medium text-gray-300">Downgrade Options</h3>
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-300">Select New Tier</label>
-            <Select value={selectedTier} onValueChange={(value) => setSelectedTier(value as "free" | "pro" | "byok" | "enterprise")}>
+            <Select value={selectedTier} onValueChange={setSelectedTier}>
               <SelectTrigger className="w-full bg-gray-800 border-gray-700 text-white">
                 <SelectValue />
               </SelectTrigger>
