@@ -1,5 +1,7 @@
-import { firebaseStorage } from '../firebaseStorage';
-
+import { storage } from '../storage';
+import { db } from '../db';
+import { guildLinks } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 
 // Discord permission constants
@@ -174,7 +176,7 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
 
     // Find and validate the code
     console.log(`Looking up link code: ${code}`);
-    const linkCode = await firebaseStorage.getLinkCode(code);
+    const linkCode = await storage.getLinkCode(code);
     console.log(`Link code found:`, linkCode ? 'YES' : 'NO');
     
     if (!linkCode) {
@@ -193,7 +195,7 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
 
     // Check if guild is already linked
     console.log(`Checking existing guild link for: ${guildId}`);
-    const existingLink = await firebaseStorage.getGuildLink(guildId);
+    const existingLink = await storage.getGuildLink(guildId);
     console.log(`Existing link:`, existingLink ? `Active: ${existingLink.active}, Workspace: ${existingLink.workspaceId}` : 'NONE');
     
     if (existingLink) {
@@ -202,26 +204,28 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
       } else {
         // Reactivate existing inactive link with new workspace
         console.log(`Reactivating existing guild link for workspace: ${linkCode.workspaceId}`);
-                 try {
-           // Update the existing link instead of creating a new one
-           await firebaseStorage.updateGuildLink(guildId, {
-             workspaceId: linkCode.workspaceId,
-             linkedByUserId: userId,
-             active: true,
-             // Reset created date to now for the new link
-             createdAt: new Date()
-           });
-           console.log(`✅ Guild link reactivated successfully`);
-         } catch (updateError) {
-           console.error('❌ Failed to reactivate guild link:', updateError);
-           throw updateError;
-         }
+        try {
+          // Update the existing link instead of creating a new one
+          await db.update(guildLinks)
+            .set({
+              workspaceId: linkCode.workspaceId,
+              linkedByUserId: userId,
+              active: true,
+              // Reset created date to now for the new link
+              createdAt: new Date()
+            })
+            .where(eq(guildLinks.guildId, guildId));
+          console.log(`✅ Guild link reactivated successfully`);
+        } catch (updateError) {
+          console.error('❌ Failed to reactivate guild link:', updateError);
+          throw updateError;
+        }
       }
     } else {
       // Create new guild link
       console.log(`Creating new guild link - Guild: ${guildId}, Workspace: ${linkCode.workspaceId}`);
       try {
-        await firebaseStorage.createGuildLink({
+        await storage.createGuildLink({
           guildId,
           workspaceId: linkCode.workspaceId,
           linkedByUserId: userId,
@@ -236,18 +240,16 @@ async function handleLinkCommand(body: any, guildId: string, userId: string) {
 
     // Mark code as consumed
     console.log(`Consuming link code: ${code}`);
-    await firebaseStorage.consumeLinkCode(code);
+    await storage.consumeLinkCode(code);
     console.log(`✅ Link code consumed`);
 
     // Create default guild settings with error handling
     try {
       console.log(`Creating guild settings for: ${guildId}`);
-      await firebaseStorage.upsertGuildSettings({
+      await storage.upsertGuildSettings({
         guildId,
         workspaceId: linkCode.workspaceId,
         enabledEvents: ['discord_message', 'discord_member_join', 'discord_reaction'],
-        voiceProvider: 'openai',
-        personality: 'witty',
         updatedAt: new Date(),
       });
       console.log(`✅ Guild settings created for ${guildId}`);
@@ -277,14 +279,14 @@ BanterBox will now generate witty banters for events in this server. Use \`/conf
  * Handles /unlink command
  */
 async function handleUnlinkCommand(guildId: string) {
-  const guildLink = await firebaseStorage.getGuildLink(guildId);
+  const guildLink = await storage.getGuildLink(guildId);
   
   if (!guildLink || !guildLink.active) {
     return ephemeral('❌ This server is not currently linked to any BanterBox workspace.');
   }
 
   // Deactivate the link
-      await firebaseStorage.deactivateGuildLink(guildId);
+  await storage.deactivateGuildLink(guildId);
 
   return ephemeral('✅ Successfully unlinked this Discord server from BanterBox. No more banters will be generated for this server.');
 }
@@ -293,13 +295,13 @@ async function handleUnlinkCommand(guildId: string) {
  * Handles /status command
  */
 async function handleStatusCommand(guildId: string) {
-  const guildLink = await firebaseStorage.getGuildLink(guildId);
+  const guildLink = await storage.getGuildLink(guildId);
   
   if (!guildLink || !guildLink.active) {
     return ephemeral('📋 **BanterBox Status**\n\n❌ This server is not linked to any BanterBox workspace.\n\nUse `/link <code>` to connect this server to BanterBox.');
   }
 
-  const settings = await firebaseStorage.getGuildSettings(guildId);
+  const settings = await storage.getGuildSettings(guildId);
   const isStreaming = discordService?.isInVoiceChannel(guildId) || false;
   
   let statusMessage = `📋 **BanterBox Status**\n\n✅ Linked to workspace: \`${guildLink.workspaceId}\`\n`;
@@ -334,7 +336,7 @@ async function handleStatusCommand(guildId: string) {
  * Handles /config command for personality and voice switching
  */
 async function handleConfigCommand(body: any, guildId: string) {
-  const guildLink = await firebaseStorage.getGuildLink(guildId);
+  const guildLink = await storage.getGuildLink(guildId);
   const userId = body.member?.user?.id || body.user?.id;
   
   if (!guildLink || !guildLink.active) {
@@ -356,7 +358,7 @@ async function handleConfigCommand(body: any, guildId: string) {
 
   // Get user settings from the workspace
   const workspaceUserId = guildLink.workspaceId;
-  const userSettings = await firebaseStorage.getUserSettings(workspaceUserId);
+  const userSettings = await storage.getUserSettings(workspaceUserId);
   
   if (!userSettings) {
     return ephemeral('❌ User settings not found. Please visit banterbox.ai/dashboard to set up your account first.');
@@ -409,7 +411,7 @@ async function handlePersonalityConfig(option: string, userSettings: any, worksp
   }
 
   // Update settings
-      await firebaseStorage.updateUserSettings(workspaceUserId, {
+  await storage.updateUserSettings(workspaceUserId, {
     banterPersonality: newPersonality,
     customPersonalityPrompt: newCustomPrompt
   });
@@ -424,9 +426,9 @@ async function handlePersonalityConfig(option: string, userSettings: any, worksp
 async function handleVoiceConfig(option: string, userSettings: any, workspaceUserId: string) {
   if (option === 'default') {
     // Reset to default voice settings
-    await firebaseStorage.updateUserSettings(workspaceUserId, {
+    await storage.updateUserSettings(workspaceUserId, {
       voiceProvider: 'openai',
-      voiceId: undefined
+      voiceId: null
     });
     return ephemeral('✅ **Voice Updated!**\n\n🎤 **New Voice:** Default OpenAI Voice\n\n💡 **Test it:** Join a voice channel with `/join` to hear the new voice!');
   } else if (option === 'custom') {
@@ -445,7 +447,7 @@ async function handleVoiceConfig(option: string, userSettings: any, workspaceUse
  * Handles /join [channel] command
  */
 async function handleJoinCommand(body: any, guildId: string, userId: string) {
-  const guildLink = await firebaseStorage.getGuildLink(guildId);
+  const guildLink = await storage.getGuildLink(guildId);
   
   if (!guildLink || !guildLink.active) {
     return ephemeral('❌ This server must be linked to BanterBox before joining voice channels. Use `/link <code>` first.');
@@ -461,7 +463,7 @@ async function handleJoinCommand(body: any, guildId: string, userId: string) {
   const currentlyInVoice = discordService.isInVoiceChannel(guildId);
   if (currentlyInVoice) {
     // Check if current user is already the active streamer
-    const currentStreamer = await firebaseStorage.getCurrentStreamer(guildId);
+    const currentStreamer = await storage.getCurrentStreamer(guildId);
     if (currentStreamer && currentStreamer !== userId) {
       return ephemeral('🚫 **Another streamer is currently active**\n\nSomeone else is already using the bot for streaming in this server. Wait for them to finish (`/leave`) or ask a server admin to use `/force-leave` if needed.\n\nUse `/status` to see current streaming status.');
     }
@@ -482,7 +484,7 @@ async function handleJoinCommand(body: any, guildId: string, userId: string) {
     
     if (success) {
       // Set current streamer in storage
-      await firebaseStorage.setCurrentStreamer(guildId, userId);
+      await storage.setCurrentStreamer(guildId, userId);
       console.log(`Successfully joined voice channel, set streamer to ${userId}`);
       
       return {
@@ -519,7 +521,7 @@ async function handleJoinCommand(body: any, guildId: string, userId: string) {
  */
 async function handleFavoritesCommand(body: any, guildId: string, userId: string) {
   try {
-    const guildLink = await firebaseStorage.getGuildLink(guildId);
+    const guildLink = await storage.getGuildLink(guildId);
     if (!guildLink || !guildLink.active) {
       return ephemeral('❌ This server must be linked to BanterBox before using favorites. Use `/link <code>` first.');
     }
@@ -553,7 +555,7 @@ async function handleFavoritesCommand(body: any, guildId: string, userId: string
 async function handleLeaveCommand(guildId: string, userId: string) {
   try {
     // Check if user has permission to stop streaming
-    const currentStreamer = await firebaseStorage.getCurrentStreamer(guildId);
+    const currentStreamer = await storage.getCurrentStreamer(guildId);
     const isCurrentStreamer = currentStreamer === userId;
     const hasAdminPermission = await checkAdminPermission(guildId, userId);
     
@@ -564,7 +566,7 @@ async function handleLeaveCommand(guildId: string, userId: string) {
     const success = await discordService.leaveVoiceChannel(guildId);
     if (success) {
       // Clear current streamer
-      await firebaseStorage.clearCurrentStreamer(guildId);
+      await storage.clearCurrentStreamer(guildId);
       
       const byAdmin = !isCurrentStreamer && hasAdminPermission;
       return ephemeral(`✅ Left voice channel! Streaming mode deactivated. No more audio banters will be generated.${byAdmin ? '\n\n⚡ **Admin Override:** You stopped another user\'s streaming session.' : ''}`);

@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { URLSearchParams } from 'url';
-import { firebaseStorage } from './firebaseStorage';
+import { storage } from './storage';
 import { isAuthenticated } from './replitAuth';
 
 interface DiscordUser {
@@ -258,7 +258,7 @@ export function setupDiscordAuth(app: express.Application) {
       console.log('Discord user obtained:', discordUser.username);
       
       // Store Discord connection in database/storage
-              await firebaseStorage.upsertDiscordSettings({
+      await storage.upsertDiscordSettings({
         userId,
         discordUserId: discordUser.id,
         discordUsername: discordUser.username,

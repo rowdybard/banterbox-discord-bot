@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from "express";
 import { randomBytes } from "crypto";
-import { firebaseStorage } from "./firebaseStorage";
+import { storage } from "./storage";
 
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
@@ -109,7 +109,7 @@ export function setupTwitchAuth(app: Express) {
 
       // Save Twitch settings
       const userId = req.user.id;
-      await firebaseStorage.upsertTwitchSettings({
+      await storage.upsertTwitchSettings({
         userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -138,7 +138,7 @@ export function setupTwitchAuth(app: Express) {
 
     try {
       const userId = req.user.id;
-      const twitchSettings = await firebaseStorage.getTwitchSettings(userId);
+      const twitchSettings = await storage.getTwitchSettings(userId);
 
       if (twitchSettings?.accessToken) {
         // Revoke the access token
@@ -155,14 +155,13 @@ export function setupTwitchAuth(app: Express) {
       }
 
       // Update settings to disconnected
-      await firebaseStorage.upsertTwitchSettings({
+      await storage.upsertTwitchSettings({
         userId,
         isConnected: false,
-        enabledEvents: [],
-        accessToken: undefined,
-        refreshToken: undefined,
-        twitchUsername: undefined,
-        twitchUserId: undefined,
+        accessToken: null,
+        refreshToken: null,
+        twitchUsername: null,
+        twitchUserId: null,
       });
 
       res.json({ success: true });
@@ -180,7 +179,7 @@ export function setupTwitchAuth(app: Express) {
 
     try {
       const userId = req.user.id;
-      const twitchSettings = await firebaseStorage.getTwitchSettings(userId);
+      const twitchSettings = await storage.getTwitchSettings(userId);
 
       res.json({
         isConnected: twitchSettings?.isConnected || false,
@@ -203,7 +202,7 @@ export function setupTwitchAuth(app: Express) {
       const { enabledEvents } = req.body;
       const userId = req.user.id;
 
-      await firebaseStorage.updateTwitchEventSettings(userId, enabledEvents);
+      await storage.updateTwitchEventSettings(userId, enabledEvents);
 
       res.json({ success: true });
     } catch (error) {

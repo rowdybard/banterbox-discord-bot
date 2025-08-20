@@ -260,16 +260,16 @@ export class DiscordService {
         // Clean up voice connections
         this.voiceConnections.delete(guild.id);
         
-            // Import storage to clean up guild data
-    const { firebaseStorage } = await import('./firebaseStorage');
+        // Import storage to clean up guild data
+        const { storage } = await import('./storage');
         
         try {
           // Deactivate guild link
-          await firebaseStorage.deactivateGuildLink(guild.id);
+          await storage.deactivateGuildLink(guild.id);
           console.log(`Deactivated guild link for ${guild.name}`);
           
           // Clear any active streamer session
-          await firebaseStorage.clearCurrentStreamer(guild.id);
+          await storage.clearCurrentStreamer(guild.id);
           console.log(`Cleared streaming session for ${guild.name}`);
           
           // Note: We don't delete guild settings/banters as user might re-add the bot
@@ -449,7 +449,7 @@ export class DiscordService {
       const connection = joinVoiceChannel({
         channelId: channelId,
         guildId: guildId,
-        adapterCreator: guild.voiceAdapterCreator as any, // Type assertion to resolve version incompatibility
+        adapterCreator: guild.voiceAdapterCreator,
         selfDeaf: false, // Allow bot to be undeafened for proper audio playback
         selfMute: false,
         // Add connection stability options
@@ -704,7 +704,7 @@ export class DiscordService {
 
   // Sync guild links with actual bot presence
   async syncGuildLinks() {
-    const { firebaseStorage } = await import('./firebaseStorage');
+    const { storage } = await import('./storage');
     const currentGuilds = new Set(this.client.guilds.cache.keys());
     
     // This would need to be implemented to get all active guild links
@@ -953,10 +953,10 @@ export class DiscordService {
   async validateGuildConnections() {
     try {
       console.log('🔍 Validating guild connections...');
-      const { firebaseStorage } = await import('./firebaseStorage');
+      const { storage } = await import('./storage');
       
       // Get all active guild links from database
-      const allGuildLinks = await firebaseStorage.getAllActiveGuildLinks();
+      const allGuildLinks = await storage.getAllActiveGuildLinks();
       const currentGuildIds = new Set(this.client.guilds.cache.keys());
       
       let staleLinks = 0;
@@ -972,8 +972,8 @@ export class DiscordService {
           
           // Clean up stale guild link
           try {
-            await firebaseStorage.deactivateGuildLink(guildLink.guildId);
-            await firebaseStorage.clearCurrentStreamer(guildLink.guildId);
+            await storage.deactivateGuildLink(guildLink.guildId);
+            await storage.clearCurrentStreamer(guildLink.guildId);
             console.log(`🧹 Cleaned up stale guild link: ${guildLink.guildId}`);
           } catch (error) {
             console.error(`Error cleaning up stale guild link ${guildLink.guildId}:`, error);

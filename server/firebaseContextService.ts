@@ -56,7 +56,7 @@ export class FirebaseContextService {
         expiresAt,
       };
 
-      const docRef = await db.collection('contextMemory').add(contextMemory);
+      const docRef = await db.collection('context_memory').add(contextMemory);
       console.log(`Context memory recorded with ID: ${docRef.id}`);
 
       // Clean expired context occasionally
@@ -91,7 +91,7 @@ export class FirebaseContextService {
       
       // Ultra-simplified query: Get all context for user and filter in memory
       // This avoids any composite index requirements
-      const recentContextSnapshot = await db.collection('contextMemory')
+      const recentContextSnapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
         .limit(50) // Get more items and filter in memory
         .get();
@@ -226,7 +226,7 @@ export class FirebaseContextService {
       const db = getFirestoreDb();
       if (!db) return;
 
-              await db.collection('contextMemory').doc(contextId).update({
+      await db.collection('context_memory').doc(contextId).update({
         banterResponse,
         updatedAt: new Date()
       });
@@ -274,7 +274,7 @@ export class FirebaseContextService {
       const db = getFirestoreDb();
       if (!db) return 0;
 
-      const expiredSnapshot = await db.collection('contextMemory')
+      const expiredSnapshot = await db.collection('context_memory')
         .where('expiresAt', '<', new Date())
         .limit(100) // Process in batches
         .get();
@@ -350,7 +350,7 @@ export class FirebaseContextService {
       }
 
       // Ultra-simplified query: Get all context for user and filter in memory
-      const snapshot = await db.collection('contextMemory')
+      const snapshot = await db.collection('context_memory')
         .where('userId', '==', userId)
         .limit(50) // Get more items and filter/sort in memory
         .get();

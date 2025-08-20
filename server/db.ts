@@ -1,17 +1,15 @@
-import { getFirestoreDb } from './firebase';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import ws from "ws";
+import * as schema from "@shared/schema";
 
-// Firebase database setup
-let db: any = null;
+neonConfig.webSocketConstructor = ws;
 
-try {
-  db = getFirestoreDb();
-  console.log('✅ Firebase database initialized successfully');
-} catch (error) {
-  console.error('❌ Failed to initialize Firebase database:', error);
-  db = null;
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL must be set. Did you forget to provision a database?",
+  );
 }
 
-export { db };
-
-// For backward compatibility, export a dummy pool
-export const pool = null;
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = drizzle({ client: pool, schema });

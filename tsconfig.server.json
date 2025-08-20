@@ -1,20 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "rootDir": ".",
-    "outDir": "dist/server",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",          // ← was "server"
+    "outDir": "dist",         // ← was "dist/server"
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strict": true,
-    "skipLibCheck": true,
-    "baseUrl": ".",
-    "types": ["node"],
-    "paths": {
-      "@shared/*": ["shared/*"]
-    }
+    "skipLibCheck": true
   },
-  "include": ["server/**/*", "shared/**/*"],
-  "exclude": ["client/**/*", "node_modules", "dist", "**/*.test.ts"]
+  "include": ["server/**/*", "shared/**/*"]
 }

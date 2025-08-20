@@ -1,17 +1,23 @@
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-
-import { firebaseStorage } from "./firebaseStorage";
+import connectPg from "connect-pg-simple";
+import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import { Strategy as LocalStrategy } from "passport-local";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  
-  // Use memory store for local development since we're not using PostgreSQL
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
   return session({
-    secret: process.env.SESSION_SECRET || 'dev-secret-key-for-local-development-only',
+    secret: process.env.SESSION_SECRET!,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -32,7 +38,7 @@ passport.use(new LocalStrategy(
   async (email, password, done) => {
     try {
       // Check if user exists
-      const user = await firebaseStorage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email);
       if (!user) {
         return done(null, false, { message: 'Invalid email or password' });
       }
@@ -56,7 +62,7 @@ passport.serializeUser((user: any, done) => {
 
 passport.deserializeUser(async (id: string, done) => {
   try {
-          const user = await firebaseStorage.getUser(id);
+    const user = await storage.getUser(id);
     if (!user) {
       return done(null, false);
     }
@@ -99,7 +105,7 @@ export async function setupAuth(app: Express) {
       const { email, password, firstName, lastName } = req.body;
       
       // Check if user already exists
-      const existingUser = await firebaseStorage.getUserByEmail(email);
+      const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(400).json({ error: 'User already exists' });
       }
@@ -108,7 +114,7 @@ export async function setupAuth(app: Express) {
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Create user
-              const user = await firebaseStorage.upsertUser({
+      const user = await storage.upsertUser({
         id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         email,
         firstName,

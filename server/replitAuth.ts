@@ -1,12 +1,12 @@
 import * as client from "openid-client";
-// import { Strategy, type VerifyFunction } from "openid-client";
+import { Strategy, type VerifyFunction } from "openid-client/passport";
 
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
-
-import { firebaseStorage } from "./firebaseStorage";
+import connectPg from "connect-pg-simple";
+import { storage } from "./storage";
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -24,8 +24,16 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
   return session({
     secret: process.env.SESSION_SECRET!,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -49,7 +57,7 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-          await firebaseStorage.upsertUser({
+  await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
@@ -66,7 +74,7 @@ export async function setupAuth(app: Express) {
 
   const config = await getOidcConfig();
 
-  const verify: any = async (
+  const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
@@ -78,7 +86,7 @@ export async function setupAuth(app: Express) {
 
   for (const domain of process.env
     .REPLIT_DOMAINS!.split(",")) {
-    const strategy = new (client as any).Strategy(
+    const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
         config,
