@@ -1,512 +1,428 @@
+import { sql } from "drizzle-orm";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Firebase-compatible schema definitions
-// These are TypeScript interfaces that match the Firebase document structure
+// Session storage table (required for Replit Auth)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
 
-// Session storage interface (for session management)
-export interface Session {
-  sid: string;
-  sess: any;
-  expire: Date;
-}
-
-// User interface
-export interface User {
-  id: string;
-  email?: string;
-  passwordHash?: string; // For local authentication
-  firstName?: string;
-  lastName?: string;
-  profileImageUrl?: string;
-  subscriptionTier: 'free' | 'pro' | 'byok' | 'enterprise';
-  subscriptionStatus: 'active' | 'canceled' | 'past_due' | 'trialing';
-  subscriptionId?: string; // External subscription ID (Stripe, etc.)
-  trialEndsAt?: Date;
-  currentPeriodEnd?: Date;
-  lastPlanChangeAt?: Date; // Track when user last changed plans
-  planChangeCount: number; // Track number of plan changes
-  hasCompletedOnboarding: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// User storage table (required for Replit Auth)
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").unique(),
+  passwordHash: varchar("password_hash"), // For local authentication
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  subscriptionTier: text("subscription_tier").default("free"), // 'free', 'pro', 'byok', 'enterprise'
+  subscriptionStatus: text("subscription_status").default("active"), // 'active', 'canceled', 'past_due', 'trialing'
+  subscriptionId: varchar("subscription_id"), // External subscription ID (Stripe, etc.)
+  trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  lastPlanChangeAt: timestamp("last_plan_change_at"), // Track when user last changed plans
+  planChangeCount: integer("plan_change_count").default(0), // Track number of plan changes
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // API Keys for "Bring Your Own Key" tier
-export interface UserApiKey {
-  id: string;
-  userId: string;
-  provider: 'openai' | 'elevenlabs';
-  apiKey: string; // Encrypted API key
-  isActive: boolean;
-  lastUsedAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export const userApiKeys = pgTable("user_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  provider: text("provider").notNull(), // 'openai', 'elevenlabs'
+  apiKey: text("api_key").notNull(), // Encrypted API key
+  isActive: boolean("is_active").default(true),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Billing information
-export interface BillingInfo {
-  id: string;
-  userId: string;
-  customerId?: string; // External customer ID (Stripe, etc.)
-  name?: string;
-  email?: string;
-  address?: any; // Billing address
-  createdAt: Date;
-  updatedAt: Date;
-}
+export const billingInfo = pgTable("billing_info", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  customerId: varchar("customer_id"), // External customer ID (Stripe, etc.)
+  name: varchar("name"),
+  email: varchar("email"),
+  address: jsonb("address"), // Billing address
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Usage tracking for billing
-export interface UsageTracking {
-  id: string;
-  userId: string;
-  date: string; // YYYY-MM-DD format
-  bantersGenerated: number;
-  openaiTokensUsed: number;
-  elevenlabsCharactersUsed: number;
-  audioMinutesGenerated: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export const usageTracking = pgTable("usage_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD format
+  bantersGenerated: integer("banters_generated").default(0),
+  openaiTokensUsed: integer("openai_tokens_used").default(0),
+  elevenlabsCharactersUsed: integer("elevenlabs_characters_used").default(0),
+  audioMinutesGenerated: integer("audio_minutes_generated").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
-// Banter items
-export interface BanterItem {
-  id: string;
-  userId?: string;
-  originalMessage?: string;
-  banterText: string;
-  eventType: EventType;
-  eventData?: EventData;
-  audioUrl?: string;
-  isPlayed: boolean;
-  createdAt: Date;
-}
+export const banterItems = pgTable("banter_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  originalMessage: text("original_message"),
+  banterText: text("banter_text").notNull(),
+  eventType: text("event_type").notNull(), // 'chat', 'subscription', 'donation', 'raid'
+  eventData: jsonb("event_data"), // Additional event information
+  audioUrl: text("audio_url"),
+  isPlayed: boolean("is_played").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
-// User settings
-export interface UserSettings {
-  id: string;
-  userId: string;
-  voiceProvider: 'openai' | 'elevenlabs' | 'favorite';
-  voiceId?: string;
-  autoPlay: boolean;
-  volume: number;
-  responseFrequency: number; // 0-100 scale for response frequency
-  enabledEvents: string[];
-  overlayPosition: string;
-  overlayDuration: number;
-  overlayAnimation: string;
-  banterPersonality: string;
-  customPersonalityPrompt?: string;
-  favoritePersonalities: any[]; // Array of saved personality objects
-  favoriteVoices: any[]; // Array of saved voice objects
-  updatedAt: Date;
-}
+export const userSettings = pgTable("user_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).unique(),
+  voiceProvider: text("voice_provider").default("openai"), // 'openai', 'elevenlabs'
+  voiceId: text("voice_id"),
+  autoPlay: boolean("auto_play").default(true),
+  volume: integer("volume").default(75),
+  responseFrequency: integer("response_frequency").default(50), // 0-100 scale for response frequency
+  enabledEvents: jsonb("enabled_events").default(['chat']),
+  overlayPosition: text("overlay_position").default("bottom-center"),
+  overlayDuration: integer("overlay_duration").default(12),
+  overlayAnimation: text("overlay_animation").default("fade"),
+  banterPersonality: text("banter_personality").default("context"),
+  customPersonalityPrompt: text("custom_personality_prompt"),
+  favoritePersonalities: jsonb("favorite_personalities").default([]), // Array of saved personality objects
+  favoriteVoices: jsonb("favorite_voices").default([]), // Array of saved voice objects
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
-// Daily stats
-export interface DailyStats {
-  id: string;
-  userId?: string;
-  date: string; // YYYY-MM-DD format
-  bantersGenerated: number;
-  bantersPlayed: number;
-  chatResponses: number;
-  audioGenerated: number; // in seconds
-  viewerEngagement: number; // percentage
-  peakHour?: number; // Hour of day (0-23) with most activity
-}
+export const dailyStats = pgTable("daily_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  date: text("date").notNull(), // YYYY-MM-DD format
+  bantersGenerated: integer("banters_generated").default(0),
+  bantersPlayed: integer("banters_played").default(0),
+  chatResponses: integer("chat_responses").default(0),
+  audioGenerated: integer("audio_generated").default(0), // in seconds
+  viewerEngagement: integer("viewer_engagement").default(0), // percentage
+  peakHour: integer("peak_hour"), // Hour of day (0-23) with most activity
+});
 
 // Twitch integration settings
-export interface TwitchSettings {
-  id: string;
-  userId: string;
-  accessToken?: string;
-  refreshToken?: string;
-  twitchUsername?: string;
-  twitchUserId?: string;
-  isConnected: boolean;
-  enabledEvents: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+export const twitchSettings = pgTable("twitch_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  accessToken: varchar("access_token"),
+  refreshToken: varchar("refresh_token"),
+  twitchUsername: varchar("twitch_username"),
+  twitchUserId: varchar("twitch_user_id"),
+  isConnected: boolean("is_connected").default(false),
+  enabledEvents: text("enabled_events").array().default(['chat', 'subscribe', 'cheer', 'raid', 'follow']),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Discord Link Codes - for connecting BanterBox workspaces to Discord guilds
-export interface LinkCode {
-  id: string;
-  code: string;
-  workspaceId: string; // BanterBox user ID
-  createdAt: Date;
-  expiresAt: Date;
-  consumedAt?: Date;
-}
+export const linkCodes = pgTable("link_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 8 }).notNull().unique(),
+  workspaceId: varchar("workspace_id").notNull(), // BanterBox user ID
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+});
 
 // Discord Guild Links - stores which Discord servers are linked to BanterBox workspaces
-export interface GuildLink {
-  id: string;
-  guildId: string;
-  workspaceId: string; // BanterBox user ID
-  linkedByUserId: string; // Discord user who ran /link
-  createdAt: Date;
-  active: boolean;
-}
+export const guildLinks = pgTable("guild_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guildId: varchar("guild_id").notNull().unique(),
+  workspaceId: varchar("workspace_id").notNull(), // BanterBox user ID
+  linkedByUserId: varchar("linked_by_user_id").notNull(), // Discord user who ran /link
+  createdAt: timestamp("created_at").defaultNow(),
+  active: boolean("active").default(true),
+});
 
 // Discord Guild Settings - per-guild configuration
-export interface GuildSettings {
-  guildId: string;
-  workspaceId: string;
-  personality: string;
-  voiceProvider: string;
-  enabledEvents: string[];
-  currentStreamer?: string; // Discord user ID of active streamer
-  updatedAt: Date;
-}
+export const guildSettings = pgTable("guild_settings", {
+  guildId: varchar("guild_id").primaryKey(),
+  workspaceId: varchar("workspace_id").notNull(),
+  personality: varchar("personality").default("context"),
+  voiceProvider: varchar("voice_provider").default("openai"),
+  enabledEvents: text("enabled_events").array().default(['discord_message', 'discord_member_join', 'discord_reaction']),
+  currentStreamer: varchar("current_streamer"), // Discord user ID of active streamer
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Context Memory - stores conversation history and events for better AI responses
-export interface ContextMemory {
-  id: string;
-  userId?: string;
-  guildId?: string; // For Discord context
-  eventType: string; // 'discord_message', 'chat', etc.
-  eventData?: any; // Full event details
-  contextSummary: string; // Human-readable summary for AI
-  originalMessage?: string; // The actual message content
-  banterResponse?: string; // AI's response (if any)
-  importance: number; // 1-10 scale for relevance
-  participants: string[]; // User IDs involved
-  createdAt: Date;
-  expiresAt: Date;
-}
+export const contextMemory = pgTable("context_memory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  guildId: varchar("guild_id"), // For Discord context
+  eventType: varchar("event_type").notNull(), // 'discord_message', 'chat', etc.
+  eventData: jsonb("event_data"), // Full event details
+  contextSummary: text("context_summary").notNull(), // Human-readable summary for AI
+  originalMessage: text("original_message"), // The actual message content
+  banterResponse: text("banter_response"), // AI's response (if any)
+  importance: integer("importance").default(1), // 1-10 scale for relevance
+  participants: text("participants").array().default([]), // User IDs involved
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
 
 // Marketplace Voices - public voice marketplace
-export interface MarketplaceVoice {
-  id: string;
-  name: string;
-  description?: string;
-  category: string;
-  tags: string[];
-  voiceId: string; // ElevenLabs voice ID
-  baseVoiceId?: string; // For backward compatibility
-  settings: any; // Voice settings (stability, similarity, etc.)
-  sampleText?: string;
-  sampleAudioUrl?: string;
-  authorId: string;
-  authorName: string;
-  isVerified: boolean;
-  isActive: boolean;
-  downloads: number;
-  upvotes: number;
-  downvotes: number;
-  createdAt: Date;
-  updatedAt: Date;
-  moderationStatus: 'pending' | 'approved' | 'rejected';
-  moderationNotes?: string;
-  moderatedAt?: Date;
-  moderatedBy?: string;
-}
+export const marketplaceVoices = pgTable("marketplace_voices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  category: varchar("category").notNull(),
+  tags: text("tags").array().default([]),
+  voiceId: varchar("voice_id").notNull(), // ElevenLabs voice ID
+  baseVoiceId: varchar("base_voice_id"), // For backward compatibility
+  settings: jsonb("settings").notNull(), // Voice settings (stability, similarity, etc.)
+  sampleText: text("sample_text"),
+  sampleAudioUrl: text("sample_audio_url"),
+  authorId: varchar("author_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  authorName: varchar("author_name").notNull(),
+  isVerified: boolean("is_verified").default(false),
+  isActive: boolean("is_active").default(true),
+  downloads: integer("downloads").default(0),
+  upvotes: integer("upvotes").default(0),
+  downvotes: integer("downvotes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  moderationStatus: varchar("moderation_status").default("pending"), // 'pending', 'approved', 'rejected'
+  moderationNotes: text("moderation_notes"),
+  moderatedAt: timestamp("moderated_at"),
+  moderatedBy: varchar("moderated_by").references(() => users.id),
+});
 
 // Marketplace Personalities - public personality marketplace
-export interface MarketplacePersonality {
-  id: string;
-  name: string;
-  description?: string;
-  prompt: string; // The actual personality prompt
-  category: string;
-  tags: string[];
-  authorId: string;
-  authorName: string;
-  isVerified: boolean;
-  isActive: boolean;
-  downloads: number;
-  upvotes: number;
-  downvotes: number;
-  createdAt: Date;
-  updatedAt: Date;
-  moderationStatus: 'pending' | 'approved' | 'rejected';
-  moderationNotes?: string;
-  moderatedAt?: Date;
-  moderatedBy?: string;
-}
+export const marketplacePersonalities = pgTable("marketplace_personalities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  prompt: text("prompt").notNull(), // The actual personality prompt
+  category: varchar("category").notNull(),
+  tags: text("tags").array().default([]),
+  authorId: varchar("author_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  authorName: varchar("author_name").notNull(),
+  isVerified: boolean("is_verified").default(false),
+  isActive: boolean("is_active").default(true),
+  downloads: integer("downloads").default(0),
+  upvotes: integer("upvotes").default(0),
+  downvotes: integer("downvotes").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  moderationStatus: varchar("moderation_status").default("pending"), // 'pending', 'approved', 'rejected'
+  moderationNotes: text("moderation_notes"),
+  moderatedAt: timestamp("moderated_at"),
+  moderatedBy: varchar("moderated_by").references(() => users.id),
+});
 
 // User Downloads - track what users have downloaded
-export interface UserDownload {
-  id: string;
-  userId: string;
-  itemType: 'voice' | 'personality';
-  itemId: string; // ID from marketplace_voices or marketplace_personalities
-  downloadedAt: Date;
-}
+export const userDownloads = pgTable("user_downloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(), // ID from marketplace_voices or marketplace_personalities
+  downloadedAt: timestamp("downloaded_at").defaultNow(),
+}, (table) => [
+  index("idx_user_downloads_user").on(table.userId),
+  index("idx_user_downloads_item").on(table.itemType, table.itemId),
+]);
 
 // User Ratings - track user ratings for marketplace items
-export interface UserRating {
-  id: string;
-  userId: string;
-  itemType: 'voice' | 'personality';
-  itemId: string;
-  rating: number; // 1 for upvote, -1 for downvote
-  createdAt: Date;
-  updatedAt: Date;
-}
+export const userRatings = pgTable("user_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(),
+  rating: integer("rating").notNull(), // 1 for upvote, -1 for downvote
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_ratings_unique").on(table.userId, table.itemType, table.itemId),
+]);
 
 // Reports - for flagging inappropriate content
-export interface ContentReport {
-  id: string;
-  reporterId: string;
-  itemType: 'voice' | 'personality';
-  itemId: string;
-  reason: 'inappropriate' | 'offensive' | 'spam' | 'copyright' | 'other';
-  description?: string;
-  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
-  reviewedBy?: string;
-  reviewNotes?: string;
-  createdAt: Date;
-  reviewedAt?: Date;
-}
+export const contentReports = pgTable("content_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reporterId: varchar("reporter_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  itemType: varchar("item_type").notNull(), // 'voice' or 'personality'
+  itemId: varchar("item_id").notNull(),
+  reason: varchar("reason").notNull(), // 'inappropriate', 'offensive', 'spam', 'copyright', 'other'
+  description: text("description"),
+  status: varchar("status").default("pending"), // 'pending', 'reviewed', 'resolved', 'dismissed'
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  reviewedAt: timestamp("reviewed_at"),
+});
 
 // Legacy Discord settings (will be removed after migration)
-export interface DiscordSettings {
-  id: string;
-  userId: string;
-  discordUserId?: string;
-  discordUsername?: string;
-  discordTag?: string; // username#discriminator
-  accessToken?: string;
-  refreshToken?: string;
-  isConnected: boolean;
-  enabledEvents: string[];
-  connectedGuilds?: any; // Array of guild IDs and names
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// Zod schemas for validation
-export const userSchema = z.object({
-  id: z.string(),
-  email: z.string().email().optional(),
-  passwordHash: z.string().optional(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  profileImageUrl: z.string().optional(),
-  subscriptionTier: z.enum(['free', 'pro', 'byok', 'enterprise']).default('free'),
-  subscriptionStatus: z.enum(['active', 'canceled', 'past_due', 'trialing']).default('active'),
-  subscriptionId: z.string().optional(),
-  trialEndsAt: z.date().optional(),
-  currentPeriodEnd: z.date().optional(),
-  lastPlanChangeAt: z.date().optional(),
-  planChangeCount: z.number().default(0),
-  hasCompletedOnboarding: z.boolean().default(false),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+export const discordSettings = pgTable("discord_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  discordUserId: varchar("discord_user_id"),
+  discordUsername: varchar("discord_username"),
+  discordTag: varchar("discord_tag"), // username#discriminator
+  accessToken: varchar("access_token"),
+  refreshToken: varchar("refresh_token"),
+  isConnected: boolean("is_connected").default(false),
+  enabledEvents: text("enabled_events").array().default(['discord_message', 'discord_member_join', 'discord_reaction']),
+  connectedGuilds: jsonb("connected_guilds"), // Array of guild IDs and names
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const banterItemSchema = z.object({
-  id: z.string(),
-  userId: z.string().optional(),
-  originalMessage: z.string().optional(),
-  banterText: z.string(),
-  eventType: z.enum(['chat', 'subscription', 'donation', 'raid', 'discord_message', 'discord_member_join', 'discord_reaction']),
-  eventData: z.any().optional(),
-  audioUrl: z.string().optional(),
-  isPlayed: z.boolean().default(false),
-  createdAt: z.date(),
-});
-
-export const userSettingsSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  voiceProvider: z.enum(['openai', 'elevenlabs']).default('openai'),
-  voiceId: z.string().optional(),
-  autoPlay: z.boolean().default(true),
-  volume: z.number().default(75),
-  responseFrequency: z.number().default(50),
-  enabledEvents: z.array(z.string()).default(['chat']),
-  overlayPosition: z.string().default('bottom-center'),
-  overlayDuration: z.number().default(12),
-  overlayAnimation: z.string().default('fade'),
-  banterPersonality: z.string().default('context'),
-  customPersonalityPrompt: z.string().optional(),
-  favoritePersonalities: z.array(z.any()).default([]),
-  favoriteVoices: z.array(z.any()).default([]),
-  updatedAt: z.date(),
-});
-
-// Insert schemas (for creating new records)
-export const insertUserSchema = userSchema.omit({
+// Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const upsertUserSchema = userSchema.partial().omit({
+export const upsertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertBanterItemSchema = banterItemSchema.omit({
+export const insertBanterItemSchema = createInsertSchema(banterItems).omit({
   id: true,
   createdAt: true,
 });
 
-export const insertUserSettingsSchema = userSettingsSchema.partial().omit({
+export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
   id: true,
   updatedAt: true,
 });
 
 // New Discord bot schemas
-export const insertLinkCodeSchema = z.object({
-  code: z.string(),
-  workspaceId: z.string(),
-  expiresAt: z.date(),
+export const insertLinkCodeSchema = createInsertSchema(linkCodes).omit({
+  id: true,
+  createdAt: true,
 });
 
-export const insertGuildLinkSchema = z.object({
-  guildId: z.string(),
-  workspaceId: z.string(),
-  linkedByUserId: z.string(),
-  active: z.boolean().default(true),
+export const insertGuildLinkSchema = createInsertSchema(guildLinks).omit({
+  id: true,
+  createdAt: true,
 });
 
-export const insertGuildSettingsSchema = z.object({
-  guildId: z.string(),
-  workspaceId: z.string(),
-  personality: z.string().default('context'),
-  voiceProvider: z.string().default('openai'),
-  enabledEvents: z.array(z.string()).default(['discord_message', 'discord_member_join', 'discord_reaction']),
-  currentStreamer: z.string().optional(),
-  updatedAt: z.date(),
-});
+export const insertGuildSettingsSchema = createInsertSchema(guildSettings);
 
 // Legacy Discord settings schema (to be removed)
-export const insertDiscordSettingsSchema = z.object({
-  userId: z.string(),
-  discordUserId: z.string().optional(),
-  discordUsername: z.string().optional(),
-  discordTag: z.string().optional(),
-  accessToken: z.string().optional(),
-  refreshToken: z.string().optional(),
-  isConnected: z.boolean().default(false),
-  enabledEvents: z.array(z.string()).default(['discord_message', 'discord_member_join', 'discord_reaction']),
-  connectedGuilds: z.any().optional(),
+export const insertDiscordSettingsSchema = createInsertSchema(discordSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-export const insertDailyStatsSchema = z.object({
-  userId: z.string().optional(),
-  date: z.string(),
-  bantersGenerated: z.number().default(0),
-  bantersPlayed: z.number().default(0),
-  chatResponses: z.number().default(0),
-  audioGenerated: z.number().default(0),
-  viewerEngagement: z.number().default(0),
-  peakHour: z.number().optional(),
+export const insertDailyStatsSchema = createInsertSchema(dailyStats).omit({
+  id: true,
 });
 
-export const insertTwitchSettingsSchema = z.object({
-  userId: z.string(),
-  accessToken: z.string().optional(),
-  refreshToken: z.string().optional(),
-  twitchUsername: z.string().optional(),
-  twitchUserId: z.string().optional(),
-  isConnected: z.boolean().default(false),
-  enabledEvents: z.array(z.string()).default(['chat', 'subscribe', 'cheer', 'raid', 'follow']),
+export const insertTwitchSettingsSchema = createInsertSchema(twitchSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
+export type User = typeof users.$inferSelect;
 
 export type InsertBanterItem = z.infer<typeof insertBanterItemSchema>;
+export type BanterItem = typeof banterItems.$inferSelect;
 
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+export type UserSettings = typeof userSettings.$inferSelect;
 
 export type InsertDailyStats = z.infer<typeof insertDailyStatsSchema>;
+export type DailyStats = typeof dailyStats.$inferSelect;
 
 export type InsertTwitchSettings = z.infer<typeof insertTwitchSettingsSchema>;
+export type TwitchSettings = typeof twitchSettings.$inferSelect;
 
 // New Discord bot types
 export type InsertLinkCode = z.infer<typeof insertLinkCodeSchema>;
+export type LinkCode = typeof linkCodes.$inferSelect;
 
 export type InsertGuildLink = z.infer<typeof insertGuildLinkSchema>;
+export type GuildLink = typeof guildLinks.$inferSelect;
 
 export type InsertGuildSettings = z.infer<typeof insertGuildSettingsSchema>;
+export type GuildSettings = typeof guildSettings.$inferSelect;
 
-export const insertContextMemorySchema = z.object({
-  userId: z.string().optional(),
-  guildId: z.string().optional(),
-  eventType: z.string(),
-  eventData: z.any().optional(),
-  contextSummary: z.string(),
-  originalMessage: z.string().optional(),
-  banterResponse: z.string().optional(),
-  importance: z.number().default(1),
-  participants: z.array(z.string()).default([]),
-  expiresAt: z.date(),
+export const insertContextMemorySchema = createInsertSchema(contextMemory).omit({
+  id: true,
+  createdAt: true,
 });
 
 export type InsertContextMemory = z.infer<typeof insertContextMemorySchema>;
+export type ContextMemory = typeof contextMemory.$inferSelect;
 
 // Marketplace schemas
-export const insertMarketplaceVoiceSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  category: z.string(),
-  tags: z.array(z.string()).default([]),
-  voiceId: z.string(),
-  baseVoiceId: z.string().optional(),
-  settings: z.any(),
-  sampleText: z.string().optional(),
-  sampleAudioUrl: z.string().optional(),
-  authorId: z.string(),
-  authorName: z.string(),
-  isVerified: z.boolean().default(false),
-  isActive: z.boolean().default(true),
-  moderationStatus: z.enum(['pending', 'approved', 'rejected']).default('pending'),
-  moderationNotes: z.string().optional(),
+export const insertMarketplaceVoiceSchema = createInsertSchema(marketplaceVoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  downloads: true,
+  upvotes: true,
+  downvotes: true,
 });
 
-export const insertMarketplacePersonalitySchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  prompt: z.string(),
-  category: z.string(),
-  tags: z.array(z.string()).default([]),
-  authorId: z.string(),
-  authorName: z.string(),
-  isVerified: z.boolean().default(false),
-  isActive: z.boolean().default(true),
-  moderationStatus: z.enum(['pending', 'approved', 'rejected']).default('pending'),
-  moderationNotes: z.string().optional(),
+export const insertMarketplacePersonalitySchema = createInsertSchema(marketplacePersonalities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  downloads: true,
+  upvotes: true,
+  downvotes: true,
 });
 
-export const insertUserDownloadSchema = z.object({
-  userId: z.string(),
-  itemType: z.enum(['voice', 'personality']),
-  itemId: z.string(),
+export const insertUserDownloadSchema = createInsertSchema(userDownloads).omit({
+  id: true,
+  downloadedAt: true,
 });
 
-export const insertUserRatingSchema = z.object({
-  userId: z.string(),
-  itemType: z.enum(['voice', 'personality']),
-  itemId: z.string(),
-  rating: z.number(), // 1 for upvote, -1 for downvote
+export const insertUserRatingSchema = createInsertSchema(userRatings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-export const insertContentReportSchema = z.object({
-  reporterId: z.string(),
-  itemType: z.enum(['voice', 'personality']),
-  itemId: z.string(),
-  reason: z.enum(['inappropriate', 'offensive', 'spam', 'copyright', 'other']),
-  description: z.string().optional(),
+export const insertContentReportSchema = createInsertSchema(contentReports).omit({
+  id: true,
+  createdAt: true,
+  status: true,
 });
 
 // Marketplace types
 export type InsertMarketplaceVoice = z.infer<typeof insertMarketplaceVoiceSchema>;
+export type MarketplaceVoice = typeof marketplaceVoices.$inferSelect;
 
 export type InsertMarketplacePersonality = z.infer<typeof insertMarketplacePersonalitySchema>;
+export type MarketplacePersonality = typeof marketplacePersonalities.$inferSelect;
 
 export type InsertUserDownload = z.infer<typeof insertUserDownloadSchema>;
+export type UserDownload = typeof userDownloads.$inferSelect;
 
 export type InsertUserRating = z.infer<typeof insertUserRatingSchema>;
+export type UserRating = typeof userRatings.$inferSelect;
 
 export type InsertContentReport = z.infer<typeof insertContentReportSchema>;
+export type ContentReport = typeof contentReports.$inferSelect;
 
 // Legacy Discord types (to be removed)
 export type InsertDiscordSettings = z.infer<typeof insertDiscordSettingsSchema>;
+export type DiscordSettings = typeof discordSettings.$inferSelect;
 
 // Event types
 export type EventType = 'chat' | 'subscription' | 'donation' | 'raid' | 'discord_message' | 'discord_member_join' | 'discord_reaction';
