@@ -1,11 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-
-// Extend WebSocket interface for connection health tracking
-interface ExtendedWebSocket extends WebSocket {
-  isAlive?: boolean;
-}
 import { storage } from "./storage";
 import { ObjectStorageService } from "./objectStorage";
 import { firebaseStorage } from "./firebase";
@@ -56,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
   // Store connected clients
-  const clients = new Set<ExtendedWebSocket>();
+  const clients = new Set<WebSocket>();
   
   // Store active Twitch clients
   const twitchClients = new Map<string, TwitchEventSubClient>();
@@ -67,63 +62,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Global Discord service for bot operations
   let globalDiscordService: DiscordService | null = null;
   
-  wss.on('connection', (ws: ExtendedWebSocket, req) => {
+  wss.on('connection', (ws) => {
     clients.add(ws);
-    console.log(`Client connected to WebSocket from ${req.socket.remoteAddress}`);
-    console.log(`Total WebSocket clients: ${clients.size}`);
+    console.log('Client connected to WebSocket');
     
-    // Configure WebSocket for stability on hosting platforms
-    ws.isAlive = true;
-    
-    // Send initial connection confirmation
-    ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connected successfully' }));
-    
-    // Set up ping interval to keep connection alive
-    const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
-      } else {
-        // Clean up if connection is not open
-        clearInterval(pingInterval);
-        clients.delete(ws);
-      }
-    }, 45000); // Send ping every 45 seconds for better reliability
-    
-    ws.on('message', (message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        
-        // Only log non-ping/pong messages to reduce noise
-        if (data.type !== 'ping' && data.type !== 'pong') {
-          console.log('Received WebSocket message:', data);
-        }
-        
-        // Handle pong responses from client
-        if (data.type === 'pong') {
-          ws.isAlive = true; // Mark connection as alive
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    });
-    
-    ws.on('close', (code, reason) => {
-      clearInterval(pingInterval); // Clear ping interval on close
+    ws.on('close', () => {
       clients.delete(ws);
-      console.log(`Client disconnected from WebSocket. Code: ${code}, Reason: ${reason || 'No reason provided'}`);
-      console.log(`Total WebSocket clients: ${clients.size}`);
+      console.log('Client disconnected from WebSocket');
     });
     
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
-      clearInterval(pingInterval); // Clear ping interval on error
       clients.delete(ws);
-      console.log(`Total WebSocket clients: ${clients.size}`);
-    });
-    
-    // Handle connection termination gracefully
-    ws.on('unexpected-response', (request, response) => {
-      console.log('Unexpected WebSocket response:', response.statusCode);
     });
   });
   
@@ -133,7 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Broadcasting to ${clients.size} clients:`, data);
     
     // Use Array.from() to avoid modifying Set during iteration
-    const clientsToRemove: ExtendedWebSocket[] = [];
+    const clientsToRemove: WebSocket[] = [];
     Array.from(clients).forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);
