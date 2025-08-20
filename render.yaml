@@ -10,14 +10,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-    buildFilter:
-      paths:
-        - client/**
-        - server/**
-        - shared/**
-        - package.json
-        - package-lock.json
-        - tsconfig*.json
-        - vite.config.ts
-        - tailwind.config.ts
-        - postcss.config.js

@@ -9,7 +9,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.client.json && vite build && tsc -p tsconfig.server.json",
-    "render-build": "tsc -p tsconfig.client.json && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "start": "node dist/server/server/index.js",
     "server": "tsx server/index.ts",
