@@ -1,13 +1,22 @@
 {
-  "extends": "./tsconfig.json",
   "include": ["client/src/**/*", "shared/**/*"],
   "exclude": ["server/**/*", "node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
-    "types": ["node", "vite/client"],
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "lib": ["esnext", "dom", "dom.iterable"],
     "jsx": "preserve",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "strict": true,
+    "baseUrl": ".",
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./client/src/*"],
+      "@shared/*": ["./shared/*"]
+    }
   }
 }
