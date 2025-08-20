@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "description": "Discord bot for BanterBox AI",
   "main": "server/index.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.client.json && vite build && tsc -p tsconfig.server.json",
+    "render-build": "tsc -p tsconfig.client.json && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "start": "node dist/server/server/index.js",
     "server": "tsx server/index.ts",
