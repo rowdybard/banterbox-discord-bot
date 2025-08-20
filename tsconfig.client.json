@@ -13,7 +13,7 @@
     "noEmit": true,
     "strict": true,
     "baseUrl": ".",
-    "types": ["node"],
+    "types": ["node", "react", "react-dom"],
     "paths": {
       "@/*": ["./client/src/*"],
       "@shared/*": ["./shared/*"]
