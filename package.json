@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.client.json && vite build && tsc -p tsconfig.server.json",
     "preview": "vite preview",
-    "start": "node dist/server/index.js",
+    "start": "node dist/server/server/index.js",
     "server": "tsx server/index.ts",
     "server:dev": "tsx watch server/index.ts"
   },

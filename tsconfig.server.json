@@ -3,17 +3,18 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "rootDir": ".",          // ← was "server"
-    "outDir": "dist",         // ← was "dist/server"
+    "rootDir": ".",
+    "outDir": "dist/server",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strict": true,
     "skipLibCheck": true,
     "baseUrl": ".",
+    "types": ["node"],
     "paths": {
       "@shared/*": ["shared/*"]
-    },
-    "outDir": "dist"
+    }
   },
-  "include": ["server/**/*", "shared/**/*"]
+  "include": ["server/**/*", "shared/**/*"],
+  "exclude": ["client/**/*", "node_modules", "dist", "**/*.test.ts"]
 }
